@@ -24,12 +24,16 @@
 #include <cstdlib>
 #include <cassert>
 
+#ifndef SNAP_MAX_ENERGY_GROUPS
+#define SNAP_MAX_ENERGY_GROUPS            1024
+#endif
+
 using namespace Legion;
 using namespace Legion::Mapping;
 
 class Snap {
 public:
-  enum SnapTaskIDs {
+  enum SnapTaskID {
     SNAP_TOP_LEVEL_TASK_ID,
   };
   enum MaterialLayout {
@@ -47,6 +51,16 @@ public:
     OUTER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST,
     INNER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+1,
   };
+  enum SnapFieldID {
+    FID_GROUP_0,
+    FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
+  };
+  enum SnapPartitionID {
+    DISJOINT_PARTITION,
+    GHOST_X_PARTITION,
+    GHOST_Y_PARTITION,
+    GHOST_Z_PARTITION,
+  };
 public:
   Snap(Context c, Runtime *rt)
     : ctx(c), runtime(rt) { }
@@ -59,20 +73,12 @@ private:
   Runtime *const runtime;
 private:
   // Primary logical regions
-  // Assuming only one material right now
-  LogicalRegion velocity; // 1-D number of groups
-  LogicalRegion materials; // nx-ny-nz material identifier array
-  LogicalRegion qi; // nx-ny-nz-ng fixed source array for src_opt < 3
-  LogicalRegion qim; // nang-nx-ny-nz-noct,ng fixed source array for src_opt >= 3
-  LogicalRegion sigt; // 1-D number of groups total interaction
-  LogicalRegion siga; // 1-D number of gropus absorbtion
-  LogicalRegion sigs; // 1-D number of groups scatering
-  LogicalRegion slgg; // nmom-ng-ng scatering matrix
-  LogicalRegion vdelt; // 1-D number of groups time-absorbtion coefficient
+  LogicalRegion flux0, flux0po, flux0pi;  
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
                                   Context ctx, Runtime *runtime);
+  static void save_fluxes(LogicalRegion source, LogicalRegion target);
 public:
   static void parse_arguments(int argc, char **argv);
   static void report_arguments(void);
