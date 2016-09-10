@@ -16,3 +16,78 @@
 #include "snap.h"
 #include "outer.h"
 
+//------------------------------------------------------------------------------
+CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred)
+  : SnapTask<CalcOuterSource>(snap, snap.get_launch_bounds(), pred)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcOuterSource::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_cpu_variant<cpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcOuterSource::preregister_gpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_gpu_variant<gpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcOuterSource::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcOuterSource::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+
+}
+
+//------------------------------------------------------------------------------
+TestOuterConvergence::TestOuterConvergence(const Snap &snap, 
+                                           const Predicate &pred)
+  : SnapTask<TestOuterConvergence>(snap, snap.get_launch_bounds(), pred)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void TestOuterConvergence::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_cpu_variant<bool, cpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void TestOuterConvergence::preregister_gpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_gpu_variant<bool, gpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ bool TestOuterConvergence::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  return false;
+}
+
+//------------------------------------------------------------------------------
+/*static*/ bool TestOuterConvergence::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  return false;
+}
+

@@ -16,3 +16,78 @@
 #include "snap.h"
 #include "inner.h"
 
+//------------------------------------------------------------------------------
+CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred)
+  : SnapTask<CalcInnerSource>(snap, snap.get_launch_bounds(), pred)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcInnerSource::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_cpu_variant<cpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcInnerSource::preregister_gpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_gpu_variant<gpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcInnerSource::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void CalcInnerSource::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+
+}
+
+//------------------------------------------------------------------------------
+TestInnerConvergence::TestInnerConvergence(const Snap &snap, 
+                                           const Predicate &pred)
+  : SnapTask<TestInnerConvergence>(snap, snap.get_launch_bounds(), pred)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void TestInnerConvergence::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_cpu_variant<bool, cpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void TestInnerConvergence::preregister_gpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_gpu_variant<bool, gpu_implementation>();
+}
+
+//------------------------------------------------------------------------------
+/*static*/ bool TestInnerConvergence::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  return false;
+}
+
+//------------------------------------------------------------------------------
+/*static*/ bool TestInnerConvergence::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  return false;
+}
+

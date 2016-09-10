@@ -23,19 +23,35 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
+#include <cstring>
 
 #ifndef SNAP_MAX_ENERGY_GROUPS
-#define SNAP_MAX_ENERGY_GROUPS            1024
+#define SNAP_MAX_ENERGY_GROUPS            8192
 #endif
 
 using namespace Legion;
 using namespace Legion::Mapping;
+using namespace LegionRuntime::Arrays;
+
+extern LegionRuntime::Logger::Category log_snap;
 
 class Snap {
 public:
   enum SnapTaskID {
     SNAP_TOP_LEVEL_TASK_ID,
+    CALC_OUTER_SOURCE_TASK_ID,
+    TEST_OUTER_CONVERGENCE_TASK_ID,
+    CALC_INNER_SOURCE_TASK_ID,
+    TEST_INNER_CONVERGENCE_TASK_ID,
+    LAST_TASK_ID, // must be last
   };
+#define SNAP_TASK_NAMES           \
+    "Top Level Task",             \
+    "Calc Outer Source",          \
+    "Test Outer Convergence",     \
+    "Calc Inner Source",          \
+    "Test Inner Convergence",
+  static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
     CENTER_LAYOUT = 1,
@@ -51,6 +67,10 @@ public:
     OUTER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST,
     INNER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+1,
   };
+  enum SnapReductionID {
+    NO_REDUCTION_ID = 0,
+    AND_REDUCTION_ID = 1,
+  };
   enum SnapFieldID {
     FID_GROUP_0,
     FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
@@ -65,6 +85,11 @@ public:
   Snap(Context c, Runtime *rt)
     : ctx(c), runtime(rt) { }
 public:
+  inline const Rect<3>& get_simulation_bounds(void) const 
+    { return simulation_bounds; }
+  inline const Rect<3>& get_launch_bounds(void) const
+    { return launch_bounds; }
+public:
   void setup(void);
   void transport_solve(void);
   void output(void);
@@ -72,6 +97,9 @@ private:
   const Context ctx;
   Runtime *const runtime;
 private:
+  // Simulation bounds
+  Rect<3> simulation_bounds;
+  Rect<3> launch_bounds;
   // Primary logical regions
   LogicalRegion flux0, flux0po, flux0pi;  
 public:
@@ -129,6 +157,107 @@ public:
                                       const SelectTunableInput& input,
                                             SelectTunableOutput& output);
   };
+};
+
+template<typename T>
+class SnapTask : public IndexLauncher {
+public:
+  SnapTask(const Snap &snap, const Rect<3> &launch_domain, const Predicate &pred)
+    : IndexLauncher(T::TASK_ID, Domain::from_rect<3>(launch_domain), 
+                    TaskArgument(), ArgumentMap(), pred) { }
+public:
+  void dispatch(Context ctx, Runtime *runtime)
+  { 
+    log_snap.info("Dispatching Task %s (ID %d)", 
+        Snap::task_names[T::TASK_ID], T::TASK_ID);
+    runtime->execute_index_space(ctx, *this);
+  }
+  template<typename REDOP>
+  Future dispatch(Context ctx, Runtime *runtime)
+  {
+    assert(REDOP::REDOP_ID == T::REDOP);
+    log_snap.info("Dispatching Task %s (ID %d) with Reduction %d", 
+                  Snap::task_names[T::TASK_ID], T::TASK_ID, T::REDOP);
+    return runtime->execute_index_space(ctx, *this, T::REDOP);
+  }
+public:
+  static void preregister_all_variants(void)
+  {
+    T::preregister_cpu_variants();
+    T::preregister_gpu_variants();
+  }
+  static void register_task_name(Runtime *runtime)
+  {
+    runtime->attach_name(T::TASK_ID, Snap::task_names[T::TASK_ID]);
+  }
+protected:
+  // For registering CPU variants
+  template<void (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static void register_cpu_variant(void)
+  {
+    char variant_name[128];
+    strcpy(variant_name, "CPU ");
+    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
+    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+        NULL/*generator*/, variant_name);
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<TASK_PTR>(registrar, 
+                                         Snap::task_names[T::TASK_ID]);
+  }
+  template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static void register_cpu_variant(void)
+  {
+    char variant_name[128];
+    strcpy(variant_name, "CPU ");
+    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
+    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+        NULL/*generator*/, variant_name);
+    registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    Runtime::preregister_task_variant<RET_T,TASK_PTR>(registrar, 
+                                         Snap::task_names[T::TASK_ID]);
+  }
+protected:
+  // For registering GPU variants
+  template<void (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static void register_gpu_variant(void)
+  {
+    char variant_name[128];
+    strcpy(variant_name, "CPU ");
+    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
+    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+        NULL/*generator*/, variant_name);
+    registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
+    Runtime::preregister_task_variant<TASK_PTR>(registrar, 
+                                         Snap::task_names[T::TASK_ID]);
+  }
+  template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static void register_gpu_variant(void)
+  {
+    char variant_name[128];
+    strcpy(variant_name, "CPU ");
+    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
+    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+        NULL/*generator*/, variant_name);
+    registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
+    Runtime::preregister_task_variant<RET_T,TASK_PTR>(registrar, 
+                                         Snap::task_names[T::TASK_ID]);
+  }
+};
+
+class AndReduction {
+public:
+  static const Snap::SnapReductionID REDOP_ID = Snap::AND_REDUCTION_ID;
+public:
+  typedef bool LHS;
+  typedef bool RHS;
+  static const bool identity = true;
+public:
+  template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
+  template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
 };
 
 #endif // __SNAP_H__

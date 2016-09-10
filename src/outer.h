@@ -16,22 +16,41 @@
 #ifndef __OUTER_H__
 #define __OUTER_H__
 
+#include "snap.h"
 #include "legion.h"
 
 using namespace Legion;
 
-class CalcOuterSource : public IndexLauncher {
+class CalcOuterSource : public SnapTask<CalcOuterSource> {
 public:
-  CalcOuterSource(const Predicate &pred);
+  static const Snap::SnapTaskID TASK_ID = Snap::CALC_OUTER_SOURCE_TASK_ID;
+  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
-  void dispatch(Context ctx, Runtime *runtime);
+  CalcOuterSource(const Snap &snap, const Predicate &pred);
+public:
+  static void preregister_cpu_variants(void);
+  static void preregister_gpu_variants(void);
+public:
+  static void cpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static void gpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class TestOuterConvergence : public IndexLauncher {
+class TestOuterConvergence : public SnapTask<TestOuterConvergence> {
 public:
-  TestOuterConvergence(const Predicate &pred);
+  static const Snap::SnapTaskID TASK_ID = Snap::TEST_OUTER_CONVERGENCE_TASK_ID;
+  static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
 public:
-  Future dispatch(Context ctx, Runtime *runtime);
+  TestOuterConvergence(const Snap &snap, const Predicate &pred);
+public:
+  static void preregister_cpu_variants(void);
+  static void preregister_gpu_variants(void);
+public:
+  static bool cpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static bool gpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
 #endif // __OUTER_H__

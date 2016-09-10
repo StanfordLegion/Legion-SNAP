@@ -19,16 +19,22 @@
 
 #include <cstdio>
 
+LegionRuntime::Logger::Category log_snap("snap");
+
+const char* Snap::task_names[LAST_TASK_ID] = { SNAP_TASK_NAMES };
+
 //------------------------------------------------------------------------------
 void Snap::setup(void)
 //------------------------------------------------------------------------------
 {
-#if 0
   // This is the index space for all our regions
-  Rect<3> bounds(Point<3>(0,0,0), Point<3>(nx-1,ny-1,nz-1));
+  const int upper[3] = { nx-1, ny-1, nz-1 };
+  simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
   IndexSpace simulation_space = 
-    runtime->create_index_space(ctx, Domain::from_rect<3>(bounds));
+    runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   // Create the disjoint partition of the index space 
+  const int chunks[3] = { nx_chunks-1, ny_chunks-1, nz_chunks-1 };
+  launch_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(chunks)); 
 
   // Create the ghost partitions for each subregion
 
@@ -46,17 +52,16 @@ void Snap::setup(void)
   flux0 = runtime->create_logical_region(ctx, simulation_space, group_space);
   flux0po = runtime->create_logical_region(ctx, simulation_space, group_space);
   flux0pi = runtime->create_logical_region(ctx, simulation_space, group_space);
-#endif
 }
 
 //------------------------------------------------------------------------------
 void Snap::transport_solve(void)
 //------------------------------------------------------------------------------
 {
-#if 0
   // Use a tunable variable to decide how far ahead the outer loop gets
   Future outer_runahead_future = 
     runtime->select_tunable_value(ctx, OUTER_RUNAHEAD_TUNABLE);
+  // Same thing with the inner loop
   Future inner_runahead_future = 
     runtime->select_tunable_value(ctx, INNER_RUNAHEAD_TUNABLE);
   const unsigned outer_runahead = outer_runahead_future.get_result<unsigned>();
@@ -75,10 +80,10 @@ void Snap::transport_solve(void)
     for (unsigned otno = 0; otno < max_outer_iters; otno++)
     {
       // Do the outer source calculation 
-      CalcOuterSource outer_src(outer_pred);
+      CalcOuterSource outer_src(*this, outer_pred);
       outer_src.dispatch(ctx, runtime);
       // Save the fluxes
-      save_fluxes(flux0, flux0po);
+      //save_fluxes(flux0, flux0po);
       // Do the inner solve
       inner_converged_tests.clear();
       Predicate inner_pred = Predicate::TRUE_PRED;
@@ -86,15 +91,16 @@ void Snap::transport_solve(void)
       for (unsigned inno=0; inno < max_inner_iters; inno++)
       {
         // Do the inner source calculation
-        CalcInnerSource inner_src(inner_pred);
+        CalcInnerSource inner_src(*this, inner_pred);
         inner_src.dispatch(ctx, runtime);
         // Save the fluxes
-        save_fluxes(flux0, flux0pi);
+        //save_fluxes(flux0, flux0pi);
         // Perform the sweeps
 
         // Test for inner convergence
-        TestInnerConvergence inner_conv(inner_pred);
-        Future inner_converged = inner_conv.dispatch(ctx, runtime);
+        TestInnerConvergence inner_conv(*this, inner_pred);
+        Future inner_converged = 
+          inner_conv.dispatch<AndReduction>(ctx, runtime);
         inner_converged_tests.push_back(inner_converged);
         // Update the next predicate
         Predicate converged = runtime->create_predicate(ctx, inner_converged);
@@ -109,8 +115,9 @@ void Snap::transport_solve(void)
         }
       }
       // Test for outer convergence
-      TestOuterConvergence outer_conv(outer_pred);
-      Future outer_converged = outer_conv.dispatch(ctx, runtime);
+      TestOuterConvergence outer_conv(*this, outer_pred);
+      Future outer_converged = 
+        outer_conv.dispatch<AndReduction>(ctx, runtime);
       outer_converged_tests.push_back(outer_converged);
       // Update the next predicate
       Predicate converged = runtime->create_predicate(ctx, outer_converged);
@@ -125,7 +132,6 @@ void Snap::transport_solve(void)
       }
     }
   }
-#endif
 }
 
 //------------------------------------------------------------------------------
@@ -142,12 +148,10 @@ void Snap::output(void)
 {
   printf("Welcome to Legion-SNAP!\n");
   report_arguments();
-#if 0
   Snap snap(ctx, runtime); 
   snap.setup();
   snap.transport_solve();
   snap.output();
-#endif
 }
 
 static void skip_line(FILE *f)
@@ -179,25 +183,25 @@ static void read_double(FILE *f, const char *name, double &result)
   fscanf(f, format, &result);
 }
 
-int Snap::num_dims = 3;
-int Snap::nx_chunks = 1;
+int Snap::num_dims = 1;
+int Snap::nx_chunks = 4;
 int Snap::ny_chunks = 1;
 int Snap::nz_chunks = 1;
 int Snap::nx = 4;
-double Snap::lx = 0.1;
-int Snap::ny = 4;
-double Snap::ly = 0.1;
-int Snap::nz = 4;
-double Snap::lz = 0.1;
+double Snap::lx = 1.0;
+int Snap::ny = 1;
+double Snap::ly = 1.0;
+int Snap::nz = 1;
+double Snap::lz = 1.0;
 int Snap::num_moments = 1;
 int Snap::num_angles = 1;
 int Snap::num_groups = 1;
-double Snap::convergence_eps = 1e-2;
-int Snap::max_inner_iters = 1;
-int Snap::max_outer_iters = 1;
+double Snap::convergence_eps = 1e-4;
+int Snap::max_inner_iters = 5;
+int Snap::max_outer_iters = 100;
 bool Snap::time_dependent = false;
-double Snap::total_sim_time = 0.1;
-int Snap::num_steps = 2;
+double Snap::total_sim_time = 0.0;
+int Snap::num_steps = 1;
 Snap::MaterialLayout Snap::material_layout = HOMOGENEOUS_LAYOUT;
 Snap::SourceLayout Snap::source_layout = EVERYWHERE_SOURCE; 
 bool Snap::dump_scatter = false;
@@ -208,7 +212,7 @@ bool Snap::dump_solution = false;
 int Snap::dump_kplane = 0;
 int Snap::dump_population = 0;
 bool Snap::minikba_sweep = false;
-bool Snap::single_angle_copy = false;
+bool Snap::single_angle_copy = true;
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::parse_arguments(int argc, char **argv)
@@ -372,6 +376,13 @@ bool Snap::single_angle_copy = false;
   Runtime::preregister_task_variant<snap_top_level_task>(registrar,"snap_main");
   Runtime::set_top_level_task_id(SNAP_TOP_LEVEL_TASK_ID);
   Runtime::set_registration_callback(mapper_registration);
+  // Now register all the task variants
+  CalcOuterSource::preregister_all_variants();
+  TestOuterConvergence::preregister_all_variants();
+  CalcInnerSource::preregister_all_variants();
+  TestInnerConvergence::preregister_all_variants();
+  // Finally register our reduction operators
+  Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
 }
 
 //------------------------------------------------------------------------------
@@ -419,5 +430,45 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
       // Fall back to the default mapper
       DefaultMapper::select_tunable_value(ctx, task, input, output);
   }
+}
+
+//------------------------------------------------------------------------------
+template<>
+/*static*/ void AndReduction::apply<true>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  // This is monotonic so no need for synchronization either way 
+  if (!rhs)
+    lhs = false;
+}
+
+//------------------------------------------------------------------------------
+template<>
+/*static*/ void AndReduction::apply<false>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  // This is monotonic so no need for synchronization either way 
+  if (!rhs)
+    lhs = false;
+}
+
+//------------------------------------------------------------------------------
+template<>
+/*static*/ void AndReduction::fold<true>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  // This is monotonic so no need for synchronization either way
+  if (!rhs2)
+    rhs1 = false;
+}
+
+//------------------------------------------------------------------------------
+template<>
+/*static*/ void AndReduction::fold<false>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  // This is monotonic so no need for synchronization either way
+  if (!rhs2)
+    rhs1 = false;
 }
 
