@@ -30,28 +30,70 @@ void Snap::setup(void)
   // This is the index space for all our regions
   const int upper[3] = { nx-1, ny-1, nz-1 };
   simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
-  IndexSpace simulation_space = 
+  simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   // Create the disjoint partition of the index space 
   const int chunks[3] = { nx_chunks-1, ny_chunks-1, nz_chunks-1 };
   launch_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(chunks)); 
-
+  const int bf[3] = { nx_chunks, ny_chunks, nz_chunks };
+  Point<3> blocking_factor(bf);
+  Blockify<3> spatial_map(blocking_factor);
+  spatial_ip = 
+    runtime->create_index_partition(ctx, simulation_is,
+                                    spatial_map, DISJOINT_PARTITION);
   // Create the ghost partitions for each subregion
 
+  // Make some of our other field spaces
+  const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  material_is = runtime->create_index_space(ctx,
+      Domain::from_rect<1>(Rect<1>(Point<1>(0), Point<1>(nmat-1))));
+  const int slgg_upper[2] = { nmat-1, num_groups-1 };
+  Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
+  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
   // Make a field space for all the energy groups
-  FieldSpace group_space = runtime->create_field_space(ctx); 
+  group_fs = runtime->create_field_space(ctx); 
   {
     FieldAllocator allocator = 
-      runtime->create_field_allocator(ctx, group_space);
+      runtime->create_field_allocator(ctx, group_fs);
+    assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> group_fields(num_groups);
     for (unsigned idx = 0; idx < num_groups; idx++)
       group_fields[idx] = FID_GROUP_0 + idx;
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
   }
-  flux0 = runtime->create_logical_region(ctx, simulation_space, group_space);
-  flux0po = runtime->create_logical_region(ctx, simulation_space, group_space);
-  flux0pi = runtime->create_logical_region(ctx, simulation_space, group_space);
+  // Make a fields space for the moments for each energy group
+  moment_fs = runtime->create_field_space(ctx);
+  {
+    FieldAllocator allocator = 
+      runtime->create_field_allocator(ctx, moment_fs);
+    assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
+    std::vector<FieldID> moment_fields(num_groups);
+    for (unsigned idx = 0; idx < num_groups; idx++)
+      moment_fields[idx] = FID_GROUP_0 + idx;
+    // Notice that the field size is as big as necessary to store all moments
+    std::vector<size_t> moment_sizes(num_groups, num_moments*sizeof(double));
+    allocator.allocate_fields(moment_sizes, moment_fields);
+  }
+  flux_moment_fs = runtime->create_field_space(ctx);
+  {
+    FieldAllocator allocator = 
+      runtime->create_field_allocator(ctx, flux_moment_fs);
+    assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
+    std::vector<FieldID> moment_fields(num_groups);
+    for (unsigned idx = 0; idx < num_groups; idx++)
+      moment_fields[idx] = FID_GROUP_0 + idx;
+    // Storing number of moments - 1
+    std::vector<size_t> moment_sizes(num_groups, 
+                                      (num_moments-1)*sizeof(double));
+    allocator.allocate_fields(moment_sizes, moment_fields);
+  }
+  mat_fs = runtime->create_field_space(ctx);
+  {
+    FieldAllocator allocator = 
+      runtime->create_field_allocator(ctx, mat_fs);
+    allocator.allocate_field(sizeof(int), FID_SINGLE);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -64,6 +106,39 @@ void Snap::transport_solve(void)
   // Same thing with the inner loop
   Future inner_runahead_future = 
     runtime->select_tunable_value(ctx, INNER_RUNAHEAD_TUNABLE);
+
+  // Create our important arrays
+  SnapArray flux0(simulation_is, spatial_ip, group_fs, ctx, runtime);
+  SnapArray flux0po(simulation_is,spatial_ip, group_fs, ctx, runtime);
+  SnapArray flux0pi(simulation_is, spatial_ip, group_fs, ctx, runtime);
+  SnapArray fluxm(simulation_is, spatial_ip, flux_moment_fs, ctx, runtime);
+
+  SnapArray qi(simulation_is, spatial_ip, group_fs, ctx, runtime);
+  SnapArray q2grp0(simulation_is, spatial_ip, group_fs, ctx, runtime);
+  SnapArray q2grpm(simulation_is, spatial_ip, moment_fs, ctx, runtime);
+  SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime);
+
+  SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime);
+  SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, ctx, runtime);
+  SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime);
+
+  // Initialize our data
+  flux0.initialize();
+  flux0po.initialize();
+  flux0pi.initialize();
+  if (num_moments > 1)
+    fluxm.initialize();
+
+  qi.initialize();
+  q2grp0.initialize();
+  q2grpm.initialize();
+  qtot.initialize();
+
+  mat.initialize<int>(1);
+  slgg.initialize();
+  s_xs.initialize();
+
+  // Tunables should be ready by now
   const unsigned outer_runahead = outer_runahead_future.get_result<unsigned>();
   assert(outer_runahead > 0);
   const unsigned inner_runahead = inner_runahead_future.get_result<unsigned>();
@@ -72,33 +147,35 @@ void Snap::transport_solve(void)
   std::deque<Future> outer_converged_tests;
   std::deque<Future> inner_converged_tests;
   // Iterate over time steps
-  for (unsigned cy = 0; cy < num_steps; cy++)
+  for (unsigned cy = 0; cy < num_steps; ++cy)
   {
     outer_converged_tests.clear();
     Predicate outer_pred = Predicate::TRUE_PRED;
     // The outer solve loop    
-    for (unsigned otno = 0; otno < max_outer_iters; otno++)
+    for (unsigned otno = 0; otno < max_outer_iters; ++otno)
     {
       // Do the outer source calculation 
-      CalcOuterSource outer_src(*this, outer_pred);
+      CalcOuterSource outer_src(*this, outer_pred, qi, 
+                                slgg, mat, q2grp0, q2grpm);
       outer_src.dispatch(ctx, runtime);
       // Save the fluxes
-      //save_fluxes(flux0, flux0po);
+      save_fluxes(outer_pred, flux0, flux0po);
       // Do the inner solve
       inner_converged_tests.clear();
       Predicate inner_pred = Predicate::TRUE_PRED;
       // The inner solve loop
-      for (unsigned inno=0; inno < max_inner_iters; inno++)
+      for (unsigned inno=0; inno < max_inner_iters; ++inno)
       {
         // Do the inner source calculation
-        CalcInnerSource inner_src(*this, inner_pred);
+        CalcInnerSource inner_src(*this, inner_pred, s_xs, flux0, fluxm,
+                                  q2grp0, q2grpm, qtot);
         inner_src.dispatch(ctx, runtime);
         // Save the fluxes
-        //save_fluxes(flux0, flux0pi);
+        save_fluxes(inner_pred, flux0, flux0pi);
         // Perform the sweeps
 
         // Test for inner convergence
-        TestInnerConvergence inner_conv(*this, inner_pred);
+        TestInnerConvergence inner_conv(*this, inner_pred, flux0, flux0pi);
         Future inner_converged = 
           inner_conv.dispatch<AndReduction>(ctx, runtime);
         inner_converged_tests.push_back(inner_converged);
@@ -115,7 +192,7 @@ void Snap::transport_solve(void)
         }
       }
       // Test for outer convergence
-      TestOuterConvergence outer_conv(*this, outer_pred);
+      TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po);
       Future outer_converged = 
         outer_conv.dispatch<AndReduction>(ctx, runtime);
       outer_converged_tests.push_back(outer_converged);
@@ -138,6 +215,39 @@ void Snap::transport_solve(void)
 void Snap::output(void)
 //------------------------------------------------------------------------------
 {
+}
+
+//------------------------------------------------------------------------------
+void Snap::save_fluxes(const Predicate &pred, 
+                       const SnapArray &src, const SnapArray &dst) const
+//------------------------------------------------------------------------------
+{
+  // Build the CopyLauncher
+  CopyLauncher launcher(pred);
+  launcher.add_copy_requirements(
+      RegionRequirement(LogicalRegion::NO_REGION, READ_ONLY, 
+                        EXCLUSIVE, src.get_region()),
+      RegionRequirement(LogicalRegion::NO_REGION, WRITE_DISCARD,
+                        EXCLUSIVE, dst.get_region()));
+  const std::set<FieldID> &src_fields = src.get_all_fields();
+  RegionRequirement &src_req = launcher.src_requirements.back();
+  src_req.privilege_fields = src_fields;
+  src_req.instance_fields.insert(src_req.instance_fields.end(),
+      src_fields.begin(), src_fields.end());
+  const std::set<FieldID> &dst_fields = dst.get_all_fields();
+  RegionRequirement &dst_req = launcher.dst_requirements.back();
+  dst_req.privilege_fields = dst_fields;
+  dst_req.instance_fields.insert(dst_req.instance_fields.end(),
+      dst_fields.begin(), dst_fields.end());
+  // Iterate over the sub-regions and issue copies for each separately
+  for (GenericPointInRectIterator<3> color_it(launch_bounds); 
+        color_it; color_it++)   
+  {
+    DomainPoint dp = DomainPoint::from_point<3>(color_it.p);
+    src_req.region = src.get_subregion(dp);
+    dst_req.region = dst.get_subregion(dp);
+    runtime->issue_copy_operation(ctx, launcher);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -431,6 +541,85 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
       // Fall back to the default mapper
       DefaultMapper::select_tunable_value(ctx, task, input, output);
   }
+}
+
+//------------------------------------------------------------------------------
+SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
+                     Context c, Runtime *rt)
+  : ctx(c), runtime(rt)
+//------------------------------------------------------------------------------
+{
+  lr = runtime->create_logical_region(ctx, is, fs);
+  if (ip.exists())
+    lp = runtime->get_logical_partition(lr, ip);
+  runtime->get_field_space_fields(fs, all_fields);
+}
+
+//------------------------------------------------------------------------------
+SnapArray::SnapArray(const SnapArray &rhs)
+  : ctx(rhs.ctx), runtime(rhs.runtime)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+}
+
+//------------------------------------------------------------------------------
+SnapArray::~SnapArray(void)
+//------------------------------------------------------------------------------
+{
+  runtime->destroy_logical_region(ctx, lr);
+}
+
+//------------------------------------------------------------------------------
+SnapArray& SnapArray::operator=(const SnapArray &rhs)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return *this;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
+//------------------------------------------------------------------------------
+{
+  assert(lp.exists());
+  // See if we already cached the result
+  std::map<DomainPoint,LogicalRegion>::const_iterator finder = 
+    subregions.find(color);
+  if (finder != subregions.end())
+    return finder->second;
+  LogicalRegion result = runtime->get_logical_subregion_by_color(lp, color);
+  // Save the result for later
+  subregions[color] = result;
+  return result;
+}
+
+//------------------------------------------------------------------------------
+void SnapArray::initialize(void)
+//------------------------------------------------------------------------------
+{
+  assert(!all_fields.empty());
+  // Assume all the fields are the same size
+  size_t field_size = runtime->get_field_size(lr.get_field_space(),
+                                              *(all_fields.begin()));
+  void *buffer = malloc(field_size);
+  memset(buffer, 0, field_size);
+  FillLauncher launcher(lr, lr, TaskArgument(buffer, field_size));
+  launcher.fields = all_fields;
+  runtime->fill_fields(ctx, launcher);
+  free(buffer);
+}
+
+//------------------------------------------------------------------------------
+template<typename T>
+void SnapArray::initialize(T value)
+//------------------------------------------------------------------------------
+{
+  FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)));
+  launcher.fields = all_fields;
+  runtime->fill_fields(ctx, launcher);
 }
 
 //------------------------------------------------------------------------------

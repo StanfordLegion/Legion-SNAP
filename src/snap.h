@@ -35,6 +35,8 @@ using namespace LegionRuntime::Arrays;
 
 extern LegionRuntime::Logger::Category log_snap;
 
+class SnapArray;
+
 class Snap {
 public:
   enum SnapTaskID {
@@ -72,7 +74,8 @@ public:
     AND_REDUCTION_ID = 1,
   };
   enum SnapFieldID {
-    FID_GROUP_0,
+    FID_SINGLE, // For field spaces with just one field
+    FID_GROUP_0 = FID_SINGLE,
     FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
   };
   enum SnapPartitionID {
@@ -93,6 +96,9 @@ public:
   void setup(void);
   void transport_solve(void);
   void output(void);
+protected:
+  void save_fluxes(const Predicate &pred,
+                   const SnapArray &src, const SnapArray &dst) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -100,13 +106,20 @@ private:
   // Simulation bounds
   Rect<3> simulation_bounds;
   Rect<3> launch_bounds;
-  // Primary logical regions
-  LogicalRegion flux0, flux0po, flux0pi;  
+private:
+  IndexSpace simulation_is;
+  IndexPartition spatial_ip;
+  IndexSpace material_is;
+  IndexSpace slgg_is;
+private:
+  FieldSpace group_fs;
+  FieldSpace moment_fs;
+  FieldSpace flux_moment_fs;
+  FieldSpace mat_fs;
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
                                   Context ctx, Runtime *runtime);
-  static void save_fluxes(LogicalRegion source, LogicalRegion target);
 public:
   static void parse_arguments(int argc, char **argv);
   static void report_arguments(void);
@@ -247,7 +260,7 @@ protected:
   static void register_gpu_variant(void)
   {
     char variant_name[128];
-    strcpy(variant_name, "CPU ");
+    strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
@@ -260,7 +273,7 @@ protected:
   static void register_gpu_variant(void)
   {
     char variant_name[128];
-    strcpy(variant_name, "CPU ");
+    strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
@@ -268,6 +281,50 @@ protected:
     Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
                                        registrar, Snap::task_names[T::TASK_ID]);
   }
+};
+
+class SnapArray {
+public:
+  SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs, 
+            Context ctx, Runtime *runtime);
+  ~SnapArray(void);
+private:
+  SnapArray(const SnapArray &rhs);
+  SnapArray& operator=(const SnapArray &rhs);
+public:
+  inline LogicalRegion get_region(void) const { return lr; }
+  inline LogicalPartition get_partition(void) const { return lp; }
+  inline const std::set<FieldID>& get_all_fields(void) const 
+    { return all_fields; }
+  LogicalRegion get_subregion(const DomainPoint &color) const;
+public:
+  void initialize(void);
+  template<typename T>
+  void initialize(T value);
+public:
+  template<typename T>
+  inline void add_projection_requirement(PrivilegeMode priv, 
+                                         T &launcher) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lp, 0/*proj id*/,
+                                                      priv, EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields = all_fields;
+  }
+  template<typename T>
+  inline void add_region_requirement(PrivilegeMode priv, 
+                                     T &launcher) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields = all_fields;
+  }
+protected:
+  const Context ctx;
+  Runtime *const runtime;
+protected:
+  LogicalRegion lr;
+  LogicalPartition lp;
+  std::set<FieldID> all_fields;
+  mutable std::map<DomainPoint,LogicalRegion> subregions;
 };
 
 class AndReduction {

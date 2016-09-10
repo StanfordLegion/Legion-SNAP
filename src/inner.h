@@ -26,7 +26,10 @@ public:
   static const Snap::SnapTaskID TASK_ID = Snap::CALC_INNER_SOURCE_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
-  CalcInnerSource(const Snap &snap, const Predicate &pred);
+  CalcInnerSource(const Snap &snap, const Predicate &pred,
+                  const SnapArray &s_xs, const SnapArray &flux0,
+                  const SnapArray &fluxm, const SnapArray &q2grp0,
+                  const SnapArray &q2grpm, const SnapArray &qtot);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);
@@ -42,7 +45,8 @@ public:
   static const Snap::SnapTaskID TASK_ID = Snap::TEST_INNER_CONVERGENCE_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
 public:
-  TestInnerConvergence(const Snap &snap, const Predicate &pred);
+  TestInnerConvergence(const Snap &snap, const Predicate &pred,
+                       const SnapArray &flux0, const SnapArray &flux0pi);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

@@ -26,7 +26,10 @@ public:
   static const Snap::SnapTaskID TASK_ID = Snap::CALC_OUTER_SOURCE_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
-  CalcOuterSource(const Snap &snap, const Predicate &pred);
+  CalcOuterSource(const Snap &snap, const Predicate &pred,
+                  const SnapArray &qi, const SnapArray &slgg,
+                  const SnapArray &mat, const SnapArray &q2rgp0, 
+                  const SnapArray &q2grpm);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);
@@ -42,7 +45,8 @@ public:
   static const Snap::SnapTaskID TASK_ID = Snap::TEST_OUTER_CONVERGENCE_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
 public:
-  TestOuterConvergence(const Snap &snap, const Predicate &pred);
+  TestOuterConvergence(const Snap &snap, const Predicate &pred,
+                       const SnapArray &flux0, const SnapArray &flux0po);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

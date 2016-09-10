@@ -17,10 +17,21 @@
 #include "inner.h"
 
 //------------------------------------------------------------------------------
-CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred)
+CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
+                               const SnapArray &s_xs, const SnapArray &flux0,
+                               const SnapArray &fluxm, const SnapArray &q2grp0,
+                               const SnapArray &q2grpm, const SnapArray &qtot)
   : SnapTask<CalcInnerSource>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
+  s_xs.add_projection_requirement(READ_ONLY, *this);
+  flux0.add_projection_requirement(READ_ONLY, *this);
+  q2grp0.add_projection_requirement(READ_ONLY, *this);
+  q2grpm.add_projection_requirement(READ_ONLY, *this);
+  qtot.add_projection_requirement(WRITE_DISCARD, *this);
+  // only include this requirement if we have more than one moment
+  if (Snap::num_moments > 1)
+    fluxm.add_projection_requirement(READ_ONLY, *this);
 }
 
 //------------------------------------------------------------------------------
@@ -55,10 +66,14 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred)
 
 //------------------------------------------------------------------------------
 TestInnerConvergence::TestInnerConvergence(const Snap &snap, 
-                                           const Predicate &pred)
+                                           const Predicate &pred,
+                                           const SnapArray &flux0,
+                                           const SnapArray &flux0pi)
   : SnapTask<TestInnerConvergence>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
+  flux0.add_projection_requirement(READ_ONLY, *this);
+  flux0pi.add_projection_requirement(READ_ONLY, *this);
 }
 
 //------------------------------------------------------------------------------
