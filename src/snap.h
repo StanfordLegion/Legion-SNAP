@@ -190,6 +190,28 @@ public:
   {
     runtime->attach_name(T::TASK_ID, Snap::task_names[T::TASK_ID]);
   }
+private:
+  template<void (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static void snap_task_wrapper(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+  {
+    log_snap.info("Running Task %s (UID %lld) on Processor " IDFMT "",
+        task->get_task_name(), task->get_unique_id(), 
+        runtime->get_executing_processor(ctx).id);
+    (*TASK_PTR)(task, regions, ctx, runtime);
+  }
+  template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
+      const std::vector<PhysicalRegion>&, Context, Runtime*)>
+  static RET_T snap_task_wrapper(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+  {
+    log_snap.info("Running Task %s (UID %lld) on Processor " IDFMT "",
+        task->get_task_name(), task->get_unique_id(), 
+        runtime->get_executing_processor(ctx).id);
+    RET_T result = (*TASK_PTR)(task, regions, ctx, runtime);
+    return result;
+  }
 protected:
   // For registering CPU variants
   template<void (*TASK_PTR)(const Task*,
@@ -202,8 +224,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<TASK_PTR>(registrar, 
-                                         Snap::task_names[T::TASK_ID]);
+    Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar, 
+                                                Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
@@ -215,8 +237,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-    Runtime::preregister_task_variant<RET_T,TASK_PTR>(registrar, 
-                                         Snap::task_names[T::TASK_ID]);
+    Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
+                                       registrar, Snap::task_names[T::TASK_ID]);
   }
 protected:
   // For registering GPU variants
@@ -230,8 +252,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
-    Runtime::preregister_task_variant<TASK_PTR>(registrar, 
-                                         Snap::task_names[T::TASK_ID]);
+    Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar,
+                                                Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
@@ -243,8 +265,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
-    Runtime::preregister_task_variant<RET_T,TASK_PTR>(registrar, 
-                                         Snap::task_names[T::TASK_ID]);
+    Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
+                                       registrar, Snap::task_names[T::TASK_ID]);
   }
 };
 
