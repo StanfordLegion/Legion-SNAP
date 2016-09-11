@@ -33,7 +33,8 @@ OUTFILE		?= snap
 GEN_SRC		?= main.cc \
 		   snap.cc \
 		   outer.cc \
-		   inner.cc	# .cc files
+		   inner.cc \
+		   sweep.cc	# .cc files
 GEN_GPU_SRC	?=		# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile

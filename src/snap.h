@@ -45,6 +45,7 @@ public:
     TEST_OUTER_CONVERGENCE_TASK_ID,
     CALC_INNER_SOURCE_TASK_ID,
     TEST_INNER_CONVERGENCE_TASK_ID,
+    MINI_KBA_TASK_ID,
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES           \
@@ -52,7 +53,8 @@ public:
     "Calc Outer Source",          \
     "Test Outer Convergence",     \
     "Calc Inner Source",          \
-    "Test Inner Convergence",
+    "Test Inner Convergence",     \
+    "Mini KBA",                   
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
@@ -74,15 +76,89 @@ public:
     AND_REDUCTION_ID = 1,
   };
   enum SnapFieldID {
-    FID_SINGLE, // For field spaces with just one field
+    FID_SINGLE = 0, // For field spaces with just one field
+    // Fields for energy groups
     FID_GROUP_0 = FID_SINGLE,
+    // ...
     FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
+    FID_CORNER_0_EVEN_GHOST_FLUX_X_0,
+    FID_CORNER_0_EVEN_GHOST_FLUX_Y_0,
+    FID_CORNER_0_EVEN_GHOST_FLUX_Z_0,
+    FID_CORNER_0_ODD_GHOST_FLUX_X_0,
+    FID_CORNER_0_ODD_GHOST_FLUX_Y_0,
+    FID_CORNER_0_ODD_GHOST_FLUX_Z_0,
+    FID_CORNER_0_EVEN_MAX = FID_CORNER_0_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
+    FID_CORNER_1_EVEN_GHOST_FLUX_X_0,
+    FID_CORNER_1_EVEN_GHOST_FLUX_Y_0,
+    FID_CORNER_1_EVEN_GHOST_FLUX_Z_0,
+    FID_CORNER_1_ODD_GHOST_FLUX_X_0,
+    FID_CORNER_1_ODD_GHOST_FLUX_Y_0,
+    FID_CORNER_1_ODD_GHOST_FLUX_Z_0,
+    FID_CORNER_1_EVEN_MAX = FID_CORNER_1_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
+    FID_CORNER_2_EVEN_GHOST_FLUX_X_0,
+    FID_CORNER_2_EVEN_GHOST_FLUX_Y_0,
+    FID_CORNER_2_EVEN_GHOST_FLUX_Z_0,
+    FID_CORNER_2_ODD_GHOST_FLUX_X_0,
+    FID_CORNER_2_ODD_GHOST_FLUX_Y_0,
+    FID_CORNER_2_ODD_GHOST_FLUX_Z_0,
+    FID_CORNER_2_EVEN_MAX = FID_CORNER_2_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
+    FID_CORNER_3_EVEN_GHOST_FLUX_X_0,
+    FID_CORNER_3_EVEN_GHOST_FLUX_Y_0,
+    FID_CORNER_3_EVEN_GHOST_FLUX_Z_0,
+    FID_CORNER_3_ODD_GHOST_FLUX_X_0,
+    FID_CORNER_3_ODD_GHOST_FLUX_Y_0,
+    FID_CORNER_3_ODD_GHOST_FLUX_Z_0,
+    FID_CORNER_3_EVEN_MAX = FID_CORNER_3_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
   };
+#define SNAP_ENERGY_GROUP_FIELD(group)    \
+  ((Snap::SnapFieldID)(Snap::FID_GROUP_0 + (group)))
+#define SNAP_GHOST_FLUX_FIELD(corner, group, even, dim)                         \
+  ((Snap::SnapFieldID)(Snap::FID_CORNER_0_EVEN_GHOST_FLUX_X_0 +                 \
+    ((corner) * 6 * SNAP_MAX_ENERGY_GROUPS) +                                   \
+   ((group) * 6) + ((even) ? 0 : 3) + (dim)))
   enum SnapPartitionID {
-    DISJOINT_PARTITION,
-    GHOST_X_PARTITION,
-    GHOST_Y_PARTITION,
-    GHOST_Z_PARTITION,
+    DISJOINT_PARTITION = 0,
+    GHOST_X_PARTITION = 1,
+    GHOST_Y_PARTITION = 2,
+    GHOST_Z_PARTITION = 3,
+  };
+  enum SnapProjectionID {
+    CORNER_0_GHOST_X_IN_PROJECTION = 1,
+    CORNER_0_GHOST_Y_IN_PROJECTION = 2,
+    CORNER_0_GHOST_Z_IN_PROJECTION = 3,
+    CORNER_1_GHOST_X_IN_PROJECTION = 4,
+    CORNER_1_GHOST_Y_IN_PROJECTION = 5,
+    CORNER_1_GHOST_Z_IN_PROJECTION = 6,
+    CORNER_2_GHOST_X_IN_PROJECTION = 7,
+    CORNER_2_GHOST_Y_IN_PROJECTION = 8,
+    CORNER_2_GHOST_Z_IN_PROJECTION = 9,
+    CORNER_3_GHOST_X_IN_PROJECTION = 10,
+    CORNER_3_GHOST_Y_IN_PROJECTION = 11,
+    CORNER_3_GHOST_Z_IN_PROJECTION = 12,
+
+    CORNER_0_GHOST_X_OUT_PROJECTION = 13,
+    CORNER_0_GHOST_Y_OUT_PROJECTION = 14,
+    CORNER_0_GHOST_Z_OUT_PROJECTION = 15,
+    CORNER_1_GHOST_X_OUT_PROJECTION = 16,
+    CORNER_1_GHOST_Y_OUT_PROJECTION = 17,
+    CORNER_1_GHOST_Z_OUT_PROJECTION = 18,
+    CORNER_2_GHOST_X_OUT_PROJECTION = 19,
+    CORNER_2_GHOST_Y_OUT_PROJECTION = 20,
+    CORNER_2_GHOST_Z_OUT_PROJECTION = 21,
+    CORNER_3_GHOST_X_OUT_PROJECTION = 22,
+    CORNER_3_GHOST_Y_OUT_PROJECTION = 23,
+    CORNER_3_GHOST_Z_OUT_PROJECTION = 24,
+  };
+#define SNAP_GHOST_INPUT_PROJECTION(corner, dim)                    \
+  ((Snap::SnapProjectionID)(Snap::CORNER_0_GHOST_X_IN_PROJECTION +  \
+    ((corner) * 3) + (dim)))
+#define SNAP_GHOST_OUTPUT_PROJECTION(corner, dim)                   \
+  ((Snap::SnapProjectionID)(Snap::CORNER_0_GHOST_X_OUT_PROJECTION + \
+    ((corner) * 3) + (dim)))
+
+  enum SnapGhostColor {
+    LO_GHOST = 0,
+    HI_GHOST = 1,
   };
 public:
   Snap(Context c, Runtime *rt)
@@ -99,6 +175,8 @@ public:
 protected:
   void save_fluxes(const Predicate &pred,
                    const SnapArray &src, const SnapArray &dst) const;
+  void perform_sweeps(const Predicate &pred, const SnapArray &flux,
+                      const SnapArray &qtot);
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -113,17 +191,21 @@ private:
   IndexSpace slgg_is;
 private:
   FieldSpace group_fs;
+  FieldSpace group_and_ghost_fs;
   FieldSpace moment_fs;
   FieldSpace flux_moment_fs;
   FieldSpace mat_fs;
+private:
+  std::vector<Domain> wavefront_domains[4];
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
                                   Context ctx, Runtime *runtime);
 public:
   static void parse_arguments(int argc, char **argv);
+  static void compute_wavefronts(void);
   static void report_arguments(void);
-  static void register_task_variants(void);
+  static void perform_registrations(void);
   static void mapper_registration(Machine machine, Runtime *runtime,
                                   const std::set<Processor> &local_procs);
 public:
@@ -158,6 +240,11 @@ public:
   static int dump_population;  // originally popout
   static bool minikba_sweep; // originally swp_typ
   static bool single_angle_copy; // originall angcpy
+public: // derived
+  static int num_corners; // orignally ncor
+  // Indexed by wavefront number and the point number
+  static std::vector<std::vector<DomainPoint> > wavefront_map[4];
+  static int corner_table[2][4];
 public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
@@ -294,8 +381,8 @@ private:
 public:
   inline LogicalRegion get_region(void) const { return lr; }
   inline LogicalPartition get_partition(void) const { return lp; }
-  inline const std::set<FieldID>& get_all_fields(void) const 
-    { return all_fields; }
+  inline const std::set<FieldID>& get_regular_fields(void) const 
+    { return regular_fields; }
   LogicalRegion get_subregion(const DomainPoint &color) const;
 public:
   void initialize(void);
@@ -303,19 +390,27 @@ public:
   void initialize(T value);
 public:
   template<typename T>
-  inline void add_projection_requirement(PrivilegeMode priv, 
+  inline void add_projection_requirement(PrivilegeMode priv,
                                          T &launcher) const
   {
     launcher.add_region_requirement(RegionRequirement(lp, 0/*proj id*/,
                                                       priv, EXCLUSIVE, lr));
-    launcher.region_requirements.back().privilege_fields = all_fields;
+    launcher.region_requirements.back().privilege_fields = regular_fields;
   }
   template<typename T>
-  inline void add_region_requirement(PrivilegeMode priv, 
+  inline void add_projection_requirement(PrivilegeMode priv, T &launcher,
+                        Snap::SnapFieldID field, ProjectionID proj_id = 0) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lp, proj_id, priv,
+                                                      EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(field);
+  }
+  template<typename T>
+  inline void add_region_requirement(PrivilegeMode priv,
                                      T &launcher) const
   {
     launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
-    launcher.region_requirements.back().privilege_fields = all_fields;
+    launcher.region_requirements.back().privilege_fields = regular_fields;
   }
 protected:
   const Context ctx;
@@ -323,8 +418,57 @@ protected:
 protected:
   LogicalRegion lr;
   LogicalPartition lp;
-  std::set<FieldID> all_fields;
+  std::set<FieldID> regular_fields;
+  std::set<FieldID> ghost_fields;
   mutable std::map<DomainPoint,LogicalRegion> subregions;
+};
+
+class SnapInputProjectionFunctor : public ProjectionFunctor {
+public:
+  SnapInputProjectionFunctor(int corner, int dim);
+public:
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index, 
+                                LogicalRegion upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index, 
+                                LogicalPartition upper_bound,
+                                const DomainPoint &point);
+  virtual unsigned get_depth(void) const { return 1; }
+private:
+  static Snap::SnapGhostColor get_color(int corner, int dim);
+  static Point<3> get_offset(int corner, int dim);
+protected:
+  const int dim;
+  const int corner;
+  const Snap::SnapGhostColor color;
+  const Point<3> offset;
+  std::vector<std::vector<LogicalRegion> > cache;    
+  std::vector<std::vector<bool> > cache_valid;
+};
+
+class SnapOutputProjectionFunctor : public ProjectionFunctor {
+public:
+  SnapOutputProjectionFunctor(int corner, int dim);
+public:
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index, 
+                                LogicalRegion upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index,
+                                LogicalPartition upper_bound,
+                                const DomainPoint &point);
+  virtual unsigned get_depth(void) const { return 1; }
+private:
+  static Snap::SnapGhostColor get_color(int corner, int dim);
+protected:
+  const int dim;
+  const int corner;
+  const Snap::SnapGhostColor color;
+  std::vector<std::vector<LogicalRegion> > cache; 
+  std::vector<std::vector<bool> > cache_valid;
 };
 
 class AndReduction {

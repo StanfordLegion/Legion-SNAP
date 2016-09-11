@@ -18,7 +18,7 @@
 int main(int argc, char **argv)
 {
   Snap::parse_arguments(argc, argv);
-  Snap::register_task_variants();
+  Snap::perform_registrations();
   return Runtime::start(argc, argv);
 }
 

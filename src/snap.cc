@@ -16,8 +16,12 @@
 #include "snap.h"
 #include "outer.h"
 #include "inner.h"
+#include "sweep.h"
 
 #include <cstdio>
+
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
 
 LegionRuntime::Logger::Category log_snap("snap");
 
@@ -28,21 +32,56 @@ void Snap::setup(void)
 //------------------------------------------------------------------------------
 {
   // This is the index space for all our regions
-  const int upper[3] = { nx-1, ny-1, nz-1 };
+  // To handle vaccum boundary conditions we allocate an extra chunks of cells
+  // on each side of the space just to make everything easier for the
+  // computation later. Ironically this makes it look more like the fortran
+  // implementation because it makes a lot of indexing look 1-based. This
+  // has virtually no overhead cause making overly large logical regions
+  // doesn't result in any memory allocation.
+  int x_cells_per_chunk = nx / nx_chunks;
+  int y_cells_per_chunk = ny / ny_chunks;
+  int z_cells_per_chunk = nz / nz_chunks;
+  const int upper[3] = { (nx_chunks+2)*x_cells_per_chunk - 1,
+                         (ny_chunks+2)*y_cells_per_chunk - 1,
+                         (nz_chunks+2)*z_cells_per_chunk - 1 };
   simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
   simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   // Create the disjoint partition of the index space 
-  const int chunks[3] = { nx_chunks-1, ny_chunks-1, nz_chunks-1 };
-  launch_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(chunks)); 
-  const int bf[3] = { nx_chunks, ny_chunks, nz_chunks };
+  const int bf[3] = { x_cells_per_chunk, y_cells_per_chunk, z_cells_per_chunk };
   Point<3> blocking_factor(bf);
   Blockify<3> spatial_map(blocking_factor);
   spatial_ip = 
     runtime->create_index_partition(ctx, simulation_is,
                                     spatial_map, DISJOINT_PARTITION);
+  // Launch bounds though ignore the boundary condition chunks
+  // so they start at 1 and go to number of chunks, just like Fortran!
+  const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
+  launch_bounds = Rect<3>(Point<3>::ONES(), Point<3>(chunks)); 
   // Create the ghost partitions for each subregion
+  Rect<3> color_space(Point<3>::ZEROES(), Point<3>(chunks) + Point<3>::ONES());
+  for (GenericPointInRectIterator<3> itr(color_space); itr; itr++)
+  {
+    IndexSpace child_is = 
+      runtime->get_index_subspace<3>(ctx, spatial_ip, itr.p);
+    Rect<3> child_bounds = spatial_map.preimage(itr.p);
+    for (int i = 0; i < num_dims; i++)
+    {
+      DomainColoring dc;
 
+      Rect<3> bounds_lo = child_bounds;
+      bounds_lo.hi.x[i] = bounds_lo.lo.x[i];
+      dc[LO_GHOST] = Domain::from_rect<3>(bounds_lo);
+
+      Rect<3> bounds_hi = child_bounds;
+      bounds_hi.lo.x[i] = bounds_hi.hi.x[i];
+      dc[HI_GHOST] = Domain::from_rect<3>(bounds_hi);
+
+      runtime->create_index_partition(ctx, child_is, 
+          Domain::from_rect<1>(Rect<1>(LO_GHOST,HI_GHOST)), dc, 
+          DISJOINT_KIND, GHOST_X_PARTITION+i);
+    }
+  }
   // Make some of our other field spaces
   const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
   material_is = runtime->create_index_space(ctx,
@@ -58,9 +97,36 @@ void Snap::setup(void)
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> group_fields(num_groups);
     for (unsigned idx = 0; idx < num_groups; idx++)
-      group_fields[idx] = FID_GROUP_0 + idx;
+      group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
+  }
+  // This field space contains all the energy group fields and ghost fields
+  group_and_ghost_fs = runtime->create_field_space(ctx);
+  {
+    FieldAllocator allocator = 
+      runtime->create_field_allocator(ctx, group_and_ghost_fs);
+    // Normal energy group fields
+    assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
+    std::vector<FieldID> group_fields(num_groups);
+    for (unsigned idx = 0; idx < num_groups; idx++)
+      group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
+    std::vector<size_t> group_sizes(num_groups, sizeof(double));
+    allocator.allocate_fields(group_sizes, group_fields);
+    // ghost corner fields
+    std::vector<FieldID> ghost_fields(2*num_groups*num_dims);
+    std::vector<size_t> ghost_sizes(2*num_groups*num_dims, sizeof(double));
+    for (unsigned corner = 0; corner < num_corners; corner++)
+    {
+      unsigned next = 0;
+      for (unsigned g = 0; g < num_groups; g++)
+        for (unsigned i = 0; i < 2; i++)
+          for (unsigned dim = 0; dim < num_dims; dim++)
+            ghost_fields[next++] = 
+              SNAP_GHOST_FLUX_FIELD(corner, g, i==0, dim);
+
+      allocator.allocate_fields(ghost_sizes, ghost_fields);
+    }
   }
   // Make a fields space for the moments for each energy group
   moment_fs = runtime->create_field_space(ctx);
@@ -70,7 +136,7 @@ void Snap::setup(void)
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> moment_fields(num_groups);
     for (unsigned idx = 0; idx < num_groups; idx++)
-      moment_fields[idx] = FID_GROUP_0 + idx;
+      moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Notice that the field size is as big as necessary to store all moments
     std::vector<size_t> moment_sizes(num_groups, num_moments*sizeof(double));
     allocator.allocate_fields(moment_sizes, moment_fields);
@@ -82,7 +148,7 @@ void Snap::setup(void)
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> moment_fields(num_groups);
     for (unsigned idx = 0; idx < num_groups; idx++)
-      moment_fields[idx] = FID_GROUP_0 + idx;
+      moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Storing number of moments - 1
     std::vector<size_t> moment_sizes(num_groups, 
                                       (num_moments-1)*sizeof(double));
@@ -93,6 +159,19 @@ void Snap::setup(void)
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, mat_fs);
     allocator.allocate_field(sizeof(int), FID_SINGLE);
+  }
+  // Compute the wavefronts for our sweeps
+  for (int corner = 0; corner < num_corners; corner++)
+  {
+    assert(!wavefront_map[corner].empty());
+    for (std::vector<std::vector<DomainPoint> >::const_iterator it = 
+         wavefront_map[corner].begin(); it != wavefront_map[corner].end(); it++)
+    {
+      const size_t wavefront_points = it->size();
+      assert(wavefront_points > 0);
+      wavefront_domains[corner].push_back(Domain::from_rect<1>(
+            Rect<1>(Point<1>(0), Point<1>(wavefront_points-1))));
+    }
   }
 }
 
@@ -108,7 +187,7 @@ void Snap::transport_solve(void)
     runtime->select_tunable_value(ctx, INNER_RUNAHEAD_TUNABLE);
 
   // Create our important arrays
-  SnapArray flux0(simulation_is, spatial_ip, group_fs, ctx, runtime);
+  SnapArray flux0(simulation_is, spatial_ip, group_and_ghost_fs, ctx, runtime);
   SnapArray flux0po(simulation_is,spatial_ip, group_fs, ctx, runtime);
   SnapArray flux0pi(simulation_is, spatial_ip, group_fs, ctx, runtime);
   SnapArray fluxm(simulation_is, spatial_ip, flux_moment_fs, ctx, runtime);
@@ -173,7 +252,7 @@ void Snap::transport_solve(void)
         // Save the fluxes
         save_fluxes(inner_pred, flux0, flux0pi);
         // Perform the sweeps
-
+        perform_sweeps(inner_pred, flux0, qtot); 
         // Test for inner convergence
         TestInnerConvergence inner_conv(*this, inner_pred, flux0, flux0pi);
         Future inner_converged = 
@@ -229,12 +308,12 @@ void Snap::save_fluxes(const Predicate &pred,
                         EXCLUSIVE, src.get_region()),
       RegionRequirement(LogicalRegion::NO_REGION, WRITE_DISCARD,
                         EXCLUSIVE, dst.get_region()));
-  const std::set<FieldID> &src_fields = src.get_all_fields();
+  const std::set<FieldID> &src_fields = src.get_regular_fields();
   RegionRequirement &src_req = launcher.src_requirements.back();
   src_req.privilege_fields = src_fields;
   src_req.instance_fields.insert(src_req.instance_fields.end(),
       src_fields.begin(), src_fields.end());
-  const std::set<FieldID> &dst_fields = dst.get_all_fields();
+  const std::set<FieldID> &dst_fields = dst.get_regular_fields();
   RegionRequirement &dst_req = launcher.dst_requirements.back();
   dst_req.privilege_fields = dst_fields;
   dst_req.instance_fields.insert(dst_req.instance_fields.end(),
@@ -247,6 +326,43 @@ void Snap::save_fluxes(const Predicate &pred,
     src_req.region = src.get_subregion(dp);
     dst_req.region = dst.get_subregion(dp);
     runtime->issue_copy_operation(ctx, launcher);
+  }
+}
+
+//------------------------------------------------------------------------------
+void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
+                          const SnapArray &qtot)
+//------------------------------------------------------------------------------
+{
+  // Loop over the corners
+  for (unsigned corner = 0; corner < num_corners; corner++)
+  {
+    // Then loop over the energy groups
+    for (unsigned group = 0; group < num_groups; group++)
+    {
+      // Launch the sweep from this corner for the given field
+      // Create our miniKBA tasks, we need an even and an odd one
+      // to ensure that we meet the index space non-interference
+      // requirement across iterations, eventually we should just
+      // be able to make this a single index space launch
+      MiniKBATask mini_kba_even(*this, pred, flux, qtot,
+                                group, corner, true/*even*/);
+      MiniKBATask mini_kba_odd(*this, pred, flux, qtot,
+                                group, corner, false/*even*/);
+      // Iterate over the launch spaces and alternate between
+      // launching from the even and odd launchers
+      bool even = true;
+      for (unsigned idx = 0; idx < wavefront_domains[corner].size(); idx++)
+      {
+        if (even)
+          mini_kba_even.dispatch_wavefront(
+              wavefront_domains[corner][idx], ctx, runtime);
+        else
+          mini_kba_odd.dispatch_wavefront(
+              wavefront_domains[corner][idx], ctx, runtime);
+        even = !even;
+      }
+    }
   }
 }
 
@@ -321,8 +437,12 @@ bool Snap::flux_fixup = false;
 bool Snap::dump_solution = false;
 int Snap::dump_kplane = 0;
 int Snap::dump_population = 0;
-bool Snap::minikba_sweep = false;
+bool Snap::minikba_sweep = true;
 bool Snap::single_angle_copy = true;
+
+int Snap::num_corners = 1;
+std::vector<std::vector<DomainPoint> > Snap::wavefront_map[4];
+int Snap::corner_table[2][4] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::parse_arguments(int argc, char **argv)
@@ -411,12 +531,22 @@ bool Snap::single_angle_copy = true;
   read_bool(f, "it_det", dump_iteration);
   read_int(f, "fluxp", dump_flux);
   read_bool(f, "fixup", flux_fixup);
-  read_bool(f, "solutp", dump_solution);
+  read_bool(f, "soloutp", dump_solution);
   read_int(f, "kplane", dump_kplane);
   read_int(f, "popout", dump_population);
   read_bool(f, "swp_typ", minikba_sweep);
   read_bool(f, "angcpy", single_angle_copy);
   fclose(f);
+  if (!minikba_sweep)
+  {
+    printf("ERROR: swp_type=0 is not currently supported.\n");
+    printf("Legion SNAP currently implements only mini-kba sweeps\n");
+    exit(1);
+  }
+  // Some derived quantities
+  num_corners = MIN(num_dims, 2) * MAX(num_dims-1, 1);
+  compute_wavefronts(); 
+  
   // Check all the conditions
   assert((1 <= num_dims) && (num_dims <= 3));
   assert((1 <= nx_chunks) && (nx_chunks <= nx));
@@ -428,6 +558,9 @@ bool Snap::single_angle_copy = true;
   assert(0.0 < ly);
   assert(4 <= ny);
   assert(0.0 < lz);
+  assert((nx % nx_chunks) == 0);
+  assert((ny % ny_chunks) == 0);
+  assert((nz % nz_chunks) == 0);
   assert((1 <= num_moments) && (num_moments <= 4));
   assert(1 <= num_angles);
   assert(1 <= num_groups);
@@ -437,6 +570,128 @@ bool Snap::single_angle_copy = true;
   if (time_dependent)
     assert(0.0 <= total_sim_time);
   assert(1 <= num_steps);
+}
+
+static bool contains_point(Point<3> &point, int xlo, int xhi, 
+                           int ylo, int yhi, int zlo, int zhi)
+{
+  if ((point[0] < xlo) || (point[0] > xhi))
+    return false;
+  if ((point[1] < ylo) || (point[1] > yhi))
+    return false;
+  if ((point[2] < zlo) || (point[2] > zhi))
+    return false;
+  return true;
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void Snap::compute_wavefronts(void)
+//------------------------------------------------------------------------------
+{
+  if (num_dims == 3)
+  {
+    if (ny_chunks <= nz_chunks)
+    {
+      corner_table[0][0] = 0;
+      corner_table[0][1] = 1;
+      corner_table[0][2] = 1;
+      corner_table[0][3] = 0;
+      corner_table[1][0] = 0;
+      corner_table[1][1] = 0;
+      corner_table[1][2] = 1;
+      corner_table[1][3] = 1;
+    }
+    else
+    {
+      corner_table[0][0] = 0;
+      corner_table[0][1] = 0;
+      corner_table[0][2] = 1;
+      corner_table[0][3] = 1;
+      corner_table[1][0] = 0;
+      corner_table[1][1] = 1;
+      corner_table[1][2] = 1;
+      corner_table[1][3] = 0;
+    }
+  }
+  else
+  {
+    corner_table[0][0] = 0;
+    corner_table[0][1] = 1;
+    corner_table[0][2] = 0;
+    corner_table[0][3] = 0;
+    corner_table[1][0] = 0;
+    corner_table[1][1] = 0;
+    corner_table[1][2] = 0;
+    corner_table[1][3] = 0;
+  }
+  // Compute the mapping from corners to wavefronts
+  for (unsigned corner = 0; corner < num_corners; corner++)
+  {
+    int jd = corner_table[0][corner];
+    int kd = corner_table[1][corner];
+    int jlo = 1, jhi = 1, jst = 0; 
+    int klo = 1, khi = 1, kst = 0;
+    if (jd == 0)
+    {
+      jlo = ny_chunks;
+      jhi = 1;
+      jst = -1;
+    }
+    else
+    {
+      jlo = 1;
+      jhi = ny_chunks;
+      jst = 1;
+    }
+    if (kd == 0)
+    {
+      klo = nz_chunks;
+      khi = 1;
+      kst = -1;
+    }
+    else
+    {
+      klo = 1;
+      khi = nz_chunks;
+      kst = 1;
+    }
+    std::set<DomainPoint> current_points;
+    const int start[3] = { 1, jlo, klo };
+    current_points.insert(DomainPoint::from_point<3>(Point<3>(start)));
+    const int stride_x[3] = { 1, 0, 0 };
+    Point<3> x_step(stride_x);
+    const int stride_y[3] = { 0 , jst, 0 };
+    Point<3> y_step(stride_y);
+    const int stride_z[3] = { 0, 0, kst };
+    Point<3> z_step(stride_z);
+    // Do a little BFS to handle weird rectangle shapes correctly
+    unsigned wavefront_number = 0;
+    while (!current_points.empty())
+    {
+      wavefront_map[corner].push_back(std::vector<DomainPoint>());
+      std::vector<DomainPoint> &wavefront_points = 
+                          wavefront_map[corner][wavefront_number];
+      std::set<DomainPoint> next_points;
+      for (std::set<DomainPoint>::const_iterator it = current_points.begin();
+            it != current_points.end(); it++)
+      {
+        // Save the point in this wavefront
+        wavefront_points.push_back(*it);
+        Point<3> point = it->get_point<3>();
+        Point<3> next_x = point + x_step;
+        if (contains_point(next_x, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
+          next_points.insert(DomainPoint::from_point<3>(next_x));
+        Point<3> next_y = point + y_step;
+        if (contains_point(next_y, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
+          next_points.insert(DomainPoint::from_point<3>(next_y));
+        Point<3> next_z = point + z_step;
+        if (contains_point(next_z, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
+          next_points.insert(DomainPoint::from_point<3>(next_z));
+      }
+      current_points = next_points;
+      wavefront_number++;
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -478,7 +733,7 @@ bool Snap::single_angle_copy = true;
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void Snap::register_task_variants(void)
+/*static*/ void Snap::perform_registrations(void)
 //------------------------------------------------------------------------------
 {
   TaskVariantRegistrar registrar(SNAP_TOP_LEVEL_TASK_ID, "snap_main_variant");
@@ -492,6 +747,18 @@ bool Snap::single_angle_copy = true;
   TestOuterConvergence::preregister_all_variants();
   CalcInnerSource::preregister_all_variants();
   TestInnerConvergence::preregister_all_variants();
+  MiniKBATask::preregister_all_variants();
+  // Register projection functors
+  for (int corner = 0; corner < num_corners; corner++)
+    for (int dim = 0; dim < num_dims; dim++)
+    {
+      SnapProjectionID input_id = SNAP_GHOST_INPUT_PROJECTION(corner, dim); 
+      Runtime::preregister_projection_functor(input_id, 
+          new SnapInputProjectionFunctor(corner, dim));
+      SnapProjectionID output_id = SNAP_GHOST_OUTPUT_PROJECTION(corner, dim); 
+      Runtime::preregister_projection_functor(output_id,
+          new SnapOutputProjectionFunctor(corner, dim));
+    }
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
 }
@@ -552,7 +819,16 @@ SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
   lr = runtime->create_logical_region(ctx, is, fs);
   if (ip.exists())
     lp = runtime->get_logical_partition(lr, ip);
+  std::vector<FieldID> all_fields;
   runtime->get_field_space_fields(fs, all_fields);
+  for (std::vector<FieldID>::const_iterator it = all_fields.begin();
+        it != all_fields.end(); it++)
+  {
+    if ((*it) < Snap::FID_GROUP_MAX)
+      regular_fields.insert(*it);
+    else
+      ghost_fields.insert(*it);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -600,14 +876,14 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 void SnapArray::initialize(void)
 //------------------------------------------------------------------------------
 {
-  assert(!all_fields.empty());
+  assert(!regular_fields.empty());
   // Assume all the fields are the same size
   size_t field_size = runtime->get_field_size(lr.get_field_space(),
-                                              *(all_fields.begin()));
+                                              *(regular_fields.begin()));
   void *buffer = malloc(field_size);
   memset(buffer, 0, field_size);
   FillLauncher launcher(lr, lr, TaskArgument(buffer, field_size));
-  launcher.fields = all_fields;
+  launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
   free(buffer);
 }
@@ -618,8 +894,223 @@ void SnapArray::initialize(T value)
 //------------------------------------------------------------------------------
 {
   FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)));
-  launcher.fields = all_fields;
+  launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
+}
+
+//------------------------------------------------------------------------------
+SnapInputProjectionFunctor::SnapInputProjectionFunctor(int c, int d)
+  : ProjectionFunctor(), dim(d), corner(c), 
+    color(get_color(c,d)), offset(get_offset(c,d))
+//------------------------------------------------------------------------------
+{
+  // Set up the cache now so we don't need a lock later
+  cache.resize(Snap::wavefront_map[corner].size());
+  cache_valid.resize(Snap::wavefront_map[corner].size());
+  for (unsigned idx = 0; idx < cache.size(); idx++)
+  {
+    cache[idx].resize(Snap::wavefront_map[corner][idx].size(), 
+                      LogicalRegion::NO_REGION);
+    cache_valid[idx].resize(Snap::wavefront_map[corner][idx].size(), false);
+  }
+}
+
+//------------------------------------------------------------------------------
+/*static*/ Snap::SnapGhostColor 
+                      SnapInputProjectionFunctor::get_color(int corner, int dim)
+//------------------------------------------------------------------------------
+{
+  assert(dim < 3);
+  assert(corner < 4);
+  // If we are the x-dimension we are always writing to hi
+  if (dim > 0)
+  {
+    if (dim == 2)
+    {
+      int kd = Snap::corner_table[1][corner];
+      if (kd == 0)
+        return Snap::LO_GHOST;
+      else
+        return Snap::HI_GHOST;
+    }
+    else
+    {
+      // 2-D case
+      int jd = Snap::corner_table[0][corner];
+      if (jd == 0)
+        return Snap::LO_GHOST;
+      else
+        return Snap::HI_GHOST;
+    }
+  }
+  // For the x-dimension we are always walking with in the positive direction
+  return Snap::HI_GHOST;
+}
+
+//------------------------------------------------------------------------------
+/*static*/ Point<3> SnapInputProjectionFunctor::get_offset(int corner, int dim)
+//------------------------------------------------------------------------------
+{
+  assert(dim < 3);
+  assert(corner < 4);
+  int offset[3] = { 0, 0, 0 };
+  // If we are the x-dimension we are always writing to hi
+  if (dim > 0)
+  {
+    if (dim == 2)
+    {
+      int kd = Snap::corner_table[1][corner];
+      if (kd == 0)
+      {
+        offset[2] = -1;
+        return Point<3>(offset);
+      }
+      else
+      {
+        offset[2] = 1;
+        return Point<3>(offset);
+      }
+    }
+    else
+    {
+      // 2-D case
+      int jd = Snap::corner_table[0][corner];
+      if (jd == 0)
+      {
+        offset[1] = -1;
+        return Point<3>(offset);
+      }
+      else
+      {
+        offset[1] = 1;
+        return Point<3>(offset);
+      }
+    }
+  }
+  // For the x-dimension we are always walking with in the positive direction
+  offset[0] = 1;
+  return Point<3>(offset);
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
+            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
+         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // Figure out which wavefront we are in 
+  unsigned wavefront = *((const unsigned*)task->args);
+  assert(point.get_dim() == 1);
+  Point<1> p = point.get_point<1>();
+  // Check to see if it is in the cache
+  if (cache_valid[wavefront][p[0]])
+    return cache[wavefront][p[0]];
+  // Not in the cache, let's go find it
+  Point<3> spatial_point = 
+    Snap::wavefront_map[corner][wavefront][p[0]].get_point<3>();
+  spatial_point += offset; 
+  LogicalRegion subregion = runtime->get_logical_subregion_by_color(upper_bound,
+                                     DomainPoint::from_point<3>(spatial_point));
+  // Get the right sub-partition 
+  LogicalPartition subpartition = runtime->get_logical_partition_by_color(
+                                    subregion, Snap::GHOST_X_PARTITION+dim);
+  LogicalRegion result = 
+    runtime->get_logical_subregion_by_color(subpartition, color);
+  cache[wavefront][p[0]] = result;
+  cache_valid[wavefront][p[0]] = true;
+  return result;
+}
+
+//------------------------------------------------------------------------------
+SnapOutputProjectionFunctor::SnapOutputProjectionFunctor(int c, int d)
+  : ProjectionFunctor(), dim(d), corner(c), color(get_color(c,d))
+//------------------------------------------------------------------------------
+{
+  // Set up the cache now so we don't need a lock
+  cache.resize(Snap::wavefront_map[corner].size());
+  cache_valid.resize(Snap::wavefront_map[corner].size());
+  for (unsigned idx = 0; idx < cache.size(); idx++)
+  {
+    cache[idx].resize(Snap::wavefront_map[corner][idx].size(), 
+                      LogicalRegion::NO_REGION);
+    cache_valid[idx].resize(Snap::wavefront_map[corner][idx].size(), false);
+  }
+}
+
+//------------------------------------------------------------------------------
+/*static*/ Snap::SnapGhostColor 
+                     SnapOutputProjectionFunctor::get_color(int corner, int dim)
+//------------------------------------------------------------------------------
+{
+  assert(dim < 3);
+  assert(corner < 4);
+  // If we are the x-dimension we are always writing to hi
+  if (dim > 0)
+  {
+    if (dim == 2)
+    {
+      int kd = Snap::corner_table[1][corner];
+      if (kd == 0)
+        return Snap::LO_GHOST;
+      else
+        return Snap::HI_GHOST;
+    }
+    else
+    {
+      // 2-D case
+      int jd = Snap::corner_table[0][corner];
+      if (jd == 0)
+        return Snap::LO_GHOST;
+      else
+        return Snap::HI_GHOST;
+    }
+  }
+  // For the x-dimension we are always walking with in the positive direction
+  return Snap::HI_GHOST;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
+            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
+         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // Figure out which wavefront we are in 
+  unsigned wavefront = *((const unsigned*)task->args);
+  assert(point.get_dim() == 1);
+  Point<1> p = point.get_point<1>();
+  // Check to see if it is in the cache
+  if (cache_valid[wavefront][p[0]])
+    return cache[wavefront][p[0]];
+  // Not in the cache, let's go find it
+  LogicalRegion subregion = runtime->get_logical_subregion_by_color(upper_bound,
+                                                                    point);
+  // Get the right sub-partition 
+  LogicalPartition subpartition = runtime->get_logical_partition_by_color(
+                                    subregion, Snap::GHOST_X_PARTITION+dim);
+  LogicalRegion result = 
+    runtime->get_logical_subregion_by_color(subpartition, color);
+  cache[wavefront][p[0]] = result;
+  cache_valid[wavefront][p[0]] = true;
+  return result;
 }
 
 //------------------------------------------------------------------------------
