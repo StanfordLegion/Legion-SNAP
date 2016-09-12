@@ -297,7 +297,7 @@ public:
   {
     runtime->attach_name(T::TASK_ID, Snap::task_names[T::TASK_ID]);
   }
-private:
+public:
   template<void (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
   static void snap_task_wrapper(const Task *task,
@@ -333,7 +333,8 @@ protected:
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
-    Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar, 
+    Runtime::preregister_task_variant<
+      SnapTask<T>::template snap_task_wrapper<TASK_PTR> >(registrar, 
                                                 Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
@@ -348,7 +349,8 @@ protected:
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
-    Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
+    Runtime::preregister_task_variant<RET_T,
+      SnapTask<T>::template snap_task_wrapper<RET_T,TASK_PTR> >(
                                        registrar, Snap::task_names[T::TASK_ID]);
   }
 protected:
@@ -365,7 +367,8 @@ protected:
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
-    Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar,
+    Runtime::preregister_task_variant<
+      SnapTask<T>::template snap_task_wrapper<TASK_PTR> >(registrar,
                                                 Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
@@ -380,7 +383,8 @@ protected:
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
-    Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
+    Runtime::preregister_task_variant<RET_T,
+      SnapTask<T>::template snap_task_wrapper<RET_T,TASK_PTR> >(
                                        registrar, Snap::task_names[T::TASK_ID]);
   }
 };
