@@ -26,7 +26,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
 {
   global_arg = TaskArgument(&mini_kba_args, sizeof(mini_kba_args));
   Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group);
-  Snap::SnapProjectionID sweep_id = SNAP_SWEEP_PROJECTION(corner);
+  Snap::SnapProjectionID sweep_id = SNAP_SWEEP_PROJECTION(wavefront, corner);
   // If you add projection requirements here, remember to update
   // the value of NON_GHOST_REQUIREMENTS in sweep.h
   qtot.add_projection_requirement(READ_ONLY, *this, group_field, sweep_id);

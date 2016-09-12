@@ -47,6 +47,7 @@ void Snap::setup(void)
   simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
   simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
+  runtime->attach_name(simulation_is, "Simulation Space");
   // Create the disjoint partition of the index space 
   const int bf[3] = { x_cells_per_chunk, y_cells_per_chunk, z_cells_per_chunk };
   Point<3> blocking_factor(bf);
@@ -54,12 +55,15 @@ void Snap::setup(void)
   spatial_ip = 
     runtime->create_index_partition(ctx, simulation_is,
                                     spatial_map, DISJOINT_PARTITION);
+  runtime->attach_name(spatial_ip, "Spatial Partition");
   // Launch bounds though ignore the boundary condition chunks
   // so they start at 1 and go to number of chunks, just like Fortran!
   const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
   launch_bounds = Rect<3>(Point<3>::ONES(), Point<3>(chunks)); 
   // Create the ghost partitions for each subregion
   Rect<3> color_space(Point<3>::ZEROES(), Point<3>(chunks) + Point<3>::ONES());
+  const char *ghost_names[3] = 
+    { "Ghost X Partition", "Ghost Y Partition", "Ghost Z Partition" };
   for (GenericPointInRectIterator<3> itr(color_space); itr; itr++)
   {
     IndexSpace child_is = 
@@ -77,9 +81,10 @@ void Snap::setup(void)
       bounds_hi.lo.x[i] = bounds_hi.hi.x[i];
       dc[HI_GHOST] = Domain::from_rect<3>(bounds_hi);
 
-      runtime->create_index_partition(ctx, child_is, 
-          Domain::from_rect<1>(Rect<1>(LO_GHOST,HI_GHOST)), dc, 
-          DISJOINT_KIND, GHOST_X_PARTITION+i);
+      IndexPartition ip = runtime->create_index_partition(ctx, child_is, 
+                   Domain::from_rect<1>(Rect<1>(LO_GHOST,HI_GHOST)), dc, 
+                   DISJOINT_KIND, GHOST_X_PARTITION+i);
+      runtime->attach_name(ip, ghost_names[i]);
     }
   }
   // Make some of our other field spaces
@@ -89,8 +94,10 @@ void Snap::setup(void)
   const int slgg_upper[2] = { nmat-1, num_groups-1 };
   Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
   slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
+  runtime->attach_name(slgg_is, "SLGG Index Space");
   // Make a field space for all the energy groups
   group_fs = runtime->create_field_space(ctx); 
+  runtime->attach_name(group_fs, "Energy Group Field Space");
   {
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, group_fs);
@@ -100,9 +107,16 @@ void Snap::setup(void)
       group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
+    char name_buffer[64];
+    for (int idx = 0; idx < num_groups; idx++)
+    {
+      snprintf(name_buffer,63,"Energy Group %d", idx);
+      runtime->attach_name(group_fs, group_fields[idx], name_buffer);
+    }
   }
   // This field space contains all the energy group fields and ghost fields
   group_and_ghost_fs = runtime->create_field_space(ctx);
+  runtime->attach_name(group_and_ghost_fs,"Energy Group and Ghost Field Space");
   {
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, group_and_ghost_fs);
@@ -113,9 +127,16 @@ void Snap::setup(void)
       group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
+    char name_buffer[64];
+    for (int idx = 0; idx < num_groups; idx++)
+    {
+      snprintf(name_buffer,63,"Energy Group %d", idx);
+      runtime->attach_name(group_and_ghost_fs, group_fields[idx], name_buffer);
+    }
     // ghost corner fields
     std::vector<FieldID> ghost_fields(2*num_groups*num_dims);
     std::vector<size_t> ghost_sizes(2*num_groups*num_dims, sizeof(double));
+    const char *ghost_field_names[3] = { "Ghost X", "Ghost Y", "Ghost Z" };
     for (int corner = 0; corner < num_corners; corner++)
     {
       unsigned next = 0;
@@ -126,10 +147,21 @@ void Snap::setup(void)
               SNAP_GHOST_FLUX_FIELD(corner, g, i==0, dim);
 
       allocator.allocate_fields(ghost_sizes, ghost_fields);
+      next = 0;
+      for (int g = 0; g < num_groups; g++)
+        for (int i = 0; i < 2; i++)
+          for (int dim = 0; dim < num_dims; dim++)
+          {
+            snprintf(name_buffer,63,"Energy Group %d %s %s", g, 
+                (i == 0) ? "Even" : "Odd", ghost_field_names[dim]);
+            runtime->attach_name(group_and_ghost_fs, 
+                                 ghost_fields[next++], name_buffer);
+          }
     }
   }
   // Make a fields space for the moments for each energy group
   moment_fs = runtime->create_field_space(ctx);
+  runtime->attach_name(moment_fs, "Moment Field Space");
   {
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, moment_fs);
@@ -140,8 +172,15 @@ void Snap::setup(void)
     // Notice that the field size is as big as necessary to store all moments
     std::vector<size_t> moment_sizes(num_groups, num_moments*sizeof(double));
     allocator.allocate_fields(moment_sizes, moment_fields);
+    char name_buffer[64];
+    for (int idx = 0; idx < num_groups; idx++)
+    {
+      snprintf(name_buffer,63,"Moment Energy Group %d", idx);
+      runtime->attach_name(moment_fs, moment_fields[idx], name_buffer);
+    }
   }
   flux_moment_fs = runtime->create_field_space(ctx);
+  runtime->attach_name(flux_moment_fs, "Flux Moment Field Space");
   {
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, flux_moment_fs);
@@ -153,12 +192,20 @@ void Snap::setup(void)
     std::vector<size_t> moment_sizes(num_groups, 
                                       (num_moments-1)*sizeof(double));
     allocator.allocate_fields(moment_sizes, moment_fields);
+    char name_buffer[64];
+    for (int idx = 0; idx < num_groups; idx++)
+    {
+      snprintf(name_buffer,63,"Moment Flux Energy Group %d", idx);
+      runtime->attach_name(flux_moment_fs, moment_fields[idx], name_buffer);
+    }
   }
   mat_fs = runtime->create_field_space(ctx);
+  runtime->attach_name(mat_fs, "Material Field Space");
   {
     FieldAllocator allocator = 
       runtime->create_field_allocator(ctx, mat_fs);
     allocator.allocate_field(sizeof(int), FID_SINGLE);
+    runtime->attach_name(mat_fs, FID_SINGLE, "Material Field");
   }
   // Compute the wavefronts for our sweeps
   for (int corner = 0; corner < num_corners; corner++)
@@ -187,19 +234,24 @@ void Snap::transport_solve(void)
     runtime->select_tunable_value(ctx, INNER_RUNAHEAD_TUNABLE);
 
   // Create our important arrays
-  SnapArray flux0(simulation_is, spatial_ip, group_and_ghost_fs, ctx, runtime);
-  SnapArray flux0po(simulation_is,spatial_ip, group_fs, ctx, runtime);
-  SnapArray flux0pi(simulation_is, spatial_ip, group_fs, ctx, runtime);
-  SnapArray fluxm(simulation_is, spatial_ip, flux_moment_fs, ctx, runtime);
+  SnapArray flux0(simulation_is, spatial_ip, group_and_ghost_fs, 
+                  ctx, runtime, "flux0");
+  SnapArray flux0po(simulation_is,spatial_ip, group_fs, 
+                    ctx, runtime, "flux0po");
+  SnapArray flux0pi(simulation_is, spatial_ip, group_fs, 
+                    ctx, runtime, "flux0pi");
+  SnapArray fluxm(simulation_is, spatial_ip, flux_moment_fs, 
+                  ctx, runtime, "fluxm");
 
-  SnapArray qi(simulation_is, spatial_ip, group_fs, ctx, runtime);
-  SnapArray q2grp0(simulation_is, spatial_ip, group_fs, ctx, runtime);
-  SnapArray q2grpm(simulation_is, spatial_ip, moment_fs, ctx, runtime);
-  SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime);
+  SnapArray qi(simulation_is, spatial_ip, group_fs, ctx, runtime, "qi");
+  SnapArray q2grp0(simulation_is, spatial_ip, group_fs, ctx, runtime, "q2grp0");
+  SnapArray q2grpm(simulation_is, spatial_ip, moment_fs, ctx, runtime,"q2grpm");
+  SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime, "qtot");
 
-  SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime);
-  SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, ctx, runtime);
-  SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime);
+  SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime, "mat");
+  SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, 
+                 ctx, runtime, "slgg");
+  SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime, "s_xs");
 
   // Initialize our data
   flux0.initialize();
@@ -814,13 +866,20 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
 
 //------------------------------------------------------------------------------
 SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
-                     Context c, Runtime *rt)
+                     Context c, Runtime *rt, const char *name)
   : ctx(c), runtime(rt)
 //------------------------------------------------------------------------------
 {
+  char name_buffer[64];
+  snprintf(name_buffer,63,"%s Logical Region", name);
   lr = runtime->create_logical_region(ctx, is, fs);
+  runtime->attach_name(lr, name_buffer);
   if (ip.exists())
+  {
     lp = runtime->get_logical_partition(lr, ip);
+    snprintf(name_buffer,63,"%s Spatial Partition", name);
+    runtime->attach_name(lp, name_buffer);
+  }
   std::vector<FieldID> all_fields;
   runtime->get_field_space_fields(fs, all_fields);
   for (std::vector<FieldID>::const_iterator it = all_fields.begin();
