@@ -96,7 +96,7 @@ void Snap::setup(void)
       runtime->create_field_allocator(ctx, group_fs);
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> group_fields(num_groups);
-    for (unsigned idx = 0; idx < num_groups; idx++)
+    for (int idx = 0; idx < num_groups; idx++)
       group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
@@ -109,19 +109,19 @@ void Snap::setup(void)
     // Normal energy group fields
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> group_fields(num_groups);
-    for (unsigned idx = 0; idx < num_groups; idx++)
+    for (int idx = 0; idx < num_groups; idx++)
       group_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     std::vector<size_t> group_sizes(num_groups, sizeof(double));
     allocator.allocate_fields(group_sizes, group_fields);
     // ghost corner fields
     std::vector<FieldID> ghost_fields(2*num_groups*num_dims);
     std::vector<size_t> ghost_sizes(2*num_groups*num_dims, sizeof(double));
-    for (unsigned corner = 0; corner < num_corners; corner++)
+    for (int corner = 0; corner < num_corners; corner++)
     {
       unsigned next = 0;
-      for (unsigned g = 0; g < num_groups; g++)
-        for (unsigned i = 0; i < 2; i++)
-          for (unsigned dim = 0; dim < num_dims; dim++)
+      for (int g = 0; g < num_groups; g++)
+        for (int i = 0; i < 2; i++)
+          for (int dim = 0; dim < num_dims; dim++)
             ghost_fields[next++] = 
               SNAP_GHOST_FLUX_FIELD(corner, g, i==0, dim);
 
@@ -135,7 +135,7 @@ void Snap::setup(void)
       runtime->create_field_allocator(ctx, moment_fs);
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> moment_fields(num_groups);
-    for (unsigned idx = 0; idx < num_groups; idx++)
+    for (int idx = 0; idx < num_groups; idx++)
       moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Notice that the field size is as big as necessary to store all moments
     std::vector<size_t> moment_sizes(num_groups, num_moments*sizeof(double));
@@ -147,7 +147,7 @@ void Snap::setup(void)
       runtime->create_field_allocator(ctx, flux_moment_fs);
     assert(num_groups <= SNAP_MAX_ENERGY_GROUPS);
     std::vector<FieldID> moment_fields(num_groups);
-    for (unsigned idx = 0; idx < num_groups; idx++)
+    for (int idx = 0; idx < num_groups; idx++)
       moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Storing number of moments - 1
     std::vector<size_t> moment_sizes(num_groups, 
@@ -226,12 +226,12 @@ void Snap::transport_solve(void)
   std::deque<Future> outer_converged_tests;
   std::deque<Future> inner_converged_tests;
   // Iterate over time steps
-  for (unsigned cy = 0; cy < num_steps; ++cy)
+  for (int cy = 0; cy < num_steps; ++cy)
   {
     outer_converged_tests.clear();
     Predicate outer_pred = Predicate::TRUE_PRED;
     // The outer solve loop    
-    for (unsigned otno = 0; otno < max_outer_iters; ++otno)
+    for (int otno = 0; otno < max_outer_iters; ++otno)
     {
       // Do the outer source calculation 
       CalcOuterSource outer_src(*this, outer_pred, qi, 
@@ -243,7 +243,7 @@ void Snap::transport_solve(void)
       inner_converged_tests.clear();
       Predicate inner_pred = Predicate::TRUE_PRED;
       // The inner solve loop
-      for (unsigned inno=0; inno < max_inner_iters; ++inno)
+      for (int inno=0; inno < max_inner_iters; ++inno)
       {
         // Do the inner source calculation
         CalcInnerSource inner_src(*this, inner_pred, s_xs, flux0, fluxm,
@@ -335,10 +335,10 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
-  for (unsigned corner = 0; corner < num_corners; corner++)
+  for (int corner = 0; corner < num_corners; corner++)
   {
     // Then loop over the energy groups
-    for (unsigned group = 0; group < num_groups; group++)
+    for (int group = 0; group < num_groups; group++)
     {
       // Launch the sweep from this corner for the given field
       // Create our miniKBA tasks, we need an even and an odd one
@@ -625,34 +625,30 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     corner_table[1][3] = 0;
   }
   // Compute the mapping from corners to wavefronts
-  for (unsigned corner = 0; corner < num_corners; corner++)
+  for (int corner = 0; corner < num_corners; corner++)
   {
     int jd = corner_table[0][corner];
     int kd = corner_table[1][corner];
-    int jlo = 1, jhi = 1, jst = 0; 
-    int klo = 1, khi = 1, kst = 0;
+    int jlo = 1, jst = 0; 
+    int klo = 1, kst = 0;
     if (jd == 0)
     {
       jlo = ny_chunks;
-      jhi = 1;
       jst = -1;
     }
     else
     {
       jlo = 1;
-      jhi = ny_chunks;
       jst = 1;
     }
     if (kd == 0)
     {
       klo = nz_chunks;
-      khi = 1;
       kst = -1;
     }
     else
     {
       klo = 1;
-      khi = nz_chunks;
       kst = 1;
     }
     std::set<DomainPoint> current_points;
@@ -948,7 +944,7 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
   assert(wavefront < cache_valid[index].size());
-  assert(p[0] < cache_valid[index][wavefront].size());
+  assert(p[0] < int(cache_valid[index][wavefront].size()));
   // Check to see if it is in the cache
   if (cache_valid[index][wavefront][p[0]])
     return cache[index][wavefront][p[0]];
