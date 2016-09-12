@@ -23,6 +23,19 @@ using namespace Legion;
 
 class MiniKBATask : public SnapTask<MiniKBATask> {
 public:
+  static const int NON_GHOST_REQUIREMENTS = 2;
+public:
+  struct MiniKBAArgs {
+  public:
+    MiniKBAArgs(int c, int g, bool e)
+      : wavefront(0), corner(c), group(g), even(e) { }
+  public:
+    int wavefront;
+    int corner;
+    int group;
+    bool even;
+  };
+public:
   static const Snap::SnapTaskID TASK_ID = Snap::MINI_KBA_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
@@ -30,8 +43,10 @@ public:
               const SnapArray &flux, const SnapArray &qtot,
               int group, int corner, bool even);
 public:
-  void dispatch_wavefront(const Domain &launch_domain, 
+  void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
                           Context cxt, Runtime *runtime);
+public:
+  MiniKBAArgs mini_kba_args;
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

@@ -148,6 +148,11 @@ public:
     CORNER_3_GHOST_X_OUT_PROJECTION = 22,
     CORNER_3_GHOST_Y_OUT_PROJECTION = 23,
     CORNER_3_GHOST_Z_OUT_PROJECTION = 24,
+
+    CORNER_0_SWEEP_PROJECTION = 25,
+    CORNER_1_SWEEP_PROJECTION = 26,
+    CORNER_2_SWEEP_PROJECTION = 27,
+    CORNER_3_SWEEP_PROJECTION = 28,
   };
 #define SNAP_GHOST_INPUT_PROJECTION(corner, dim)                    \
   ((Snap::SnapProjectionID)(Snap::CORNER_0_GHOST_X_IN_PROJECTION +  \
@@ -155,6 +160,8 @@ public:
 #define SNAP_GHOST_OUTPUT_PROJECTION(corner, dim)                   \
   ((Snap::SnapProjectionID)(Snap::CORNER_0_GHOST_X_OUT_PROJECTION + \
     ((corner) * 3) + (dim)))
+#define SNAP_SWEEP_PROJECTION(corner)                               \
+  ((Snap::SnapProjectionID)(Snap::CORNER_0_SWEEP_PROJECTION + (corner)))
 
   enum SnapGhostColor {
     LO_GHOST = 0,
@@ -421,6 +428,26 @@ protected:
   std::set<FieldID> regular_fields;
   std::set<FieldID> ghost_fields;
   mutable std::map<DomainPoint,LogicalRegion> subregions;
+};
+
+class SnapSweepProjectionFunctor : public ProjectionFunctor {
+public:
+  SnapSweepProjectionFunctor(int corner);
+public:
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index, 
+                                LogicalRegion upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(Context ctx, Task *task,
+                                unsigned index, 
+                                LogicalPartition upper_bound,
+                                const DomainPoint &point);
+  virtual unsigned get_depth(void) const { return 0; }
+protected:
+  const int corner;
+  // Indexed by region requirement, wavefront, point
+  std::vector<std::vector<std::vector<LogicalRegion> > > cache;    
+  std::vector<std::vector<std::vector<bool> > > cache_valid;
 };
 
 class SnapInputProjectionFunctor : public ProjectionFunctor {

@@ -21,13 +21,17 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
                          const SnapArray &flux, const SnapArray &qtot,
                          int group, int corner, bool even) 
   : SnapTask<MiniKBATask>(snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()),
-                          pred)
+                          pred), mini_kba_args(MiniKBAArgs(corner, group, even))
 //------------------------------------------------------------------------------
 {
+  global_arg = TaskArgument(&mini_kba_args, sizeof(mini_kba_args));
   Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group);
-  qtot.add_projection_requirement(READ_ONLY, *this, group_field);
+  Snap::SnapProjectionID sweep_id = SNAP_SWEEP_PROJECTION(corner);
+  // If you add projection requirements here, remember to update
+  // the value of NON_GHOST_REQUIREMENTS in sweep.h
+  qtot.add_projection_requirement(READ_ONLY, *this, group_field, sweep_id);
   // We want to read-write our whole region for this point
-  flux.add_projection_requirement(READ_WRITE, *this, group_field);
+  flux.add_projection_requirement(READ_WRITE, *this, group_field, sweep_id);
   // Add our reading ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
   {
@@ -47,10 +51,12 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
 }
 
 //------------------------------------------------------------------------------
-void MiniKBATask::dispatch_wavefront(const Domain &launch_d,
+void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
                                      Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+  // Save our wavefront
+  this->mini_kba_args.wavefront = wavefront;
   // Set our launch domain
   this->launch_domain = launch_d;
   // Then call the normal dispatch routine

@@ -356,10 +356,10 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       {
         if (even)
           mini_kba_even.dispatch_wavefront(
-              wavefront_domains[corner][idx], ctx, runtime);
+              idx, wavefront_domains[corner][idx], ctx, runtime);
         else
           mini_kba_odd.dispatch_wavefront(
-              wavefront_domains[corner][idx], ctx, runtime);
+              idx, wavefront_domains[corner][idx], ctx, runtime);
         even = !even;
       }
     }
@@ -750,6 +750,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   MiniKBATask::preregister_all_variants();
   // Register projection functors
   for (int corner = 0; corner < num_corners; corner++)
+  {
     for (int dim = 0; dim < num_dims; dim++)
     {
       SnapProjectionID input_id = SNAP_GHOST_INPUT_PROJECTION(corner, dim); 
@@ -759,6 +760,11 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
       Runtime::preregister_projection_functor(output_id,
           new SnapOutputProjectionFunctor(corner, dim));
     }
+    SnapProjectionID sweep_id = SNAP_SWEEP_PROJECTION(corner);
+    Runtime::preregister_projection_functor(sweep_id,
+      new SnapSweepProjectionFunctor(corner));
+  }
+  
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
 }
@@ -899,6 +905,61 @@ void SnapArray::initialize(T value)
 }
 
 //------------------------------------------------------------------------------
+SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(int c)
+  : ProjectionFunctor(), corner(c)
+//------------------------------------------------------------------------------
+{
+  // Set up the cache now so we don't need a lock later
+  cache.resize(MiniKBATask::NON_GHOST_REQUIREMENTS);
+  cache_valid.resize(MiniKBATask::NON_GHOST_REQUIREMENTS);
+  for (unsigned index = 0; index < cache.size(); index++)
+  {
+    cache[index].resize(Snap::wavefront_map[corner].size());
+    cache_valid[index].resize(Snap::wavefront_map[corner].size());
+    for (unsigned idx = 0; idx < cache[index].size(); idx++)
+    {
+      cache[index][idx].resize(Snap::wavefront_map[corner][idx].size(), 
+                        LogicalRegion::NO_REGION);
+      cache_valid[index][idx].resize(Snap::wavefront_map[corner][idx].size(), 
+                                      false/*default to not valid*/);
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
+            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
+         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  assert(task->task_id == Snap::MINI_KBA_TASK_ID);
+  assert(index < MiniKBATask::NON_GHOST_REQUIREMENTS);
+  // Figure out which wavefront we are in 
+  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
+  assert(point.get_dim() == 1);
+  Point<1> p = point.get_point<1>();
+  assert(wavefront < cache_valid[index].size());
+  assert(p[0] < cache_valid[index][wavefront].size());
+  // Check to see if it is in the cache
+  if (cache_valid[index][wavefront][p[0]])
+    return cache[index][wavefront][p[0]];
+  LogicalRegion result = runtime->get_logical_subregion_by_color(upper_bound,
+                                Snap::wavefront_map[corner][wavefront][p[0]]);
+  cache[index][wavefront][p[0]] = result;
+  cache_valid[index][wavefront][p[0]] = true;
+  return result;
+}
+
+//------------------------------------------------------------------------------
 SnapInputProjectionFunctor::SnapInputProjectionFunctor(int c, int d)
   : ProjectionFunctor(), dim(d), corner(c), 
     color(get_color(c,d)), offset(get_offset(c,d))
@@ -1007,8 +1068,9 @@ LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
          unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
+  assert(task->task_id == Snap::MINI_KBA_TASK_ID);
   // Figure out which wavefront we are in 
-  unsigned wavefront = *((const unsigned*)task->args);
+  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
   // Check to see if it is in the cache
@@ -1093,8 +1155,9 @@ LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
          unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
+  assert(task->task_id == Snap::MINI_KBA_TASK_ID);
   // Figure out which wavefront we are in 
-  unsigned wavefront = *((const unsigned*)task->args);
+  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
   // Check to see if it is in the cache
@@ -1102,7 +1165,7 @@ LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
     return cache[wavefront][p[0]];
   // Not in the cache, let's go find it
   LogicalRegion subregion = runtime->get_logical_subregion_by_color(upper_bound,
-                                                                    point);
+                                  Snap::wavefront_map[corner][wavefront][p[0]]);
   // Get the right sub-partition 
   LogicalPartition subpartition = runtime->get_logical_partition_by_color(
                                     subregion, Snap::GHOST_X_PARTITION+dim);
