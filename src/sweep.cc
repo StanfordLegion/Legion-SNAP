@@ -67,14 +67,14 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 /*static*/ void MiniKBATask::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>();
+  register_cpu_variant<cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void MiniKBATask::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>();
+  register_gpu_variant<gpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

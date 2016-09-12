@@ -26,7 +26,7 @@
 #include <cstring>
 
 #ifndef SNAP_MAX_ENERGY_GROUPS
-#define SNAP_MAX_ENERGY_GROUPS            8192
+#define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
 
 using namespace Legion;
@@ -323,7 +323,7 @@ protected:
   // For registering CPU variants
   template<void (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_cpu_variant(void)
+  static void register_cpu_variant(bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
@@ -331,12 +331,14 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.leaf_variant = leaf;
+    registrar.inner_variant = inner;
     Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar, 
                                                 Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_cpu_variant(void)
+  static void register_cpu_variant(bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
@@ -344,6 +346,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+    registrar.leaf_variant = leaf;
+    registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
                                        registrar, Snap::task_names[T::TASK_ID]);
   }
@@ -351,7 +355,7 @@ protected:
   // For registering GPU variants
   template<void (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_gpu_variant(void)
+  static void register_gpu_variant(bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
@@ -359,12 +363,14 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
+    registrar.leaf_variant = leaf;
+    registrar.inner_variant = inner;
     Runtime::preregister_task_variant<snap_task_wrapper<TASK_PTR> >(registrar,
                                                 Snap::task_names[T::TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_gpu_variant(void)
+  static void register_gpu_variant(bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
@@ -372,6 +378,8 @@ protected:
     TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
+    registrar.leaf_variant = leaf;
+    registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,snap_task_wrapper<RET_T,TASK_PTR> >(
                                        registrar, Snap::task_names[T::TASK_ID]);
   }

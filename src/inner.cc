@@ -38,14 +38,14 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcInnerSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>();
+  register_cpu_variant<cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>();
+  register_gpu_variant<gpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -80,14 +80,14 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 /*static*/ void TestInnerConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, cpu_implementation>();
+  register_cpu_variant<bool, cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void TestInnerConvergence::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<bool, gpu_implementation>();
+  register_gpu_variant<bool, gpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

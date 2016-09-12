@@ -35,14 +35,14 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcOuterSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>();
+  register_cpu_variant<cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>();
+  register_gpu_variant<gpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -77,14 +77,14 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 /*static*/ void TestOuterConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, cpu_implementation>();
+  register_cpu_variant<bool, cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void TestOuterConvergence::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<bool, gpu_implementation>();
+  register_gpu_variant<bool, gpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
