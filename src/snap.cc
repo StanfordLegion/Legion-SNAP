@@ -134,30 +134,26 @@ void Snap::setup(void)
       runtime->attach_name(group_and_ghost_fs, group_fields[idx], name_buffer);
     }
     // ghost corner fields
-    std::vector<FieldID> ghost_fields(2*num_groups*num_dims);
-    std::vector<size_t> ghost_sizes(2*num_groups*num_dims, sizeof(double));
+    std::vector<FieldID> ghost_fields(num_groups*num_corners*num_dims);
+    std::vector<size_t> ghost_sizes(num_groups*num_corners*num_dims, 
+                                    sizeof(double));
+    unsigned next = 0;
+    for (int group = 0; group < num_groups; group++)
+      for (int corner = 0; corner < num_corners; corner++)
+        for (int dim = 0; dim < num_dims; dim++)
+          ghost_fields[next++] = SNAP_GHOST_FLUX_FIELD(group, corner, dim);
+    allocator.allocate_fields(ghost_sizes, ghost_fields);
     const char *ghost_field_names[3] = { "Ghost X", "Ghost Y", "Ghost Z" };
-    for (int corner = 0; corner < num_corners; corner++)
-    {
-      unsigned next = 0;
-      for (int g = 0; g < num_groups; g++)
-        for (int i = 0; i < 2; i++)
-          for (int dim = 0; dim < num_dims; dim++)
-            ghost_fields[next++] = 
-              SNAP_GHOST_FLUX_FIELD(corner, g, i==0, dim);
-
-      allocator.allocate_fields(ghost_sizes, ghost_fields);
-      next = 0;
-      for (int g = 0; g < num_groups; g++)
-        for (int i = 0; i < 2; i++)
-          for (int dim = 0; dim < num_dims; dim++)
-          {
-            snprintf(name_buffer,63,"Energy Group %d %s %s", g, 
-                (i == 0) ? "Even" : "Odd", ghost_field_names[dim]);
-            runtime->attach_name(group_and_ghost_fs, 
-                                 ghost_fields[next++], name_buffer);
-          }
-    }
+    next = 0;
+    for (int group = 0; group < num_groups; group++)
+      for (int corner = 0; corner < num_corners; corner++)
+        for (int dim = 0; dim < num_dims; dim++)
+        {
+          snprintf(name_buffer,63,"%s Flux for Corner %d of Group %d",
+              ghost_field_names[dim], corner, dim);
+          runtime->attach_name(group_and_ghost_fs, 
+                               ghost_fields[next++], name_buffer);
+        }
   }
   // Make a fields space for the moments for each energy group
   moment_fs = runtime->create_field_space(ctx);
@@ -389,31 +385,20 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
   // Loop over the corners
   for (int corner = 0; corner < num_corners; corner++)
   {
+    // Compute the projection functions for this corner
+    int ghost_offsets[3] = { 0, 0, 0 };
+    for (int i = 0; i < num_dims; i++)
+      ghost_offsets[i] = (corner & (0x1 << i)) >> i;
+    const std::vector<Domain> &launch_domains = wavefront_domains[corner];
     // Then loop over the energy groups
     for (int group = 0; group < num_groups; group++)
     {
       // Launch the sweep from this corner for the given field
-      // Create our miniKBA tasks, we need an even and an odd one
-      // to ensure that we meet the index space non-interference
-      // requirement across iterations, eventually we should just
-      // be able to make this a single index space launch
-      MiniKBATask mini_kba_even(*this, pred, flux, qtot,
-                                group, corner, true/*even*/);
-      MiniKBATask mini_kba_odd(*this, pred, flux, qtot,
-                                group, corner, false/*even*/);
-      // Iterate over the launch spaces and alternate between
-      // launching from the even and odd launchers
-      bool even = true;
-      for (unsigned idx = 0; idx < wavefront_domains[corner].size(); idx++)
-      {
-        if (even)
-          mini_kba_even.dispatch_wavefront(
-              idx, wavefront_domains[corner][idx], ctx, runtime);
-        else
-          mini_kba_odd.dispatch_wavefront(
-              idx, wavefront_domains[corner][idx], ctx, runtime);
-        even = !even;
-      }
+      MiniKBATask mini_kba_even(*this, pred, flux, qtot, 
+                                group, corner, ghost_offsets);
+      for (unsigned idx = 0; idx < launch_domains.size(); idx++)
+        mini_kba_even.dispatch_wavefront(idx, launch_domains[idx], 
+                                         ctx, runtime);
     }
   }
 }
@@ -493,8 +478,7 @@ bool Snap::minikba_sweep = true;
 bool Snap::single_angle_copy = true;
 
 int Snap::num_corners = 1;
-std::vector<std::vector<DomainPoint> > Snap::wavefront_map[4];
-int Snap::corner_table[2][4] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::parse_arguments(int argc, char **argv)
@@ -595,10 +579,6 @@ int Snap::corner_table[2][4] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
     printf("Legion SNAP currently implements only mini-kba sweeps\n");
     exit(1);
   }
-  // Some derived quantities
-  num_corners = MIN(num_dims, 2) * MAX(num_dims-1, 1);
-  compute_wavefronts(); 
-  
   // Check all the conditions
   assert((1 <= num_dims) && (num_dims <= 3));
   assert((1 <= nx_chunks) && (nx_chunks <= nx));
@@ -622,6 +602,10 @@ int Snap::corner_table[2][4] = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
   if (time_dependent)
     assert(0.0 <= total_sim_time);
   assert(1 <= num_steps);
+  // Some derived quantities
+  for (int i = 0; i < num_dims; i++)
+    num_corners *= 2;
+  compute_wavefronts();
 }
 
 static bool contains_point(Point<3> &point, int xlo, int xhi, 
@@ -640,78 +624,20 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 /*static*/ void Snap::compute_wavefronts(void)
 //------------------------------------------------------------------------------
 {
-  if (num_dims == 3)
-  {
-    if (ny_chunks <= nz_chunks)
-    {
-      corner_table[0][0] = 0;
-      corner_table[0][1] = 1;
-      corner_table[0][2] = 1;
-      corner_table[0][3] = 0;
-      corner_table[1][0] = 0;
-      corner_table[1][1] = 0;
-      corner_table[1][2] = 1;
-      corner_table[1][3] = 1;
-    }
-    else
-    {
-      corner_table[0][0] = 0;
-      corner_table[0][1] = 0;
-      corner_table[0][2] = 1;
-      corner_table[0][3] = 1;
-      corner_table[1][0] = 0;
-      corner_table[1][1] = 1;
-      corner_table[1][2] = 1;
-      corner_table[1][3] = 0;
-    }
-  }
-  else
-  {
-    corner_table[0][0] = 0;
-    corner_table[0][1] = 1;
-    corner_table[0][2] = 0;
-    corner_table[0][3] = 0;
-    corner_table[1][0] = 0;
-    corner_table[1][1] = 0;
-    corner_table[1][2] = 0;
-    corner_table[1][3] = 0;
-  }
+  const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
   // Compute the mapping from corners to wavefronts
   for (int corner = 0; corner < num_corners; corner++)
   {
-    int jd = corner_table[0][corner];
-    int kd = corner_table[1][corner];
-    int jlo = 1, jst = 0; 
-    int klo = 1, kst = 0;
-    if (jd == 0)
+    Point<3> strides[3] = 
+      { Point<3>::ZEROES(), Point<3>::ZEROES(), Point<3>::ZEROES() };
+    Point<3> start;
+    for (int i = 0; i < num_dims; i++)
     {
-      jlo = ny_chunks;
-      jst = -1;
-    }
-    else
-    {
-      jlo = 1;
-      jst = 1;
-    }
-    if (kd == 0)
-    {
-      klo = nz_chunks;
-      kst = -1;
-    }
-    else
-    {
-      klo = 1;
-      kst = 1;
+      start.x[i] = ((corner & (0x1 << i)) ? chunks[i] : 1);
+      strides[i].x[i] = ((corner & (0x1 << i)) ? -1 : 1);
     }
     std::set<DomainPoint> current_points;
-    const int start[3] = { 1, jlo, klo };
     current_points.insert(DomainPoint::from_point<3>(Point<3>(start)));
-    const int stride_x[3] = { 1, 0, 0 };
-    Point<3> x_step(stride_x);
-    const int stride_y[3] = { 0 , jst, 0 };
-    Point<3> y_step(stride_y);
-    const int stride_z[3] = { 0, 0, kst };
-    Point<3> z_step(stride_z);
     // Do a little BFS to handle weird rectangle shapes correctly
     unsigned wavefront_number = 0;
     while (!current_points.empty())
@@ -726,15 +652,12 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
         // Save the point in this wavefront
         wavefront_points.push_back(*it);
         Point<3> point = it->get_point<3>();
-        Point<3> next_x = point + x_step;
-        if (contains_point(next_x, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
-          next_points.insert(DomainPoint::from_point<3>(next_x));
-        Point<3> next_y = point + y_step;
-        if (contains_point(next_y, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
-          next_points.insert(DomainPoint::from_point<3>(next_y));
-        Point<3> next_z = point + z_step;
-        if (contains_point(next_z, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
-          next_points.insert(DomainPoint::from_point<3>(next_z));
+        for (int i = 0; i < num_dims; i++)
+        {
+          Point<3> next = point + strides[i];
+          if (contains_point(next, 1, nx_chunks, 1, ny_chunks, 1, nz_chunks))
+            next_points.insert(DomainPoint::from_point<3>(next));
+        }
       }
       current_points = next_points;
       wavefront_number++;
@@ -797,24 +720,18 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   TestInnerConvergence::preregister_all_variants();
   MiniKBATask::preregister_all_variants();
   // Register projection functors
-  for (int corner = 0; corner < num_corners; corner++)
-  {
-    for (int dim = 0; dim < num_dims; dim++)
+  Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
+                        new SnapSweepProjectionFunctor());
+  for (int dim = 0; dim < num_dims; dim++)
+    for (int offset = 0; offset < 2; offset++)
     {
-      SnapProjectionID input_id = SNAP_GHOST_INPUT_PROJECTION(corner, dim); 
-      Runtime::preregister_projection_functor(input_id, 
-          new SnapInputProjectionFunctor(corner, dim));
-      SnapProjectionID output_id = SNAP_GHOST_OUTPUT_PROJECTION(corner, dim); 
-      Runtime::preregister_projection_functor(output_id,
-          new SnapOutputProjectionFunctor(corner, dim));
+      SnapProjectionID ghost_id = SNAP_GHOST_PROJECTION(dim, offset);
+      Runtime::preregister_projection_functor(ghost_id,
+          new SnapGhostProjectionFunctor(dim, offset));
     }
-    SnapProjectionID sweep_id = SNAP_SWEEP_PROJECTION(corner);
-    Runtime::preregister_projection_functor(sweep_id,
-      new SnapSweepProjectionFunctor(corner));
-  }
-  
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
+  Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP_ID);
 }
 
 //------------------------------------------------------------------------------
@@ -960,25 +877,26 @@ void SnapArray::initialize(T value)
 }
 
 //------------------------------------------------------------------------------
-SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(int c)
-  : ProjectionFunctor(), corner(c)
+SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(void)
+  : ProjectionFunctor()
 //------------------------------------------------------------------------------
 {
   // Set up the cache now so we don't need a lock later
-  cache.resize(MiniKBATask::NON_GHOST_REQUIREMENTS);
-  cache_valid.resize(MiniKBATask::NON_GHOST_REQUIREMENTS);
-  for (unsigned index = 0; index < cache.size(); index++)
-  {
-    cache[index].resize(Snap::wavefront_map[corner].size());
-    cache_valid[index].resize(Snap::wavefront_map[corner].size());
-    for (unsigned idx = 0; idx < cache[index].size(); idx++)
+  for (int corner = 0; corner < Snap::num_corners; corner++)
+    for (int index = 0; index < MINI_KBA_NON_GHOST_REQUIREMENTS; index++)
     {
-      cache[index][idx].resize(Snap::wavefront_map[corner][idx].size(), 
-                        LogicalRegion::NO_REGION);
-      cache_valid[index][idx].resize(Snap::wavefront_map[corner][idx].size(), 
-                                      false/*default to not valid*/);
+      cache[corner][index].resize(Snap::wavefront_map[corner].size());
+      cache_valid[corner][index].resize(Snap::wavefront_map[corner].size());
+      for (int wavefront = 0; 
+            wavefront < int(Snap::wavefront_map[corner].size()); wavefront++)
+      {
+        cache[corner][index][wavefront].resize(
+            Snap::wavefront_map[corner][wavefront].size(), 
+            LogicalRegion::NO_REGION);
+        cache_valid[corner][index][wavefront].resize(
+            Snap::wavefront_map[corner][wavefront].size(), false/*valid*/);
+      }
     }
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -997,119 +915,60 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
 //------------------------------------------------------------------------------
 {
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  assert(index < MiniKBATask::NON_GHOST_REQUIREMENTS);
-  // Figure out which wavefront we are in 
-  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
+  assert(index < MINI_KBA_NON_GHOST_REQUIREMENTS);
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
-  assert(wavefront < cache_valid[index].size());
-  assert(p[0] < int(cache_valid[index][wavefront].size()));
+  // Figure out which wavefront and corner we are in
+  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
+  unsigned corner = ((const MiniKBATask::MiniKBAArgs*)task->args)->corner;
+  assert(p[0] < int(cache_valid[corner][index][wavefront].size()));
   // Check to see if it is in the cache
-  if (cache_valid[index][wavefront][p[0]])
-    return cache[index][wavefront][p[0]];
+  if (cache_valid[corner][index][wavefront][p[0]])
+    return cache[corner][index][wavefront][p[0]];
+  // Not valid, need to go get the result
   LogicalRegion result = runtime->get_logical_subregion_by_color(upper_bound,
                                 Snap::wavefront_map[corner][wavefront][p[0]]);
-  cache[index][wavefront][p[0]] = result;
-  cache_valid[index][wavefront][p[0]] = true;
+  cache[corner][index][wavefront][p[0]] = result;
+  cache_valid[corner][index][wavefront][p[0]] = true;
   return result;
 }
 
 //------------------------------------------------------------------------------
-SnapInputProjectionFunctor::SnapInputProjectionFunctor(int c, int d)
-  : ProjectionFunctor(), dim(d), corner(c), 
-    color(get_color(c,d)), offset(get_offset(c,d))
+SnapGhostProjectionFunctor::SnapGhostProjectionFunctor(int d, int o)
+  : ProjectionFunctor(), dim(d), offset(o),
+    color((offset == 0) ? Snap::LO_GHOST : Snap::HI_GHOST), 
+    stride(get_stride(d,o))
 //------------------------------------------------------------------------------
 {
   // Set up the cache now so we don't need a lock later
-  cache.resize(Snap::wavefront_map[corner].size());
-  cache_valid.resize(Snap::wavefront_map[corner].size());
-  for (unsigned idx = 0; idx < cache.size(); idx++)
+  for (int corner = 0; corner < Snap::num_corners; corner++)
   {
-    cache[idx].resize(Snap::wavefront_map[corner][idx].size(), 
-                      LogicalRegion::NO_REGION);
-    cache_valid[idx].resize(Snap::wavefront_map[corner][idx].size(), false);
+    cache[corner].resize(Snap::wavefront_map[corner].size());
+    cache_valid[corner].resize(Snap::wavefront_map[corner].size());
+    for (int wavefront = 0; 
+          wavefront < int(Snap::wavefront_map[corner].size()); wavefront++)
+    {
+      cache[corner][wavefront].resize(
+          Snap::wavefront_map[corner][wavefront].size(), 
+          LogicalRegion::NO_REGION);
+      cache_valid[corner][wavefront].resize(
+          Snap::wavefront_map[corner][wavefront].size(), false/*valid*/);
+    }
   }
 }
 
 //------------------------------------------------------------------------------
-/*static*/ Snap::SnapGhostColor 
-                      SnapInputProjectionFunctor::get_color(int corner, int dim)
+/*static*/ Point<3> SnapGhostProjectionFunctor::get_stride(int dim, int offset)
 //------------------------------------------------------------------------------
 {
   assert(dim < 3);
-  assert(corner < 4);
-  // If we are the x-dimension we are always writing to hi
-  if (dim > 0)
-  {
-    if (dim == 2)
-    {
-      int kd = Snap::corner_table[1][corner];
-      if (kd == 0)
-        return Snap::LO_GHOST;
-      else
-        return Snap::HI_GHOST;
-    }
-    else
-    {
-      // 2-D case
-      int jd = Snap::corner_table[0][corner];
-      if (jd == 0)
-        return Snap::LO_GHOST;
-      else
-        return Snap::HI_GHOST;
-    }
-  }
-  // For the x-dimension we are always walking with in the positive direction
-  return Snap::HI_GHOST;
+  int result[3] = { 0, 0, 0 };
+  result[dim] = (offset == 0) ? -1 : 1;
+  return Point<3>(result);
 }
 
 //------------------------------------------------------------------------------
-/*static*/ Point<3> SnapInputProjectionFunctor::get_offset(int corner, int dim)
-//------------------------------------------------------------------------------
-{
-  assert(dim < 3);
-  assert(corner < 4);
-  int offset[3] = { 0, 0, 0 };
-  // If we are the x-dimension we are always writing to hi
-  if (dim > 0)
-  {
-    if (dim == 2)
-    {
-      int kd = Snap::corner_table[1][corner];
-      if (kd == 0)
-      {
-        offset[2] = -1;
-        return Point<3>(offset);
-      }
-      else
-      {
-        offset[2] = 1;
-        return Point<3>(offset);
-      }
-    }
-    else
-    {
-      // 2-D case
-      int jd = Snap::corner_table[0][corner];
-      if (jd == 0)
-      {
-        offset[1] = -1;
-        return Point<3>(offset);
-      }
-      else
-      {
-        offset[1] = 1;
-        return Point<3>(offset);
-      }
-    }
-  }
-  // For the x-dimension we are always walking with in the positive direction
-  offset[0] = 1;
-  return Point<3>(offset);
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion SnapGhostProjectionFunctor::project(Context ctx, Task *task,
             unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
@@ -1119,115 +978,35 @@ LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapInputProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion SnapGhostProjectionFunctor::project(Context ctx, Task *task,
          unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  // Figure out which wavefront we are in 
-  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
+  // Figure out which wavefront and corner we are in
+  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
+  unsigned corner = ((const MiniKBATask::MiniKBAArgs*)task->args)->corner;
+  assert(p[0] < int(cache_valid[corner][wavefront].size()));
   // Check to see if it is in the cache
-  if (cache_valid[wavefront][p[0]])
-    return cache[wavefront][p[0]];
+  if (cache_valid[corner][wavefront][p[0]])
+    return cache[corner][wavefront][p[0]];
   // Not in the cache, let's go find it
   Point<3> spatial_point = 
     Snap::wavefront_map[corner][wavefront][p[0]].get_point<3>();
-  spatial_point += offset; 
-  LogicalRegion subregion = runtime->get_logical_subregion_by_color(upper_bound,
+  spatial_point += stride; 
+  LogicalRegion result = runtime->get_logical_subregion_by_color(upper_bound,
                                      DomainPoint::from_point<3>(spatial_point));
   // Get the right sub-partition 
+#if 0
   LogicalPartition subpartition = runtime->get_logical_partition_by_color(
                                     subregion, Snap::GHOST_X_PARTITION+dim);
   LogicalRegion result = 
     runtime->get_logical_subregion_by_color(subpartition, color);
-  cache[wavefront][p[0]] = result;
-  cache_valid[wavefront][p[0]] = true;
-  return result;
-}
-
-//------------------------------------------------------------------------------
-SnapOutputProjectionFunctor::SnapOutputProjectionFunctor(int c, int d)
-  : ProjectionFunctor(), dim(d), corner(c), color(get_color(c,d))
-//------------------------------------------------------------------------------
-{
-  // Set up the cache now so we don't need a lock
-  cache.resize(Snap::wavefront_map[corner].size());
-  cache_valid.resize(Snap::wavefront_map[corner].size());
-  for (unsigned idx = 0; idx < cache.size(); idx++)
-  {
-    cache[idx].resize(Snap::wavefront_map[corner][idx].size(), 
-                      LogicalRegion::NO_REGION);
-    cache_valid[idx].resize(Snap::wavefront_map[corner][idx].size(), false);
-  }
-}
-
-//------------------------------------------------------------------------------
-/*static*/ Snap::SnapGhostColor 
-                     SnapOutputProjectionFunctor::get_color(int corner, int dim)
-//------------------------------------------------------------------------------
-{
-  assert(dim < 3);
-  assert(corner < 4);
-  // If we are the x-dimension we are always writing to hi
-  if (dim > 0)
-  {
-    if (dim == 2)
-    {
-      int kd = Snap::corner_table[1][corner];
-      if (kd == 0)
-        return Snap::LO_GHOST;
-      else
-        return Snap::HI_GHOST;
-    }
-    else
-    {
-      // 2-D case
-      int jd = Snap::corner_table[0][corner];
-      if (jd == 0)
-        return Snap::LO_GHOST;
-      else
-        return Snap::HI_GHOST;
-    }
-  }
-  // For the x-dimension we are always walking with in the positive direction
-  return Snap::HI_GHOST;
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
-            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion SnapOutputProjectionFunctor::project(Context ctx, Task *task,
-         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  // Figure out which wavefront we are in 
-  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
-  assert(point.get_dim() == 1);
-  Point<1> p = point.get_point<1>();
-  // Check to see if it is in the cache
-  if (cache_valid[wavefront][p[0]])
-    return cache[wavefront][p[0]];
-  // Not in the cache, let's go find it
-  LogicalRegion subregion = runtime->get_logical_subregion_by_color(upper_bound,
-                                  Snap::wavefront_map[corner][wavefront][p[0]]);
-  // Get the right sub-partition 
-  LogicalPartition subpartition = runtime->get_logical_partition_by_color(
-                                    subregion, Snap::GHOST_X_PARTITION+dim);
-  LogicalRegion result = 
-    runtime->get_logical_subregion_by_color(subpartition, color);
-  cache[wavefront][p[0]] = result;
-  cache_valid[wavefront][p[0]] = true;
+  cache[corner][wavefront][p[0]] = result;
+  cache_valid[corner][wavefront][p[0]] = true;
+#endif
   return result;
 }
 
@@ -1269,5 +1048,47 @@ template<>
   // This is monotonic so no need for synchronization either way
   if (!rhs2)
     rhs1 = false;
+}
+
+//------------------------------------------------------------------------------
+template <>
+void SumReduction::apply<true>(LHS &lhs, RHS rhs) 
+//------------------------------------------------------------------------------
+{
+  lhs += rhs;
+}
+
+//------------------------------------------------------------------------------
+template<>
+void SumReduction::apply<false>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  long *target = (long *)&lhs;
+  union { long as_int; double as_float; } oldval, newval;
+  do {
+    oldval.as_int = *target;
+    newval.as_float = oldval.as_float + rhs;
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+}
+
+//------------------------------------------------------------------------------
+template <>
+void SumReduction::fold<true>(RHS &rhs1, RHS rhs2) 
+//------------------------------------------------------------------------------
+{
+  rhs1 += rhs2;
+}
+
+//------------------------------------------------------------------------------
+template<>
+void SumReduction::fold<false>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  long *target = (long *)&rhs1;
+  union { long as_int; double as_float; } oldval, newval;
+  do {
+    oldval.as_int = *target;
+    newval.as_float = oldval.as_float + rhs2;
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
 }
 

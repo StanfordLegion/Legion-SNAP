@@ -28,6 +28,7 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
+#define MINI_KBA_NON_GHOST_REQUIREMENTS   5
 
 using namespace Legion;
 using namespace Legion::Mapping;
@@ -74,6 +75,7 @@ public:
   enum SnapReductionID {
     NO_REDUCTION_ID = 0,
     AND_REDUCTION_ID = 1,
+    SUM_REDUCTION_ID = 2,
   };
   enum SnapFieldID {
     FID_SINGLE = 0, // For field spaces with just one field
@@ -81,41 +83,38 @@ public:
     FID_GROUP_0 = FID_SINGLE,
     // ...
     FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
-    FID_CORNER_0_EVEN_GHOST_FLUX_X_0,
-    FID_CORNER_0_EVEN_GHOST_FLUX_Y_0,
-    FID_CORNER_0_EVEN_GHOST_FLUX_Z_0,
-    FID_CORNER_0_ODD_GHOST_FLUX_X_0,
-    FID_CORNER_0_ODD_GHOST_FLUX_Y_0,
-    FID_CORNER_0_ODD_GHOST_FLUX_Z_0,
-    FID_CORNER_0_EVEN_MAX = FID_CORNER_0_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
-    FID_CORNER_1_EVEN_GHOST_FLUX_X_0,
-    FID_CORNER_1_EVEN_GHOST_FLUX_Y_0,
-    FID_CORNER_1_EVEN_GHOST_FLUX_Z_0,
-    FID_CORNER_1_ODD_GHOST_FLUX_X_0,
-    FID_CORNER_1_ODD_GHOST_FLUX_Y_0,
-    FID_CORNER_1_ODD_GHOST_FLUX_Z_0,
-    FID_CORNER_1_EVEN_MAX = FID_CORNER_1_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
-    FID_CORNER_2_EVEN_GHOST_FLUX_X_0,
-    FID_CORNER_2_EVEN_GHOST_FLUX_Y_0,
-    FID_CORNER_2_EVEN_GHOST_FLUX_Z_0,
-    FID_CORNER_2_ODD_GHOST_FLUX_X_0,
-    FID_CORNER_2_ODD_GHOST_FLUX_Y_0,
-    FID_CORNER_2_ODD_GHOST_FLUX_Z_0,
-    FID_CORNER_2_EVEN_MAX = FID_CORNER_2_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
-    FID_CORNER_3_EVEN_GHOST_FLUX_X_0,
-    FID_CORNER_3_EVEN_GHOST_FLUX_Y_0,
-    FID_CORNER_3_EVEN_GHOST_FLUX_Z_0,
-    FID_CORNER_3_ODD_GHOST_FLUX_X_0,
-    FID_CORNER_3_ODD_GHOST_FLUX_Y_0,
-    FID_CORNER_3_ODD_GHOST_FLUX_Z_0,
-    FID_CORNER_3_EVEN_MAX = FID_CORNER_3_EVEN_GHOST_FLUX_X_0 + 6 * SNAP_MAX_ENERGY_GROUPS,
+    FID_CORNER_0_GHOST_FLUX_X_0 = FID_GROUP_MAX,
+    FID_CORNER_0_GHOST_FLUX_Y_0,
+    FID_CORNER_0_GHOST_FLUX_Z_0,
+    FID_CORNER_1_GHOST_FLUX_X_0,
+    FID_CORNER_1_GHOST_FLUX_Y_0,
+    FID_CORNER_1_GHOST_FLUX_Z_0,
+    FID_CORNER_2_GHOST_FLUX_X_0,
+    FID_CORNER_2_GHOST_FLUX_Y_0,
+    FID_CORNER_2_GHOST_FLUX_Z_0,
+    FID_CORNER_3_GHOST_FLUX_X_0,
+    FID_CORNER_3_GHOST_FLUX_Y_0,
+    FID_CORNER_3_GHOST_FLUX_Z_0,
+    FID_CORNER_4_GHOST_FLUX_X_0,
+    FID_CORNER_4_GHOST_FLUX_Y_0,
+    FID_CORNER_4_GHOST_FLUX_Z_0,
+    FID_CORNER_5_GHOST_FLUX_X_0,
+    FID_CORNER_5_GHOST_FLUX_Y_0,
+    FID_CORNER_5_GHOST_FLUX_Z_0,
+    FID_CORNER_6_GHOST_FLUX_X_0,
+    FID_CORNER_6_GHOST_FLUX_Y_0,
+    FID_CORNER_6_GHOST_FLUX_Z_0,
+    FID_CORNER_7_GHOST_FLUX_X_0,
+    FID_CORNER_7_GHOST_FLUX_Y_0,
+    FID_CORNER_7_GHOST_FLUX_Z_0,
+
+    FID_MAX_CORNER_GHOST_FLUX_FIELDS = FID_CORNER_0_GHOST_FLUX_X_0 + 24 * SNAP_MAX_ENERGY_GROUPS,
   };
 #define SNAP_ENERGY_GROUP_FIELD(group)    \
   ((Snap::SnapFieldID)(Snap::FID_GROUP_0 + (group)))
-#define SNAP_GHOST_FLUX_FIELD(corner, group, even, dim)                         \
-  ((Snap::SnapFieldID)(Snap::FID_CORNER_0_EVEN_GHOST_FLUX_X_0 +                 \
-    ((corner) * 6 * SNAP_MAX_ENERGY_GROUPS) +                                   \
-   ((group) * 6) + ((even) ? 0 : 3) + (dim)))
+#define SNAP_GHOST_FLUX_FIELD(group, corner, dim)                               \
+  ((Snap::SnapFieldID)(Snap::FID_CORNER_0_GHOST_FLUX_X_0 +                      \
+    ((group) * 24) + ((corner) * 3) + (dim)))
   enum SnapPartitionID {
     DISJOINT_PARTITION = 0,
     GHOST_X_PARTITION = 1,
@@ -123,47 +122,19 @@ public:
     GHOST_Z_PARTITION = 3,
   };
   enum SnapProjectionID {
-    WAVEFRONT_0_CORNER_0_SWEEP_PROJECTION = 0,
-    WAVEFRONT_0_CORNER_1_SWEEP_PROJECTION = 1,
-    WAVEFRONT_0_CORNER_2_SWEEP_PROJECTION = 2,
-    WAVEFRONT_0_CORNER_3_SWEEP_PROJECTION = 3,
-
-    WAVEFRONT_0_CORNER_0_GHOST_X_IN_PROJECTION = 4,
-    WAVEFRONT_0_CORNER_0_GHOST_Y_IN_PROJECTION = 5,
-    WAVEFRONT_0_CORNER_0_GHOST_Z_IN_PROJECTION = 6,
-    WAVEFRONT_0_CORNER_1_GHOST_X_IN_PROJECTION = 7,
-    WAVEFRONT_0_CORNER_1_GHOST_Y_IN_PROJECTION = 8,
-    WAVEFRONT_0_CORNER_1_GHOST_Z_IN_PROJECTION = 9,
-    WAVEFRONT_0_CORNER_2_GHOST_X_IN_PROJECTION = 10,
-    WAVEFRONT_0_CORNER_2_GHOST_Y_IN_PROJECTION = 11,
-    WAVEFRONT_0_CORNER_2_GHOST_Z_IN_PROJECTION = 12,
-    WAVEFRONT_0_CORNER_3_GHOST_X_IN_PROJECTION = 13,
-    WAVEFRONT_0_CORNER_3_GHOST_Y_IN_PROJECTION = 14,
-    WAVEFRONT_0_CORNER_3_GHOST_Z_IN_PROJECTION = 15,
-
-    WAVEFRONT_0_CORNER_0_GHOST_X_OUT_PROJECTION = 16,
-    WAVEFRONT_0_CORNER_0_GHOST_Y_OUT_PROJECTION = 17,
-    WAVEFRONT_0_CORNER_0_GHOST_Z_OUT_PROJECTION = 18,
-    WAVEFRONT_0_CORNER_1_GHOST_X_OUT_PROJECTION = 19,
-    WAVEFRONT_0_CORNER_1_GHOST_Y_OUT_PROJECTION = 20,
-    WAVEFRONT_0_CORNER_1_GHOST_Z_OUT_PROJECTION = 21,
-    WAVEFRONT_0_CORNER_2_GHOST_X_OUT_PROJECTION = 22,
-    WAVEFRONT_0_CORNER_2_GHOST_Y_OUT_PROJECTION = 23,
-    WAVEFRONT_0_CORNER_2_GHOST_Z_OUT_PROJECTION = 24,
-    WAVEFRONT_0_CORNER_3_GHOST_X_OUT_PROJECTION = 25,
-    WAVEFRONT_0_CORNER_3_GHOST_Y_OUT_PROJECTION = 26,
-    WAVEFRONT_0_CORNER_3_GHOST_Z_OUT_PROJECTION = 27,
+    SWEEP_PROJECTION = 1,
+    MINUS_X_PROJECTION = 2,
+    PLUS_X_PROJECTION = 3,
+    MINUX_Y_PROJECTION = 4,
+    PLUS_Y_PROJECTION = 5,
+    MINUS_Z_PROJECTION = 6,
+    PLUS_Z_PROJECTION = 7,
   };
-#define SNAP_GHOST_INPUT_PROJECTION(wavefront, corner, dim)         \
-  ((Snap::SnapProjectionID)(Snap::WAVEFRONT_0_CORNER_0_GHOST_X_IN_PROJECTION +  \
-    ((corner) * 3) + (dim) + ((wavefront) * 28)))
-#define SNAP_GHOST_OUTPUT_PROJECTION(wavefront, corner, dim)        \
-  ((Snap::SnapProjectionID)(Snap::WAVEFRONT_O_CORNER_0_GHOST_X_OUT_PROJECTION + \
-    ((corner) * 3) + (dim) + ((wavefront) * 28)))
-#define SNAP_SWEEP_PROJECTION(wavefront, corner)                    \
-  ((Snap::SnapProjectionID)(Snap::CORNER_0_SWEEP_PROJECTION +       \
-    (corner) + ((wavefront) * 28)))
-
+#define SNAP_SWEEP_PROJECTION(corner)                                     \
+  ((Snap::SnapProjectionID)(Snap::WAVEFRONT_0_CORNER_0_SWEEP_PROJECTION + \
+    ((wavefront) * 14) + (corner)))
+#define SNAP_GHOST_PROJECTION(dim, offset)                                \
+  ((Snap::SnapProjectionID)(Snap::PLUS_X_PROJECTION + ((dim) * 2) + (offset)))
   enum SnapGhostColor {
     LO_GHOST = 0,
     HI_GHOST = 1,
@@ -204,7 +175,7 @@ private:
   FieldSpace flux_moment_fs;
   FieldSpace mat_fs;
 private:
-  std::vector<Domain> wavefront_domains[4];
+  std::vector<Domain> wavefront_domains[8];
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
@@ -251,8 +222,7 @@ public:
 public: // derived
   static int num_corners; // orignally ncor
   // Indexed by wavefront number and the point number
-  static std::vector<std::vector<DomainPoint> > wavefront_map[4];
-  static int corner_table[2][4];
+  static std::vector<std::vector<DomainPoint> > wavefront_map[8];
 public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
@@ -426,6 +396,14 @@ public:
     launcher.region_requirements.back().privilege_fields.insert(field);
   }
   template<typename T>
+  inline void add_projection_requirement(Snap::SnapReductionID reduction,
+      T &launcher, Snap::SnapFieldID field, ProjectionID proj_id = 0) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lp, proj_id, reduction,
+                                                      EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(field);
+  }
+  template<typename T>
   inline void add_region_requirement(PrivilegeMode priv,
                                      T &launcher) const
   {
@@ -445,7 +423,7 @@ protected:
 
 class SnapSweepProjectionFunctor : public ProjectionFunctor {
 public:
-  SnapSweepProjectionFunctor(int corner);
+  SnapSweepProjectionFunctor(void);
 public:
   virtual LogicalRegion project(Context ctx, Task *task,
                                 unsigned index, 
@@ -457,15 +435,16 @@ public:
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 protected:
-  const int corner;
-  // Indexed by region requirement, wavefront, point
-  std::vector<std::vector<std::vector<LogicalRegion> > > cache;    
-  std::vector<std::vector<std::vector<bool> > > cache_valid;
+  // Indexed by corner, wavefront, region requirement, point
+  std::vector<std::vector<LogicalRegion> > 
+    cache[8][MINI_KBA_NON_GHOST_REQUIREMENTS];    
+  std::vector<std::vector<bool> > 
+    cache_valid[8][MINI_KBA_NON_GHOST_REQUIREMENTS];
 };
 
-class SnapInputProjectionFunctor : public ProjectionFunctor {
+class SnapGhostProjectionFunctor : public ProjectionFunctor {
 public:
-  SnapInputProjectionFunctor(int corner, int dim);
+  SnapGhostProjectionFunctor(int dim, int offset);
 public:
   virtual LogicalRegion project(Context ctx, Task *task,
                                 unsigned index, 
@@ -475,40 +454,19 @@ public:
                                 unsigned index, 
                                 LogicalPartition upper_bound,
                                 const DomainPoint &point);
-  virtual unsigned get_depth(void) const { return 1; }
+  virtual unsigned get_depth(void) const { return 0; }
 private:
-  static Snap::SnapGhostColor get_color(int corner, int dim);
-  static Point<3> get_offset(int corner, int dim);
+  static Point<3> get_stride(int dim, int offset);
 protected:
   const int dim;
-  const int corner;
+  const int offset;
   const Snap::SnapGhostColor color;
-  const Point<3> offset;
-  std::vector<std::vector<LogicalRegion> > cache;    
-  std::vector<std::vector<bool> > cache_valid;
-};
-
-class SnapOutputProjectionFunctor : public ProjectionFunctor {
-public:
-  SnapOutputProjectionFunctor(int corner, int dim);
-public:
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index, 
-                                LogicalRegion upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index,
-                                LogicalPartition upper_bound,
-                                const DomainPoint &point);
-  virtual unsigned get_depth(void) const { return 1; }
-private:
-  static Snap::SnapGhostColor get_color(int corner, int dim);
-protected:
-  const int dim;
-  const int corner;
-  const Snap::SnapGhostColor color;
-  std::vector<std::vector<LogicalRegion> > cache; 
-  std::vector<std::vector<bool> > cache_valid;
+  const Point<3> stride;
+  // Indexed by corner, wavefront, point
+  // No need for region requirement because we know the
+  // tree will always be the same
+  std::vector<std::vector<LogicalRegion> > cache[8];   
+  std::vector<std::vector<bool> > cache_valid[8];
 };
 
 class AndReduction {
@@ -518,6 +476,18 @@ public:
   typedef bool LHS;
   typedef bool RHS;
   static const bool identity = true;
+public:
+  template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
+  template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
+};
+
+class SumReduction {
+public:
+  static const Snap::SnapReductionID REDOP_ID = Snap::SUM_REDUCTION_ID;
+public:
+  typedef double LHS;
+  typedef double RHS;
+  static const double identity = 0.0;
 public:
   template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);

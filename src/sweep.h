@@ -27,13 +27,12 @@ public:
 public:
   struct MiniKBAArgs {
   public:
-    MiniKBAArgs(int c, int g, bool e)
-      : wavefront(0), corner(c), group(g), even(e) { }
+    MiniKBAArgs(int c, int g)
+      : wavefront(0), corner(c), group(g) { }
   public:
     int wavefront;
     int corner;
     int group;
-    bool even;
   };
 public:
   static const Snap::SnapTaskID TASK_ID = Snap::MINI_KBA_TASK_ID;
@@ -41,7 +40,7 @@ public:
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, 
               const SnapArray &flux, const SnapArray &qtot,
-              int group, int corner, bool even);
+              int group, int corner, const int ghost_offsets[3]);
 public:
   void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
                           Context cxt, Runtime *runtime);
