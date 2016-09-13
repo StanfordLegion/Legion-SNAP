@@ -17,7 +17,7 @@
 #include "sweep.h"
 
 //------------------------------------------------------------------------------
-MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
+MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                          const SnapArray &flux, const SnapArray &qtot,
                          int group, int corner, const int ghost_offsets[3])
   : SnapTask<MiniKBATask>(snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()),
@@ -37,8 +37,9 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
   // Then add our writing ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
   {
-    Snap::SnapFieldID ghost_write = 
-      SNAP_GHOST_FLUX_FIELD(group, corner, i);
+    Snap::SnapFieldID ghost_write = even ? 
+      SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, i) :
+      SNAP_GHOST_FLUX_FIELD_ODD(group, corner, i);
     flux.add_projection_requirement(WRITE_DISCARD, *this, 
                                     ghost_write, Snap::SWEEP_PROJECTION);
   }
@@ -46,8 +47,10 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
   // Add our reading ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
   {
-    Snap::SnapFieldID ghost_read = 
-      SNAP_GHOST_FLUX_FIELD(group, corner, i);
+    // Reverse polarity for these ghost fields
+    Snap::SnapFieldID ghost_read = even ?
+      SNAP_GHOST_FLUX_FIELD_ODD(group, corner, i) :
+      SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, i);
     // We know our projection ID now
     Snap::SnapProjectionID proj_id = SNAP_GHOST_PROJECTION(i, ghost_offsets[i]);
     flux.add_projection_requirement(READ_ONLY, *this, ghost_read, proj_id);

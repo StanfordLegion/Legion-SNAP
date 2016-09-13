@@ -38,7 +38,7 @@ public:
   static const Snap::SnapTaskID TASK_ID = Snap::MINI_KBA_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
-  MiniKBATask(const Snap &snap, const Predicate &pred, 
+  MiniKBATask(const Snap &snap, const Predicate &pred, bool even, 
               const SnapArray &flux, const SnapArray &qtot,
               int group, int corner, const int ghost_offsets[3]);
 public:

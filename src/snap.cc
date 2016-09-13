@@ -134,26 +134,51 @@ void Snap::setup(void)
       runtime->attach_name(group_and_ghost_fs, group_fields[idx], name_buffer);
     }
     // ghost corner fields
-    std::vector<FieldID> ghost_fields(num_groups*num_corners*num_dims);
-    std::vector<size_t> ghost_sizes(num_groups*num_corners*num_dims, 
+    std::vector<FieldID> ghost_fields(2*num_groups*num_corners*num_dims);
+    std::vector<size_t> ghost_sizes(2*num_groups*num_corners*num_dims, 
                                     sizeof(double));
     unsigned next = 0;
-    for (int group = 0; group < num_groups; group++)
-      for (int corner = 0; corner < num_corners; corner++)
-        for (int dim = 0; dim < num_dims; dim++)
-          ghost_fields[next++] = SNAP_GHOST_FLUX_FIELD(group, corner, dim);
+    for (int even = 0; even < 2; even++)
+    {
+      if (even == 0)
+        for (int group = 0; group < num_groups; group++)
+          for (int corner = 0; corner < num_corners; corner++)
+            for (int dim = 0; dim < num_dims; dim++)
+              ghost_fields[next++] = 
+                SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, dim);
+      else
+        for (int group = 0; group < num_groups; group++)
+          for (int corner = 0; corner < num_corners; corner++)
+            for (int dim = 0; dim < num_dims; dim++)
+              ghost_fields[next++] = 
+                SNAP_GHOST_FLUX_FIELD_ODD(group, corner, dim);
+    }
     allocator.allocate_fields(ghost_sizes, ghost_fields);
     const char *ghost_field_names[3] = { "Ghost X", "Ghost Y", "Ghost Z" };
     next = 0;
-    for (int group = 0; group < num_groups; group++)
-      for (int corner = 0; corner < num_corners; corner++)
-        for (int dim = 0; dim < num_dims; dim++)
-        {
-          snprintf(name_buffer,63,"%s Flux for Corner %d of Group %d",
-              ghost_field_names[dim], corner, dim);
-          runtime->attach_name(group_and_ghost_fs, 
-                               ghost_fields[next++], name_buffer);
-        }
+    for (int even = 0; even < 2; even++)
+    {
+      if (even == 0)
+        for (int group = 0; group < num_groups; group++)
+          for (int corner = 0; corner < num_corners; corner++)
+            for (int dim = 0; dim < num_dims; dim++)
+            {
+              snprintf(name_buffer,63,"%s Even Flux for Corner %d of Group %d",
+                  ghost_field_names[dim], corner, dim);
+              runtime->attach_name(group_and_ghost_fs, 
+                                   ghost_fields[next++], name_buffer);
+            }
+      else
+        for (int group = 0; group < num_groups; group++)
+          for (int corner = 0; corner < num_corners; corner++)
+            for (int dim = 0; dim < num_dims; dim++)
+            {
+              snprintf(name_buffer,63,"%s Odd Flux for Corner %d of Group %d",
+                  ghost_field_names[dim], corner, dim);
+              runtime->attach_name(group_and_ghost_fs, 
+                                   ghost_fields[next++], name_buffer);
+            }
+    }
   }
   // Make a fields space for the moments for each energy group
   moment_fs = runtime->create_field_space(ctx);
@@ -394,11 +419,24 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
     for (int group = 0; group < num_groups; group++)
     {
       // Launch the sweep from this corner for the given field
-      MiniKBATask mini_kba_even(*this, pred, flux, qtot, 
+      // We alternate between even and odd ghost fields since
+      // Legion can't prove that some of the region requirements
+      // are non-interfering with it's current projection analysis
+      MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, qtot, 
                                 group, corner, ghost_offsets);
+      MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, qtot, 
+                                group, corner, ghost_offsets);
+      bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
-        mini_kba_even.dispatch_wavefront(idx, launch_domains[idx], 
-                                         ctx, runtime);
+      {
+        if (even)
+          mini_kba_even.dispatch_wavefront(idx, launch_domains[idx], 
+                                           ctx, runtime);
+        else
+          mini_kba_odd.dispatch_wavefront(idx, launch_domains[idx],
+                                          ctx, runtime);
+        even = !even;
+      }
     }
   }
 }
@@ -1049,6 +1087,8 @@ template<>
   if (!rhs2)
     rhs1 = false;
 }
+
+const double SumReduction::identity = 0.0;
 
 //------------------------------------------------------------------------------
 template <>
