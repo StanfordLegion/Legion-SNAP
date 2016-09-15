@@ -16,8 +16,8 @@
   nang=10
   ng=4
   epsi=1.0E-4
-  iitm=2
-  oitm=2
+  iitm=5
+  oitm=30
   timedep=0
   tf=1.0
   nsteps=1
