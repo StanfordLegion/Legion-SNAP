@@ -324,6 +324,7 @@ void Snap::transport_solve(void)
         inner_src.dispatch(ctx, runtime);
         // Save the fluxes
         save_fluxes(inner_pred, flux0, flux0pi);
+        flux0.initialize();
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, qtot); 
         // Test for inner convergence
