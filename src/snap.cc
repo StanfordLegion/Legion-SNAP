@@ -459,14 +459,14 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
 static void skip_line(FILE *f)
 {
   char buffer[80];
-  fgets(buffer, 79, f);
+  assert(fgets(buffer, 79, f) > 0);
 }
 
 static void read_int(FILE *f, const char *name, int &result)
 {
   char format[80];
   sprintf(format,"  %s=%%d", name);
-  fscanf(f, format, &result);
+  assert(fscanf(f, format, &result) > 0);
 }
 
 static void read_bool(FILE *f, const char *name, bool &result)
@@ -474,7 +474,7 @@ static void read_bool(FILE *f, const char *name, bool &result)
   char format[80];
   sprintf(format,"  %s=%%d", name);
   int temp = 0;
-  fscanf(f, format, &temp);
+  assert(fscanf(f, format, &temp) > 0);
   result = (temp != 0);
 }
 
@@ -482,7 +482,7 @@ static void read_double(FILE *f, const char *name, double &result)
 {
   char format[80];
   sprintf(format,"  %s=%%lf", name);
-  fscanf(f, format, &result);
+  assert(fscanf(f, format, &result) > 0);
 }
 
 int Snap::num_dims = 1;
