@@ -46,7 +46,8 @@ public:
   static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
 public:
   TestOuterConvergence(const Snap &snap, const Predicate &pred,
-                       const SnapArray &flux0, const SnapArray &flux0po);
+                       const SnapArray &flux0, const SnapArray &flux0po,
+                       const Future &inner_converged, const Future &true_future);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

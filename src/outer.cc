@@ -13,8 +13,12 @@
  * limitations under the License.
  */
 
+#include <cmath>
+
 #include "snap.h"
 #include "outer.h"
+
+using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
 CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
@@ -24,11 +28,15 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   : SnapTask<CalcOuterSource>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
-  qi.add_projection_requirement(READ_ONLY, *this);
-  slgg.add_region_requirement(READ_ONLY, *this);
-  mat.add_projection_requirement(READ_ONLY, *this);
-  q2rgp0.add_projection_requirement(WRITE_DISCARD, *this);
-  q2grpm.add_projection_requirement(WRITE_DISCARD, *this);
+  qi.add_projection_requirement(READ_ONLY, *this); // qi0
+  slgg.add_region_requirement(READ_ONLY, *this); // sxs_g
+  mat.add_projection_requirement(READ_ONLY, *this); // map
+  q2rgp0.add_projection_requirement(WRITE_DISCARD, *this); // qo0
+  // Only have to initialize this if there are multiple moments
+  if (Snap::num_moments > 1)
+    q2grpm.add_projection_requirement(WRITE_DISCARD, *this); // qom
+  else
+    q2grpm.initialize();
 }
 
 //------------------------------------------------------------------------------
@@ -50,7 +58,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-
+  
 }
 
 //------------------------------------------------------------------------------
@@ -58,19 +66,24 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-
+  // TODO: Implement GPU kernels
+  assert(false);
 }
 
 //------------------------------------------------------------------------------
 TestOuterConvergence::TestOuterConvergence(const Snap &snap, 
                                            const Predicate &pred,
                                            const SnapArray &flux0,
-                                           const SnapArray &flux0po)
+                                           const SnapArray &flux0po,
+                                           const Future &inner_converged,
+                                           const Future &true_future)
   : SnapTask<TestOuterConvergence>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   flux0.add_projection_requirement(READ_ONLY, *this);
   flux0po.add_projection_requirement(READ_ONLY, *this);
+  add_future(inner_converged);
+  predicate_false_future = true_future;
 }
 
 //------------------------------------------------------------------------------
@@ -92,7 +105,49 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-  return false;
+  // If the inner loop didn't converge, then we can't either
+  assert(!task->futures.empty());
+  bool inner_converged = task->futures[0].get_result<bool>();
+  if (!inner_converged)
+    return false;
+  // Get the index space domain for iteration
+  assert(task->regions[0].region.get_index_space() == 
+         task->regions[1].region.get_index_space());
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const double tolr = 1.0e-12;
+  const double epsi = 100.0 * Snap::convergence_eps;
+  // Iterate over all the energy groups
+  assert(task->regions[0].privilege_fields.size() == 
+         task->regions[1].privilege_fields.size());
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0po = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+    {
+      DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+      double flux0po = fa_flux0po.read(dp);
+      double df = 1.0;
+      if (fabs(flux0po) < tolr) {
+        flux0po = 1.0;
+        df = 0.0;
+      }
+      double flux0 = fa_flux0.read(dp);
+      df = fabs( (flux0 / flux0po) - df );
+      // Skip anything less than -INF
+      if (df < -INFINITY)
+        continue;
+      if (df > epsi)
+        return false;
+    }
+  }
+  return true;
 }
 
 //------------------------------------------------------------------------------
@@ -100,6 +155,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+  // TODO: Implement GPU kernels
+  assert(false);
   return false;
 }
 

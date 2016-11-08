@@ -134,9 +134,13 @@ void Snap::setup(void)
       runtime->attach_name(group_and_ghost_fs, group_fields[idx], name_buffer);
     }
     // ghost corner fields
+    // For now we don't do any partitioning of the field space for
+    // angles so we make the ghost exchange fields the size of the
+    // number of angles.
+    // TODO: partition field space of angles 
     std::vector<FieldID> ghost_fields(2*num_groups*num_corners*num_dims);
     std::vector<size_t> ghost_sizes(2*num_groups*num_corners*num_dims, 
-                                    sizeof(double));
+                                    num_angles*sizeof(double));
     unsigned next = 0;
     for (int even = 0; even < 2; even++)
     {
@@ -291,13 +295,18 @@ void Snap::transport_solve(void)
   s_xs.initialize();
 
   // Tunables should be ready by now
-  const unsigned outer_runahead = outer_runahead_future.get_result<unsigned>();
+  const unsigned outer_runahead = 
+    outer_runahead_future.get_result<unsigned>(true/*silence warnings*/);
   assert(outer_runahead > 0);
-  const unsigned inner_runahead = inner_runahead_future.get_result<unsigned>();
+  const unsigned inner_runahead = 
+    inner_runahead_future.get_result<unsigned>(true/*silence warnings*/);
   assert(inner_runahead > 0);
   // Loop over time steps
   std::deque<Future> outer_converged_tests;
   std::deque<Future> inner_converged_tests;
+  // Use this for when predicates evaluate to false, tasks can then
+  // return true to indicate convergence
+  const Future true_future = Future::from_value<bool>(runtime, true);
   // Iterate over time steps
   for (int cy = 0; cy < num_steps; ++cy)
   {
@@ -310,11 +319,13 @@ void Snap::transport_solve(void)
       CalcOuterSource outer_src(*this, outer_pred, qi, 
                                 slgg, mat, q2grp0, q2grpm);
       outer_src.dispatch(ctx, runtime);
+      // 
       // Save the fluxes
       save_fluxes(outer_pred, flux0, flux0po);
       // Do the inner solve
       inner_converged_tests.clear();
       Predicate inner_pred = Predicate::TRUE_PRED;
+      Future inner_converged;
       // The inner solve loop
       for (int inno=0; inno < max_inner_iters; ++inno)
       {
@@ -328,9 +339,9 @@ void Snap::transport_solve(void)
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, qtot); 
         // Test for inner convergence
-        TestInnerConvergence inner_conv(*this, inner_pred, flux0, flux0pi);
-        Future inner_converged = 
-          inner_conv.dispatch<AndReduction>(ctx, runtime);
+        TestInnerConvergence inner_conv(*this, inner_pred, 
+                                        flux0, flux0pi, true_future);
+        inner_converged = inner_conv.dispatch<AndReduction>(ctx, runtime);
         inner_converged_tests.push_back(inner_converged);
         // Update the next predicate
         Predicate converged = runtime->create_predicate(ctx, inner_converged);
@@ -340,12 +351,16 @@ void Snap::transport_solve(void)
         {
           Future f = inner_converged_tests.front();
           inner_converged_tests.pop_front();
-          if (f.get_result<bool>())
+          if (f.get_result<bool>(true/*silence warnings*/))
             break;
         }
       }
       // Test for outer convergence
-      TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po);
+      // SNAP says to skip this on the first iteration
+      if (otno == 1)
+        continue;
+      TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po, 
+                                      inner_converged, true_future);
       Future outer_converged = 
         outer_conv.dispatch<AndReduction>(ctx, runtime);
       outer_converged_tests.push_back(outer_converged);
@@ -357,7 +372,7 @@ void Snap::transport_solve(void)
       {
         Future f = outer_converged_tests.front();
         outer_converged_tests.pop_front();
-        if (f.get_result<bool>())
+        if (f.get_result<bool>(true/*silence warnings*/))
           break;
       }
     }
