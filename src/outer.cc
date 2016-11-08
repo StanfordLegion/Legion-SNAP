@@ -24,18 +24,21 @@ using namespace LegionRuntime::Accessor;
 CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
                                  const SnapArray &qi, const SnapArray &slgg,
                                  const SnapArray &mat, const SnapArray &q2rgp0, 
-                                 const SnapArray &q2grpm)
+                                 const SnapArray &q2grpm, 
+                                 const SnapArray &flux0, const SnapArray &fluxm)
   : SnapTask<CalcOuterSource>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   qi.add_projection_requirement(READ_ONLY, *this); // qi0
+  flux0.add_projection_requirement(READ_ONLY, *this); // flux0
   slgg.add_region_requirement(READ_ONLY, *this); // sxs_g
   mat.add_projection_requirement(READ_ONLY, *this); // map
   q2rgp0.add_projection_requirement(WRITE_DISCARD, *this); // qo0
   // Only have to initialize this if there are multiple moments
-  if (Snap::num_moments > 1)
+  if (Snap::num_moments > 1) {
+    fluxm.add_projection_requirement(READ_ONLY, *this); // fluxm 
     q2grpm.add_projection_requirement(WRITE_DISCARD, *this); // qom
-  else
+  } else
     q2grpm.initialize();
 }
 
@@ -58,7 +61,79 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-  
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const bool multi_moment = (Snap::num_moments > 1);
+  const unsigned num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == task->regions[1].privilege_fields.size());
+  assert(num_groups == task->regions[4].privilege_fields.size());
+  // Make the accessors for all the groups up front
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_qi0(num_groups);
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_flux0(num_groups);
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_qo0(num_groups);
+  std::vector<RegionAccessor<AccessorType::Generic,double> > 
+    fa_fluxm(multi_moment ? num_groups : 0);
+  // Field spaces are all the same so this is safe
+  unsigned g = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g++)
+  {
+    fa_qi0[g] = regions[0].get_field_accessor(*it).typeify<double>();
+    fa_flux0[g] = regions[1].get_field_accessor(*it).typeify<double>();
+    fa_qo0[g] = regions[4].get_field_accessor(*it).typeify<double>();
+    if (multi_moment)
+      fa_fluxm[g] = regions[5].get_field_accessor(*it).typeify<double>();
+  }
+  RegionAccessor<AccessorType::Generic,int> fa_mat = 
+    regions[3].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
+  // Do pairwise group intersections
+  g = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_slgg = 
+      regions[2].get_field_accessor(*it).typeify<double>();
+    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+    {
+      DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+      double qo0 = fa_qi0[g].read(dp);
+      for (unsigned g2 = 0; g2 < num_groups; g2++)
+      {
+        if (g == g2)
+          continue;
+        const int mat = fa_mat.read(dp);
+        const int pvals[3] = { mat , 1, g2 }; 
+        DomainPoint xsp = DomainPoint::from_point<3>(Point<3>(pvals));
+        const double cs = fa_slgg.read(xsp);
+        qo0 += cs * fa_flux0[g2].read(dp);
+      }
+      fa_qo0[g].write(dp, qo0);
+    }
+    if (multi_moment)
+    {
+      assert(false);
+#if 0
+      for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+      {
+        DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+        for (int moment = 1; moment < Snap::num_moments; moment++)
+        {
+          double qom = 0.0;
+          for (unsigned g2 = 0; g2 < num_groups; g2++)
+          {
+            if (g == g2)
+              continue;
+            
+            qom += cs * 
+          }
+        }
+      }
+#endif
+    }
+  }
 }
 
 //------------------------------------------------------------------------------

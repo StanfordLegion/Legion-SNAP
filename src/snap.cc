@@ -91,10 +91,10 @@ void Snap::setup(void)
   const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
   material_is = runtime->create_index_space(ctx,
       Domain::from_rect<1>(Rect<1>(Point<1>(0), Point<1>(nmat-1))));
-  const int slgg_upper[2] = { nmat-1, num_groups-1 };
-  Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
-  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
-  runtime->attach_name(slgg_is, "SLGG Index Space");
+  const int slgg_upper[3] = { nmat-1, num_moments-1, num_groups-1 };
+  Rect<3> slgg_bounds(Point<3>::ZEROES(), Point<3>(slgg_upper));
+  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<3>(slgg_bounds));
+  runtime->attach_name(slgg_is, "Scattering Index Space");
   // Make a field space for all the energy groups
   group_fs = runtime->create_field_space(ctx); 
   runtime->attach_name(group_fs, "Energy Group Field Space");
@@ -316,8 +316,8 @@ void Snap::transport_solve(void)
     for (int otno = 0; otno < max_outer_iters; ++otno)
     {
       // Do the outer source calculation 
-      CalcOuterSource outer_src(*this, outer_pred, qi, 
-                                slgg, mat, q2grp0, q2grpm);
+      CalcOuterSource outer_src(*this, outer_pred, qi, slgg, mat, 
+                                q2grp0, q2grpm, flux0, fluxm);
       outer_src.dispatch(ctx, runtime);
       // 
       // Save the fluxes
@@ -905,7 +905,7 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 }
 
 //------------------------------------------------------------------------------
-void SnapArray::initialize(void)
+void SnapArray::initialize(void) const
 //------------------------------------------------------------------------------
 {
   assert(!regular_fields.empty());
@@ -922,7 +922,7 @@ void SnapArray::initialize(void)
 
 //------------------------------------------------------------------------------
 template<typename T>
-void SnapArray::initialize(T value)
+void SnapArray::initialize(T value) const
 //------------------------------------------------------------------------------
 {
   FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)));

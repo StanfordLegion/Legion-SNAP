@@ -404,9 +404,9 @@ public:
     { return regular_fields; }
   LogicalRegion get_subregion(const DomainPoint &color) const;
 public:
-  void initialize(void);
+  void initialize(void) const;
   template<typename T>
-  void initialize(T value);
+  void initialize(T value) const;
 public:
   template<typename T>
   inline void add_projection_requirement(PrivilegeMode priv,

@@ -29,7 +29,8 @@ public:
   CalcOuterSource(const Snap &snap, const Predicate &pred,
                   const SnapArray &qi, const SnapArray &slgg,
                   const SnapArray &mat, const SnapArray &q2rgp0, 
-                  const SnapArray &q2grpm);
+                  const SnapArray &q2grpm, const SnapArray &flux0,
+                  const SnapArray &fluxm);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);
