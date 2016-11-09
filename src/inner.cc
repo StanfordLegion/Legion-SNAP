@@ -31,11 +31,12 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   s_xs.add_projection_requirement(READ_ONLY, *this);
   flux0.add_projection_requirement(READ_ONLY, *this);
   q2grp0.add_projection_requirement(READ_ONLY, *this);
-  q2grpm.add_projection_requirement(READ_ONLY, *this);
   qtot.add_projection_requirement(WRITE_DISCARD, *this);
   // only include this requirement if we have more than one moment
-  if (Snap::num_moments > 1)
+  if (Snap::num_moments > 1) {
     fluxm.add_projection_requirement(READ_ONLY, *this);
+    q2grpm.add_projection_requirement(READ_ONLY, *this);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -57,7 +58,63 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-
+#ifndef NO_COMPUTE
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const bool multi_moment = (Snap::num_moments > 1);
+  const unsigned num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == task->regions[1].privilege_fields.size());
+  assert(num_groups == task->regions[2].privilege_fields.size());
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_sxs = 
+      regions[0].get_field_accessor(*it).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_q2grp0 = 
+      regions[2].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
+      regions[3].get_field_accessor(*it).typeify<MomentQuad>();
+    if (multi_moment) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[4].get_field_accessor(*it).typeify<MomentTriple>();
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_q2grpm = 
+        regions[5].get_field_accessor(*it).typeify<MomentTriple>();
+      for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+      {
+        DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+        MomentQuad sxs_quad = fa_sxs.read(dp);
+        const double q0 = fa_q2grp0.read(dp);
+        const double flux0 = fa_flux0.read(dp);
+        MomentQuad quad;
+        quad[0] = q0 + flux0 * sxs_quad[0];
+        MomentTriple qom = fa_q2grpm.read(dp);
+        MomentTriple fm = fa_fluxm.read(dp);
+        int moment = 0;
+        for (int l = 1; l < Snap::num_moments; l++) {
+          for (int i = 0; i < Snap::lma[l]; i++)
+            quad[moment+i+1] = qom[moment+i] + fm[moment+i] * sxs_quad[l];
+          moment += Snap::lma[l];
+        }
+        fa_qtot.write(dp, quad);
+      }
+    } else {
+      for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+      {
+        DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+        MomentQuad sxs_quad = fa_sxs.read(dp);
+        const double q0 = fa_q2grp0.read(dp);
+        const double flux0 = fa_flux0.read(dp);
+        MomentQuad quad;
+        quad[0] = q0 + flux0 * sxs_quad[0];
+        fa_qtot.write(dp, quad);
+      }
+    }
+  }
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -65,7 +122,9 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-
+#ifndef NO_COMPUTE
+  assert(false);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -101,6 +160,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
          task->regions[1].region.get_index_space());
@@ -136,6 +196,9 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
     }
   }
   return true;
+#else
+  return false;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -143,7 +206,9 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   assert(false);
+#endif
   return false;
 }
 

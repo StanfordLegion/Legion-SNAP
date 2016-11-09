@@ -32,6 +32,7 @@ OUTFILE		?= snap
 # List all the application source files here
 GEN_SRC		?= main.cc \
 		   snap.cc \
+		   init.cc \
 		   outer.cc \
 		   inner.cc \
 		   sweep.cc	# .cc files

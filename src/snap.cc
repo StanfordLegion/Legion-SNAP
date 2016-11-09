@@ -14,6 +14,7 @@
  */
 
 #include "snap.h"
+#include "init.h"
 #include "outer.h"
 #include "inner.h"
 #include "sweep.h"
@@ -195,7 +196,7 @@ void Snap::setup(void)
     for (int idx = 0; idx < num_groups; idx++)
       moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Notice that the field size is as big as necessary to store all moments
-    std::vector<size_t> moment_sizes(num_groups, num_moments*sizeof(double));
+    std::vector<size_t> moment_sizes(num_groups, sizeof(MomentQuad));
     allocator.allocate_fields(moment_sizes, moment_fields);
     char name_buffer[64];
     for (int idx = 0; idx < num_groups; idx++)
@@ -214,8 +215,7 @@ void Snap::setup(void)
     for (int idx = 0; idx < num_groups; idx++)
       moment_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
     // Storing number of moments - 1
-    std::vector<size_t> moment_sizes(num_groups, 
-                                      (num_moments-1)*sizeof(double));
+    std::vector<size_t> moment_sizes(num_groups,sizeof(MomentTriple)); 
     allocator.allocate_fields(moment_sizes, moment_fields);
     char name_buffer[64];
     for (int idx = 0; idx < num_groups; idx++)
@@ -270,7 +270,7 @@ void Snap::transport_solve(void)
 
   SnapArray qi(simulation_is, spatial_ip, group_fs, ctx, runtime, "qi");
   SnapArray q2grp0(simulation_is, spatial_ip, group_fs, ctx, runtime, "q2grp0");
-  SnapArray q2grpm(simulation_is, spatial_ip, moment_fs, ctx, runtime,"q2grpm");
+  SnapArray q2grpm(simulation_is, spatial_ip, flux_moment_fs, ctx, runtime,"q2grpm");
   SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime, "qtot");
 
   SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime, "mat");
@@ -287,12 +287,25 @@ void Snap::transport_solve(void)
 
   qi.initialize();
   q2grp0.initialize();
-  q2grpm.initialize();
+  if (num_moments > 1)
+    q2grpm.initialize();
   qtot.initialize();
 
   mat.initialize<int>(1);
   slgg.initialize();
   s_xs.initialize();
+
+  // Launch some tasks to initialize the application data
+  {
+    InitMaterial init_material(*this, mat);
+    init_material.dispatch(ctx, runtime);
+
+    InitScattering init_scattering(*this, slgg);
+    init_scattering.dispatch(ctx, runtime);
+
+    InitSource init_source(*this, qi);
+    init_source.dispatch(ctx, runtime);
+  }
 
   // Tunables should be ready by now
   const unsigned outer_runahead = 
@@ -533,6 +546,17 @@ bool Snap::single_angle_copy = true;
 
 int Snap::num_corners = 1;
 std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
+int Snap::cmom;
+int Snap::num_octants;
+double* Snap::mu;
+double* Snap::w;
+double *Snap::wmu;
+double* Snap::eta;
+double* Snap::weta;
+double* Snap::xi;
+double* Snap::wxi;
+double* Snap::ec;
+int Snap::lma[4];
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::parse_arguments(int argc, char **argv)
@@ -660,6 +684,7 @@ std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
   for (int i = 0; i < num_dims; i++)
     num_corners *= 2;
   compute_wavefronts();
+  compute_derived_globals();
 }
 
 static bool contains_point(Point<3> &point, int xlo, int xhi, 
@@ -720,6 +745,175 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 }
 
 //------------------------------------------------------------------------------
+/*static*/ void Snap::compute_derived_globals(void)
+//------------------------------------------------------------------------------
+{
+  cmom = num_moments;
+  num_octants = 2;
+  const size_t buffer_size = num_angles * sizeof(double);
+  mu = (double*)malloc(buffer_size);
+  w = (double*)malloc(buffer_size);
+  wmu = (double*)malloc(buffer_size);
+  eta = (double*)malloc(buffer_size);
+  weta = (double*)malloc(buffer_size);
+  xi = (double*)malloc(buffer_size);
+  wxi = (double*)malloc(buffer_size);
+
+  memset(mu, 0, buffer_size);
+  memset(w, 0, buffer_size);
+  memset(wmu, 0, buffer_size);
+  memset(eta, 0, buffer_size);
+  memset(weta, 0, buffer_size);
+  memset(xi, 0, buffer_size);
+  memset(wxi, 0, buffer_size);
+
+  if (num_dims > 1) {
+    cmom = num_moments * (num_moments+1) / 2;
+    num_octants = 4;
+  }
+
+  if (num_dims > 2) { 
+    cmom = num_moments * num_moments;
+    num_octants = 8;
+  }
+
+  const double dm = 1.0 / double(num_angles);
+
+  mu[0] = 0.5 * dm;
+  for (int i = 1; i < num_angles; i++)
+    mu[i] = mu[i-1] + dm;
+  if (num_dims > 1) { 
+    eta[0] = 1.0 - 0.5 * dm;
+    for (int i = 1; i < num_angles; i++)
+      eta[i] = eta[i-1] - dm;
+
+    if (num_dims > 2) {
+      for (int i = 0; i < num_angles; i++) {
+        const double t = mu[i]*mu[i] + eta[i]*eta[i];
+        xi[i] = sqrt( 1.0 - t );
+      }
+    }
+  }
+
+  if (num_dims == 1) {
+    for (int i = 0; i < num_angles; i++)
+      w[i] = 0.5 / double(num_angles);
+  } else if (num_dims == 2) {
+    for (int i = 0; i < num_angles; i++)
+      w[i] = 0.25 / double(num_angles);
+  } else if (num_dims == 3) {
+    for (int i = 0; i < num_angles; i++)
+      w[i] = 0.125 / double(num_angles);
+  } else 
+    assert(false);
+
+  const size_t ec_size = num_angles * cmom * num_octants * sizeof(double);
+  ec = (double*)malloc(ec_size);
+  memset(ec, 0, ec_size);
+
+  for (int i = 0; i < 4; i++)
+    lma[i] = 0;
+
+  switch (num_dims)
+  {
+    case 1:
+      {
+        for (int i = 0; i < num_angles; i++)
+          wmu[i] = w[i] * mu[i];
+        for (int i = 0; i < 4; i++)
+          lma[i] = 1;
+        for (int id = 0; id < 2; id++) {
+          int is = -1;
+          if (id == 1) 
+            is = 1;
+          for (int idx = 0; idx < num_angles; idx++)
+            ec[id * num_angles * num_moments + idx] = 1.0;
+          for (int l = 1; l < num_moments; l++)
+            for (int idx = 0; idx < num_angles; idx++)
+              ec[id * num_angles * num_moments + l * num_angles + idx] = 
+                pow(is*mu[idx], double(2*(l+1)-3)); 
+        }
+        break;
+      }
+    case 2:
+      {
+        for (int i = 0; i < num_angles; i++)
+          wmu[i] = w[i] * mu[i];
+        for (int i = 0; i < num_angles; i++)
+          weta[i] = w[i] * eta[i];
+        for (int l = 0; l < num_moments; l++)
+          lma[l] = l+1;
+        for (int jd = 0; jd < 2; jd++) {
+          int js = -1;
+          if (jd == 1)
+            js = 1;
+          for (int id = 0; id < 2; id++) {
+            int is = -1;
+            if (id == 1)
+              is = 1;
+            int oct = 2*jd + id;
+            for (int idx = 0; idx < num_angles; idx++)
+              ec[oct * num_angles * num_moments + idx] = 1.0;
+            int moment = 1;
+            for (int l = 1; l < num_moments; l++) {
+              for (int m = 0; m < l; m++) {
+                for (int idx = 0; idx < num_angles; idx++)
+                  ec[oct * num_angles * num_moments + moment * num_angles + idx] = 
+                    pow(is*mu[idx],2*(l+1)-3) * pow(js*eta[idx],m);
+                moment++;
+              }
+            }
+          }
+        }
+        break;
+      }
+    case 3:
+      {
+        for (int i = 0; i < num_angles; i++)
+          wmu[i] = w[i] * mu[i];
+        for (int i = 0; i < num_angles; i++)
+          weta[i] = w[i] * eta[i];
+        for (int i = 0; i < num_angles; i++)
+          wxi[i] = w[i] * xi[i];
+
+        for (int l = 0; l < num_moments; l++)
+          lma[l] = 2*(l+1) - 1;
+
+        for (int kd = 0; kd < 2; kd++) {
+          int ks = -1;
+          if (kd == 1)
+            ks = 1;
+          for (int jd = 0; jd < 2; jd++) {
+            int js = -1;
+            if (jd == 1)
+              js = 1;
+            for (int id = 0; id < 2; id++) {
+              int is = -1;
+              if (id == 1)
+                is = 1;
+              int oct = 4 * kd + 2 * jd + id;
+              for (int idx = 0; idx < num_angles; idx++)
+                ec[oct * num_angles * num_moments + idx] = 1.0;
+              int moment = 1;
+              for (int l = 1; l < num_moments; l++) {
+                for (int m = 0; m < (2*(l+1)-1); m++) {
+                  for (int idx = 0; idx < num_angles; idx++)
+                    ec[oct * num_angles * num_moments + moment * num_angles + idx] = 
+                      pow(is*mu[idx], 2*(l+1)-3) * pow(ks * xi[idx] * js * eta[idx], m);
+                  moment++;
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+    default:
+      assert(false);
+  }
+}
+
+//------------------------------------------------------------------------------
 /*static*/ void Snap::report_arguments(void)
 //------------------------------------------------------------------------------
 {
@@ -768,6 +962,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   Runtime::set_top_level_task_id(SNAP_TOP_LEVEL_TASK_ID);
   Runtime::set_registration_callback(mapper_registration);
   // Now register all the task variants
+  InitMaterial::preregister_cpu_variants();
+  InitScattering::preregister_cpu_variants();
+  InitSource::preregister_cpu_variants();
   CalcOuterSource::preregister_all_variants();
   TestOuterConvergence::preregister_all_variants();
   CalcInnerSource::preregister_all_variants();

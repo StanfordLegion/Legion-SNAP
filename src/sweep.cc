@@ -89,6 +89,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
+
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -96,5 +99,8 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
+
+#endif
 }
 

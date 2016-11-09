@@ -42,6 +42,9 @@ class Snap {
 public:
   enum SnapTaskID {
     SNAP_TOP_LEVEL_TASK_ID,
+    INIT_MATERIAL_TASK_ID,
+    INIT_SCATTERING_TASK_ID,
+    INIT_SOURCE_TASK_ID,
     CALC_OUTER_SOURCE_TASK_ID,
     TEST_OUTER_CONVERGENCE_TASK_ID,
     CALC_INNER_SOURCE_TASK_ID,
@@ -212,6 +215,7 @@ public:
 public:
   static void parse_arguments(int argc, char **argv);
   static void compute_wavefronts(void);
+  static void compute_derived_globals(void);
   static void report_arguments(void);
   static void perform_registrations(void);
   static void mapper_registration(Machine machine, Runtime *runtime,
@@ -253,6 +257,18 @@ public: // derived
   // Indexed by wavefront number and the point number
   static std::vector<std::vector<DomainPoint> > wavefront_map[8];
 public:
+  static int cmom;
+  static int num_octants;
+  static double *mu; // num angles
+  static double *w; // num angles
+  static double *wmu; // num angles
+  static double *eta; // num angles
+  static double *weta; // num angles
+  static double *xi; // num angles
+  static double *wxi; // num angles
+  static double *ec; // num angles x num moments x num_octants
+  static int lma[4];
+public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
   public:
@@ -273,19 +289,28 @@ public:
     : IndexLauncher(T::TASK_ID, Domain::from_rect<3>(launch_domain), 
                     TaskArgument(), ArgumentMap(), pred) { }
 public:
-  void dispatch(Context ctx, Runtime *runtime)
+  void dispatch(Context ctx, Runtime *runtime, bool block = false)
   { 
     log_snap.info("Dispatching Task %s (ID %d)", 
         Snap::task_names[T::TASK_ID], T::TASK_ID);
-    runtime->execute_index_space(ctx, *this);
+    if (block) {
+      FutureMap fm = runtime->execute_index_space(ctx, *this);
+      fm.wait_all_results(true/*silence warnings*/);
+    } else
+      runtime->execute_index_space(ctx, *this);
   }
   template<typename REDOP>
-  Future dispatch(Context ctx, Runtime *runtime)
+  Future dispatch(Context ctx, Runtime *runtime, bool block = false)
   {
     assert(REDOP::REDOP_ID == T::REDOP);
     log_snap.info("Dispatching Task %s (ID %d) with Reduction %d", 
                   Snap::task_names[T::TASK_ID], T::TASK_ID, T::REDOP);
-    return runtime->execute_index_space(ctx, *this, T::REDOP);
+    if (block) {
+      Future f = runtime->execute_index_space(ctx, *this, T::REDOP);
+      f.get_void_result(true/*silence warnings*/);
+      return f;
+    } else
+      return runtime->execute_index_space(ctx, *this, T::REDOP);
   }
 public:
   static void preregister_all_variants(void)
@@ -520,6 +545,26 @@ public:
 public:
   template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
+};
+
+struct MomentTriple {
+public:
+  MomentTriple(void) { for (int i = 0; i < 3; i++) vals[i] = 0.0; }
+public:
+  double& operator[](const int index) { return vals[index]; }
+  const double& operator[](const int index) const { return vals[index]; }
+public:
+  double vals[3];
+};
+
+struct MomentQuad {
+public:
+  MomentQuad(void) { for (int i = 0; i < 4; i++) vals[i] = 0.0; }
+public:
+  double& operator[](const int index) { return vals[index]; }
+  const double& operator[](const int index) const { return vals[index]; }
+public:
+  double vals[4];
 };
 
 #endif // __SNAP_H__

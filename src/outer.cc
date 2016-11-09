@@ -38,8 +38,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   if (Snap::num_moments > 1) {
     fluxm.add_projection_requirement(READ_ONLY, *this); // fluxm 
     q2grpm.add_projection_requirement(WRITE_DISCARD, *this); // qom
-  } else
-    q2grpm.initialize();
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -61,6 +60,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
@@ -72,7 +72,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_qi0(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_flux0(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_qo0(num_groups);
-  std::vector<RegionAccessor<AccessorType::Generic,double> > 
+  std::vector<RegionAccessor<AccessorType::Generic,MomentTriple> > 
     fa_fluxm(multi_moment ? num_groups : 0);
   // Field spaces are all the same so this is safe
   unsigned g = 0;
@@ -84,7 +84,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     fa_flux0[g] = regions[1].get_field_accessor(*it).typeify<double>();
     fa_qo0[g] = regions[4].get_field_accessor(*it).typeify<double>();
     if (multi_moment)
-      fa_fluxm[g] = regions[5].get_field_accessor(*it).typeify<double>();
+      fa_fluxm[g] = regions[5].get_field_accessor(*it).typeify<MomentTriple>();
   }
   RegionAccessor<AccessorType::Generic,int> fa_mat = 
     regions[3].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
@@ -105,7 +105,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
         if (g == g2)
           continue;
         const int mat = fa_mat.read(dp);
-        const int pvals[3] = { mat , 1, g2 }; 
+        const int pvals[3] = { mat , 0, g2 }; 
         DomainPoint xsp = DomainPoint::from_point<3>(Point<3>(pvals));
         const double cs = fa_slgg.read(xsp);
         qo0 += cs * fa_flux0[g2].read(dp);
@@ -114,26 +114,37 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     }
     if (multi_moment)
     {
-      assert(false);
-#if 0
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_qom = 
+        regions[6].get_field_accessor(*it).typeify<MomentTriple>();
       for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
       {
         DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-        for (int moment = 1; moment < Snap::num_moments; moment++)
+        MomentTriple qom;
+        for (unsigned g2 = 0; g2 < num_groups; g2++)
         {
-          double qom = 0.0;
-          for (unsigned g2 = 0; g2 < num_groups; g2++)
+          if (g == g2)
+            continue;
+          const int mat = fa_mat.read(dp);
+          int moment = 0;
+          MomentTriple csm;
+          for (int l = 1; l < Snap::num_moments; l++)
           {
-            if (g == g2)
-              continue;
-            
-            qom += cs * 
+            const int pvals[3] = { mat, l, g2 };
+            DomainPoint xsp = DomainPoint::from_point<3>(Point<3>(pvals));
+            const double scat = fa_slgg.read(xsp);
+            for (int i = 0; i < Snap::lma[l]; i++)
+              csm[moment+i] = scat;
+            moment += Snap::lma[l];
           }
+          MomentTriple fluxm = fa_fluxm[g2].read(dp); 
+          for (int i = 0; i < (Snap::num_moments-1); i++)
+            qom[i] += csm[i] * fluxm[i];
         }
+        fa_qom.write(dp, qom);  
       }
-#endif
     }
   }
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -141,8 +152,10 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   // TODO: Implement GPU kernels
   assert(false);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -180,6 +193,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   // If the inner loop didn't converge, then we can't either
   assert(!task->futures.empty());
   bool inner_converged = task->futures[0].get_result<bool>();
@@ -223,6 +237,9 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
     }
   }
   return true;
+#else
+  return false;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -230,8 +247,10 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+#ifndef NO_COMPUTE
   // TODO: Implement GPU kernels
   assert(false);
+#endif
   return false;
 }
 
