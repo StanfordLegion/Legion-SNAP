@@ -296,16 +296,22 @@ void Snap::transport_solve(void)
   s_xs.initialize();
 
   // Launch some tasks to initialize the application data
+  if (material_layout != HOMOGENEOUS_LAYOUT)
   {
     InitMaterial init_material(*this, mat);
     init_material.dispatch(ctx, runtime);
-
-    InitScattering init_scattering(*this, slgg);
-    init_scattering.dispatch(ctx, runtime);
-
+  }
+  if (source_layout != EVERYWHERE_SOURCE)
+  {
     InitSource init_source(*this, qi);
     init_source.dispatch(ctx, runtime);
   }
+#if 0
+  {
+    InitScattering init_scattering(*this, slgg);
+    init_scattering.dispatch(ctx, runtime);
+  }
+#endif
 
   // Tunables should be ready by now
   const unsigned outer_runahead = 

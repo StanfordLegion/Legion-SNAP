@@ -54,6 +54,9 @@ public:
   };
 #define SNAP_TASK_NAMES           \
     "Top Level Task",             \
+    "Initialize Material",        \
+    "Initialize Scattering",      \
+    "Initialize Source",          \
     "Calc Outer Source",          \
     "Test Outer Convergence",     \
     "Calc Inner Source",          \
