@@ -100,7 +100,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-
+  assert(false);
 #endif
 }
 

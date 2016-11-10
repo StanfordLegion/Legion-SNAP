@@ -94,8 +94,8 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_slgg = 
-      regions[2].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
+      regions[2].get_field_accessor(*it).typeify<MomentQuad>();
     for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
     {
       DomainPoint dp = DomainPoint::from_point<3>(itr.p);
@@ -105,10 +105,10 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
         if (g == g2)
           continue;
         const int mat = fa_mat.read(dp);
-        const int pvals[3] = { mat , 0, g2 }; 
-        DomainPoint xsp = DomainPoint::from_point<3>(Point<3>(pvals));
-        const double cs = fa_slgg.read(xsp);
-        qo0 += cs * fa_flux0[g2].read(dp);
+        const int pvals[2] = { mat, g2 }; 
+        DomainPoint xsp = DomainPoint::from_point<2>(Point<2>(pvals));
+        const MomentQuad cs = fa_slgg.read(xsp);
+        qo0 += cs[0] * fa_flux0[g2].read(dp);
       }
       fa_qo0[g].write(dp, qo0);
     }
@@ -129,11 +129,11 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
           MomentTriple csm;
           for (int l = 1; l < Snap::num_moments; l++)
           {
-            const int pvals[3] = { mat, l, g2 };
-            DomainPoint xsp = DomainPoint::from_point<3>(Point<3>(pvals));
-            const double scat = fa_slgg.read(xsp);
+            const int pvals[2] = { mat, g2 };
+            DomainPoint xsp = DomainPoint::from_point<2>(Point<2>(pvals));
+            const MomentQuad scat = fa_slgg.read(xsp);
             for (int i = 0; i < Snap::lma[l]; i++)
-              csm[moment+i] = scat;
+              csm[moment+i] = scat[l];
             moment += Snap::lma[l];
           }
           MomentTriple fluxm = fa_fluxm[g2].read(dp); 

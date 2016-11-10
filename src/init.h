@@ -34,22 +34,9 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class InitScattering : public SnapTask<InitScattering> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::INIT_MATERIAL_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
-public:
-  InitScattering(const Snap &snap, const SnapArray &slgg);
-public:
-  static void preregister_cpu_variants(void);
-public:
-  static void cpu_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-};
-
 class InitSource : public SnapTask<InitSource> {
 public:
-  static const Snap::SnapTaskID TASK_ID = Snap::INIT_MATERIAL_TASK_ID;
+  static const Snap::SnapTaskID TASK_ID = Snap::INIT_SOURCE_TASK_ID;
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
   InitSource(const Snap &snap, const SnapArray &qi);

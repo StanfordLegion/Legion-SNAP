@@ -99,31 +99,6 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 }
 
 //------------------------------------------------------------------------------
-InitScattering::InitScattering(const Snap &snap, const SnapArray &slgg)
-: SnapTask<InitScattering>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
-//------------------------------------------------------------------------------
-{
-  slgg.add_projection_requirement(READ_WRITE, *this);
-}
-
-//------------------------------------------------------------------------------
-/*static*/ void InitScattering::preregister_cpu_variants(void)
-//------------------------------------------------------------------------------
-{
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
-}
-
-//------------------------------------------------------------------------------
-/*static*/ void InitScattering::cpu_implementation(const Task *task,
-    const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
-//------------------------------------------------------------------------------
-{
-#ifndef NO_COMPUTE
-
-#endif
-}
-
-//------------------------------------------------------------------------------
 InitSource::InitSource(const Snap &snap, const SnapArray &qi)
   : SnapTask<InitSource>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------

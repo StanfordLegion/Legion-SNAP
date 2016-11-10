@@ -24,6 +24,8 @@
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 
+using namespace LegionRuntime::Accessor;
+
 LegionRuntime::Logger::Category log_snap("snap");
 
 const char* Snap::task_names[LAST_TASK_ID] = { SNAP_TASK_NAMES };
@@ -92,9 +94,9 @@ void Snap::setup(void)
   const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
   material_is = runtime->create_index_space(ctx,
       Domain::from_rect<1>(Rect<1>(Point<1>(0), Point<1>(nmat-1))));
-  const int slgg_upper[3] = { nmat-1, num_moments-1, num_groups-1 };
-  Rect<3> slgg_bounds(Point<3>::ZEROES(), Point<3>(slgg_upper));
-  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<3>(slgg_bounds));
+  const int slgg_upper[2] = { nmat-1, num_groups-1 };
+  Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
+  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
   runtime->attach_name(slgg_is, "Scattering Index Space");
   // Make a field space for all the energy groups
   group_fs = runtime->create_field_space(ctx); 
@@ -274,6 +276,12 @@ void Snap::transport_solve(void)
   SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime, "qtot");
 
   SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime, "mat");
+  SnapArray sigt(material_is, IndexPartition::NO_PART, group_fs, 
+                 ctx, runtime, "sigt");
+  SnapArray siga(material_is, IndexPartition::NO_PART, group_fs,
+                 ctx, runtime, "siga");
+  SnapArray sigs(material_is, IndexPartition::NO_PART, group_fs,
+                 ctx, runtime, "sigs");
   SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, 
                  ctx, runtime, "slgg");
   SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime, "s_xs");
@@ -292,6 +300,9 @@ void Snap::transport_solve(void)
   qtot.initialize();
 
   mat.initialize<int>(1);
+  sigt.initialize();
+  siga.initialize();
+  sigs.initialize();
   slgg.initialize();
   s_xs.initialize();
 
@@ -306,12 +317,7 @@ void Snap::transport_solve(void)
     InitSource init_source(*this, qi);
     init_source.dispatch(ctx, runtime);
   }
-#if 0
-  {
-    InitScattering init_scattering(*this, slgg);
-    init_scattering.dispatch(ctx, runtime);
-  }
-#endif
+  initialize_scattering(sigt, siga, sigs, slgg);
 
   // Tunables should be ready by now
   const unsigned outer_runahead = 
@@ -405,6 +411,169 @@ void Snap::output(void)
 }
 
 //------------------------------------------------------------------------------
+void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
+                             const SnapArray &sigs, const SnapArray &slgg) const
+//------------------------------------------------------------------------------
+{
+  PhysicalRegion sigt_region = sigt.map();
+  PhysicalRegion siga_region = siga.map();
+  PhysicalRegion sigs_region = sigs.map();
+  PhysicalRegion slgg_region = slgg.map();
+  sigt_region.wait_until_valid(true/*ignore warnings*/);
+  siga_region.wait_until_valid(true/*ignore warnings*/);
+  sigs_region.wait_until_valid(true/*ignore warnings*/);
+  slgg_region.wait_until_valid(true/*ignore warnings*/);
+
+  // Names reflect fortran numbering from original snap
+  const DomainPoint one = DomainPoint::from_point<1>(Point<1>(0));
+  const DomainPoint two = DomainPoint::from_point<1>(Point<1>(1));
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigt(num_groups);
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_siga(num_groups);
+  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigs(num_groups);
+  for (unsigned g = 0; g < num_groups; g++)
+  {
+    fa_sigt[g] = sigt_region.get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    fa_siga[g] = siga_region.get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    fa_sigs[g] = sigs_region.get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+  }
+
+  fa_sigt[0].write(one, 1.0);
+  fa_siga[0].write(one, 0.5);
+  fa_sigs[0].write(one, 0.5);
+  for (unsigned g = 1; g < num_groups; g++)
+  {
+    fa_sigt[g].write(one, 0.01  * fa_sigt[g-1].read(one));
+    fa_siga[g].write(one, 0.005 * fa_siga[g-1].read(one));
+    fa_sigs[g].write(one, 0.005 * fa_sigs[g-1].read(one));
+  }
+
+  if (material_layout != HOMOGENEOUS_LAYOUT) {
+    fa_sigt[0].write(two, 2.0);
+    fa_siga[0].write(two, 0.8);
+    fa_sigs[0].write(two, 1.2);
+    for (unsigned g = 1; g < num_groups; g++)
+    {
+      fa_sigt[g].write(two, 0.01  * fa_sigt[g-1].read(two));
+      fa_siga[g].write(two, 0.005 * fa_siga[g-1].read(two));
+      fa_sigs[g].write(two, 0.005 * fa_sigs[g-1].read(two));
+    }
+  }
+
+  std::vector<RegionAccessor<AccessorType::Generic,MomentQuad> > fa_slgg(num_groups); 
+  for (unsigned g = 0; g < num_groups; g++)
+    fa_slgg[g] = slgg_region.get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(g)).typeify<MomentQuad>();
+
+  Point<2> p2 = Point<2>::ZEROES();
+  if (num_groups == 1) {
+    MomentQuad local;
+    local[0] = fa_sigs[0].read(one);
+    fa_slgg[0].write(DomainPoint::from_point<2>(p2), local); 
+    if (material_layout != HOMOGENEOUS_LAYOUT) {
+      p2.x[1] = 1; 
+      local[0] = fa_sigs[0].read(two);
+      fa_slgg[0].write(DomainPoint::from_point<2>(p2), local);
+    }
+  } else {
+    MomentQuad local;
+    for (unsigned g = 0; g < num_groups; g++) {
+      p2.x[1] = g; 
+      const DomainPoint dp = DomainPoint::from_point<2>(p2);
+      local[0] = 0.2 * fa_sigs[g].read(one);
+      fa_slgg[g].write(dp, local);
+      if (g > 0) {
+        const double t = 1.0 / double(g);
+        for (unsigned g2 = 0; g2 < g; g2++) {
+          local[0] = 0.1 * fa_sigs[g].read(one) * t;
+          fa_slgg[g2].write(dp, local);
+        }
+      } else {
+        local[0] = 0.3 * fa_sigs[g].read(one);
+        fa_slgg[g].write(dp, local); 
+      }
+
+      if (g < (num_groups-1)) {
+        const double t = 1.0 / double(num_groups-(g+1));
+        for (unsigned g2 = g+1; g2 < num_groups; g2++) {
+          local[0] = 0.7 * fa_sigs[g].read(one) * t;
+          fa_slgg[g2].write(dp, local);
+        }
+      } else {
+        local[0] = 0.9 * fa_sigs[g].read(one);
+        fa_slgg[g].write(dp, local);
+      }
+    }
+    if (material_layout != HOMOGENEOUS_LAYOUT) {
+      p2.x[0] = 1;
+      for (unsigned g = 0; g < num_groups; g++) {
+        p2.x[1] = g; 
+        const DomainPoint dp = DomainPoint::from_point<2>(p2);
+        local[0] = 0.5 * fa_sigs[g].read(two);
+        fa_slgg[g].write(dp, local);
+        if (g > 0) {
+          const double t = 1.0 / double(g);
+          for (unsigned g2 = 0; g2 < g; g2++) {
+            local[0] = 0.1 * fa_sigs[g].read(two) * t;
+            fa_slgg[g2].write(dp, local);
+          }
+        } else {
+          local[0] = 0.6 * fa_sigs[g].read(two);
+          fa_slgg[g].write(dp, local); 
+        }
+
+        if (g < (num_groups-1)) {
+          const double t = 1.0 / double(num_groups-(g+1));
+          for (unsigned g2 = g+1; g2 < num_groups; g2++) {
+            local[0] = 0.4 * fa_sigs[g].read(two) * t;
+            fa_slgg[g2].write(dp, local);
+          }
+        } else {
+          local[0] = 0.9 * fa_sigs[g].read(two);
+          fa_slgg[g].write(dp, local);
+        }
+      }
+    }
+  }
+  if (num_moments > 1) 
+  {
+    p2 = Point<2>::ZEROES();
+    for (int m = 1; m < num_moments; m++) {
+      for (int g = 0; g < num_groups; g++) {
+        p2.x[1] = g;
+        DomainPoint dp = DomainPoint::from_point<2>(p2);
+        for (int g2 = 0; g2 < num_groups; g2++) {
+          MomentQuad quad = fa_slgg[g2].read(dp);
+          quad[m] = ((m == 1) ? 0.1 : 0.5) * quad[m-1];
+          fa_slgg[g2].write(dp, quad);
+        }
+      }
+    }
+    if (material_layout != HOMOGENEOUS_LAYOUT) {
+      p2.x[0] = 1;
+      for (int m = 1; m < num_moments; m++) {
+        for (int g = 0; g < num_groups; g++) {
+          p2.x[1] = g;
+          DomainPoint dp = DomainPoint::from_point<2>(p2);
+          for (int g2 = 0; g2 < num_groups; g2++) {
+            MomentQuad quad = fa_slgg[g2].read(dp);
+            quad[m] = ((m == 1) ? 0.8 : 0.6) * quad[m-1];
+            fa_slgg[g2].write(dp, quad);
+          }
+        }
+      }
+    }
+  }
+
+  sigt.unmap(sigt_region);
+  siga.unmap(siga_region);
+  sigs.unmap(sigs_region);
+  slgg.unmap(slgg_region);
+}
+
+//------------------------------------------------------------------------------
 void Snap::save_fluxes(const Predicate &pred, 
                        const SnapArray &src, const SnapArray &dst) const
 //------------------------------------------------------------------------------
@@ -439,7 +608,7 @@ void Snap::save_fluxes(const Predicate &pred,
 
 //------------------------------------------------------------------------------
 void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                          const SnapArray &qtot)
+                          const SnapArray &qtot) const
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
@@ -969,7 +1138,6 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   Runtime::set_registration_callback(mapper_registration);
   // Now register all the task variants
   InitMaterial::preregister_cpu_variants();
-  InitScattering::preregister_cpu_variants();
   InitSource::preregister_cpu_variants();
   CalcOuterSource::preregister_all_variants();
   TestOuterConvergence::preregister_all_variants();
@@ -1131,6 +1299,22 @@ void SnapArray::initialize(T value) const
   FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)));
   launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
+}
+
+//------------------------------------------------------------------------------
+PhysicalRegion SnapArray::map(void) const
+//------------------------------------------------------------------------------
+{
+  InlineLauncher launcher(RegionRequirement(lr, READ_WRITE, EXCLUSIVE, lr));
+  launcher.requirement.privilege_fields = regular_fields;
+  return runtime->map_region(ctx, launcher);
+}
+
+//------------------------------------------------------------------------------
+void SnapArray::unmap(const PhysicalRegion &region) const
+//------------------------------------------------------------------------------
+{
+  runtime->unmap_region(ctx, region);
 }
 
 //------------------------------------------------------------------------------

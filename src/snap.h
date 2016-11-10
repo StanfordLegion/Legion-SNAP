@@ -43,7 +43,6 @@ public:
   enum SnapTaskID {
     SNAP_TOP_LEVEL_TASK_ID,
     INIT_MATERIAL_TASK_ID,
-    INIT_SCATTERING_TASK_ID,
     INIT_SOURCE_TASK_ID,
     CALC_OUTER_SOURCE_TASK_ID,
     TEST_OUTER_CONVERGENCE_TASK_ID,
@@ -55,7 +54,6 @@ public:
 #define SNAP_TASK_NAMES           \
     "Top Level Task",             \
     "Initialize Material",        \
-    "Initialize Scattering",      \
     "Initialize Source",          \
     "Calc Outer Source",          \
     "Test Outer Convergence",     \
@@ -187,10 +185,12 @@ public:
   void transport_solve(void);
   void output(void);
 protected:
+  void initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
+                             const SnapArray &sigs, const SnapArray &slgg) const;
   void save_fluxes(const Predicate &pred,
                    const SnapArray &src, const SnapArray &dst) const;
   void perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                      const SnapArray &qtot);
+                      const SnapArray &qtot) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -214,7 +214,7 @@ private:
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
-                                  Context ctx, Runtime *runtime);
+                                  Context ctx, Runtime *runtime); 
 public:
   static void parse_arguments(int argc, char **argv);
   static void compute_wavefronts(void);
@@ -435,6 +435,8 @@ public:
   void initialize(void) const;
   template<typename T>
   void initialize(T value) const;
+  PhysicalRegion map(void) const;
+  void unmap(const PhysicalRegion &region) const;
 public:
   template<typename T>
   inline void add_projection_requirement(PrivilegeMode priv,
