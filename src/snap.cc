@@ -721,6 +721,8 @@ bool Snap::single_angle_copy = true;
 
 int Snap::num_corners = 1;
 std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
+std::vector<std::vector<Point<3> > > Snap::chunk_wavefronts;
+double Snap::dt;
 int Snap::cmom;
 int Snap::num_octants;
 double* Snap::mu;
@@ -917,12 +919,32 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
       wavefront_number++;
     }
   }
+  // Now compute the chunk wavefronts
+  // Total number of wavefronts is nx + ny + nz - 2
+  const int total_wavefronts = nx + ny + nz - 2;
+  chunk_wavefronts.resize(total_wavefronts);
+  int current_point[3];
+  for (current_point[0] = 0; current_point[0] < nx; current_point[0]++) 
+  {
+    for (current_point[1] = 0; current_point[1] < ny; current_point[1]++)
+    {
+      for (current_point[2] = 0; current_point[2] < nz; current_point[2]++)
+      {
+        const int wavefront = 
+          current_point[0] + current_point[1] + current_point[2];
+        assert(wavefront < total_wavefronts);
+        chunk_wavefronts[wavefront].push_back(Point<3>(current_point)); 
+      }
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::compute_derived_globals(void)
 //------------------------------------------------------------------------------
 {
+  dt = total_sim_time / double(num_steps);
+
   cmom = num_moments;
   num_octants = 2;
   const size_t buffer_size = num_angles * sizeof(double);
