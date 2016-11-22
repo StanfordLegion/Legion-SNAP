@@ -198,8 +198,8 @@ protected:
                    const SnapArray &src, const SnapArray &dst) const;
   void perform_sweeps(const Predicate &pred, const SnapArray &flux,
                       const SnapArray &qtot, const SnapArray &vdelt,
-                      const SnapArray &dinv, const SnapArray *time_flux_in,
-                      const SnapArray *time_flux_out) const;
+                      const SnapArray &dinv, SnapArray *time_flux_in[8],
+                      SnapArray *time_flux_out[8]) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -439,6 +439,7 @@ public:
             Context ctx, Runtime *runtime, const char *name);
   ~SnapArray(void);
 private:
+  SnapArray(const SnapArray &rhs);
   SnapArray& operator=(const SnapArray &rhs);
 public:
   inline LogicalRegion get_region(void) const { return lr; }

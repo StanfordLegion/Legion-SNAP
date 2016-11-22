@@ -318,26 +318,17 @@ void Snap::transport_solve(void)
   SnapArray dinv(simulation_is, spatial_ip, angle_fs, 
                  ctx, runtime, "dinv"); 
 
-  SnapArray time_flux_even[8] = { 
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 0"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 1"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 2"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 3"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 4"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 5"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 6"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 7")
-  };
-  SnapArray time_flux_odd[8] = {
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 0"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 1"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 2"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 3"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 4"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 5"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 6"),
-    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 7")
-  };
+  SnapArray *time_flux_even[8];
+  SnapArray *time_flux_odd[8]; 
+  for (int i = 0; i < 8; i++) {
+    char name_buffer[64];
+    snprintf(name_buffer, 63, "time flux even %d", i);
+    time_flux_even[i] = new SnapArray(simulation_is, spatial_ip, angle_fs, 
+                                      ctx, runtime, name_buffer);
+    snprintf(name_buffer, 63, "time flux odd %d", i);
+    time_flux_odd[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
+                                     ctx, runtime, name_buffer);
+  }
 
   // Initialize our data
   flux0.initialize();
@@ -367,8 +358,8 @@ void Snap::transport_solve(void)
   dinv.initialize();
 
   for (int i = 0; i < 8; i++) {
-    time_flux_even[i].initialize();
-    time_flux_odd[i].initialize();
+    time_flux_even[i]->initialize();
+    time_flux_odd[i]->initialize();
   }
 
   // Launch some tasks to initialize the application data
@@ -496,6 +487,10 @@ void Snap::transport_solve(void)
           break;
       }
     }
+  }
+  for (int i = 0; i < 8; i++) {
+    delete time_flux_even[i];
+    delete time_flux_odd[i];
   }
 }
 
@@ -731,8 +726,8 @@ void Snap::save_fluxes(const Predicate &pred,
 //------------------------------------------------------------------------------
 void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
                           const SnapArray &qtot, const SnapArray &vdelt,
-                          const SnapArray &dinv, const SnapArray *time_flux_in,
-                          const SnapArray *time_flux_out) const
+                          const SnapArray &dinv, SnapArray *time_flux_in[8],
+                          SnapArray *time_flux_out[8]) const
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
@@ -751,12 +746,12 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       // Legion can't prove that some of the region requirements
       // are non-interfering with it's current projection analysis
       MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, qtot, 
-                                vdelt, dinv, time_flux_in[corner],
-                                time_flux_out[corner], 
+                                vdelt, dinv, *time_flux_in[corner],
+                                *time_flux_out[corner], 
                                 group, corner, ghost_offsets);
       MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, qtot, 
-                                vdelt, dinv, time_flux_in[corner],
-                                time_flux_out[corner], 
+                                vdelt, dinv, *time_flux_in[corner],
+                                *time_flux_out[corner], 
                                 group, corner, ghost_offsets);
       bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
@@ -1397,6 +1392,15 @@ SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
     else
       ghost_fields.insert(*it);
   }
+}
+
+//------------------------------------------------------------------------------
+SnapArray::SnapArray(const SnapArray &rhs)
+  : ctx(rhs.ctx), runtime(rhs.runtime)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
 }
 
 //------------------------------------------------------------------------------
