@@ -18,6 +18,7 @@
 #include "outer.h"
 #include "inner.h"
 #include "sweep.h"
+#include "expxs.h"
 
 #include <cstdio>
 
@@ -98,6 +99,9 @@ void Snap::setup(void)
   Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
   slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
   runtime->attach_name(slgg_is, "Scattering Index Space");
+  point_is = runtime->create_index_space(ctx, 
+      Domain::from_rect<1>(Rect<1>(Point<1>::ZEROES(), Point<1>::ZEROES())));
+  runtime->attach_name(point_is, "Point Index Space");
   // Make a field space for all the energy groups
   group_fs = runtime->create_field_space(ctx); 
   runtime->attach_name(group_fs, "Energy Group Field Space");
@@ -234,6 +238,24 @@ void Snap::setup(void)
     allocator.allocate_field(sizeof(int), FID_SINGLE);
     runtime->attach_name(mat_fs, FID_SINGLE, "Material Field");
   }
+  angle_fs = runtime->create_field_space(ctx);
+  runtime->attach_name(angle_fs, "Denominator Inverse Field Space");
+  {
+    FieldAllocator allocator = 
+      runtime->create_field_allocator(ctx, angle_fs);
+    std::vector<FieldID> dinv_fields(num_groups);
+    for (int idx = 0; idx < num_groups; idx++)
+      dinv_fields[idx] = SNAP_ENERGY_GROUP_FIELD(idx);
+    std::vector<size_t> dinv_sizes(num_groups, 
+                                   Snap::num_angles*sizeof(double));
+    allocator.allocate_fields(dinv_sizes, dinv_fields);
+    char name_buffer[64];
+    for (int idx = 0; idx < num_groups; idx++)
+    {
+      snprintf(name_buffer,63,"Dinv Group %d", idx);
+      runtime->attach_name(angle_fs, dinv_fields[idx], name_buffer);
+    }
+  }
   // Compute the wavefronts for our sweeps
   for (int corner = 0; corner < num_corners; corner++)
   {
@@ -284,7 +306,38 @@ void Snap::transport_solve(void)
                  ctx, runtime, "sigs");
   SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, 
                  ctx, runtime, "slgg");
+
+  SnapArray t_xs(simulation_is, spatial_ip, group_fs, ctx, runtime, "t_xs");
+  SnapArray a_xs(simulation_is, spatial_ip, group_fs, ctx, runtime, "a_xs");
   SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime, "s_xs");
+
+  SnapArray vel(point_is, IndexPartition::NO_PART, group_fs, 
+                ctx, runtime, "vel");
+  SnapArray vdelt(point_is, IndexPartition::NO_PART, group_fs, 
+                  ctx, runtime, "vdelt");
+  SnapArray dinv(simulation_is, spatial_ip, angle_fs, 
+                 ctx, runtime, "dinv"); 
+
+  SnapArray time_flux_even[8] = { 
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 0"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 1"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 2"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 3"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 4"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 5"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 6"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux even 7")
+  };
+  SnapArray time_flux_odd[8] = {
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 0"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 1"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 2"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 3"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 4"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 5"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 6"),
+    SnapArray(simulation_is, spatial_ip, angle_fs, ctx, runtime, "time flux odd 7")
+  };
 
   // Initialize our data
   flux0.initialize();
@@ -304,7 +357,19 @@ void Snap::transport_solve(void)
   siga.initialize();
   sigs.initialize();
   slgg.initialize();
+
+  t_xs.initialize();
+  a_xs.initialize();
   s_xs.initialize();
+
+  vel.initialize();
+  vdelt.initialize();
+  dinv.initialize();
+
+  for (int i = 0; i < 8; i++) {
+    time_flux_even[i].initialize();
+    time_flux_odd[i].initialize();
+  }
 
   // Launch some tasks to initialize the application data
   if (material_layout != HOMOGENEOUS_LAYOUT)
@@ -318,6 +383,7 @@ void Snap::transport_solve(void)
     init_source.dispatch(ctx, runtime);
   }
   initialize_scattering(sigt, siga, sigs, slgg);
+  initialize_velocity(vel, vdelt);
 
   // Tunables should be ready by now
   const unsigned outer_runahead = 
@@ -333,8 +399,36 @@ void Snap::transport_solve(void)
   // return true to indicate convergence
   const Future true_future = Future::from_value<bool>(runtime, true);
   // Iterate over time steps
+  bool even_time_step = false;
   for (int cy = 0; cy < num_steps; ++cy)
   {
+    even_time_step = !even_time_step;
+    // Some of this is a little weird, you can in theory lift some
+    // of this out the time stepping loop because the mock velocity 
+    // array and the material array aren't changing, but I think that 
+    // is just an artifact off SNAP and not a more general property of PARTISN, 
+    // SNAP developers have now confirmed this so we'll leave this
+    // here to be consistent with the original implementation of SNAP
+    for (int g = 0; g < num_groups; g++)
+    {
+      ExpandCrossSection expxs(*this, siga, mat, a_xs, g);
+      expxs.dispatch(ctx, runtime);
+    }
+    for (int g = 0; g < num_groups; g++)
+    {
+      ExpandCrossSection expxs(*this, sigt, mat, t_xs, g);
+      expxs.dispatch(ctx, runtime);
+    }
+    for (int g = 0; g < num_groups; g++)
+    {
+      ExpandScatteringCrossSection expxs(*this, slgg, mat, s_xs, g);
+      expxs.dispatch(ctx, runtime);
+    }
+    for (int g = 0; g < num_groups; g++)
+    {
+      CalculateGeometryParam geom(*this, t_xs, vdelt, dinv, g);
+      geom.dispatch(ctx, runtime);
+    }
     outer_converged_tests.clear();
     Predicate outer_pred = Predicate::TRUE_PRED;
     // The outer solve loop    
@@ -344,7 +438,6 @@ void Snap::transport_solve(void)
       CalcOuterSource outer_src(*this, outer_pred, qi, slgg, mat, 
                                 q2grp0, q2grpm, flux0, fluxm);
       outer_src.dispatch(ctx, runtime);
-      // 
       // Save the fluxes
       save_fluxes(outer_pred, flux0, flux0po);
       // Do the inner solve
@@ -362,7 +455,9 @@ void Snap::transport_solve(void)
         save_fluxes(inner_pred, flux0, flux0pi);
         flux0.initialize();
         // Perform the sweeps
-        perform_sweeps(inner_pred, flux0, qtot); 
+        perform_sweeps(inner_pred, flux0, qtot, vdelt, dinv,
+                       even_time_step ? time_flux_even : time_flux_odd,
+                       even_time_step ? time_flux_odd : time_flux_even); 
         // Test for inner convergence
         TestInnerConvergence inner_conv(*this, inner_pred, 
                                         flux0, flux0pi, true_future);
@@ -382,7 +477,7 @@ void Snap::transport_solve(void)
       }
       // Test for outer convergence
       // SNAP says to skip this on the first iteration
-      if (otno == 1)
+      if (otno == 0)
         continue;
       TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po, 
                                       inner_converged, true_future);
@@ -574,6 +669,33 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
 }
 
 //------------------------------------------------------------------------------
+void Snap::initialize_velocity(const SnapArray &vel, 
+                               const SnapArray &vdelt) const
+//------------------------------------------------------------------------------
+{
+  PhysicalRegion vel_region = vel.map();
+  PhysicalRegion vdelt_region = vdelt.map();
+  vel_region.wait_until_valid(true/*ignore warnings*/);
+  vdelt_region.wait_until_valid(true/*ignore warnings*/);
+  const DomainPoint dp = DomainPoint::from_point<1>(Point<1>(0));
+  for (int g = 0; g < num_groups; g++) 
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_vel = 
+      vel_region.get_field_accessor(SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_vdelt = 
+      vdelt_region.get_field_accessor(SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    const double v = double(Snap::num_groups - g);
+    fa_vel.write(dp, v);
+    if (Snap::time_dependent)
+      fa_vdelt.write(dp, 2.0 / (Snap::dt * v));
+    else
+      fa_vdelt.write(dp, 0.0);
+  }
+  vel.unmap(vel_region);
+  vdelt.unmap(vdelt_region);
+}
+
+//------------------------------------------------------------------------------
 void Snap::save_fluxes(const Predicate &pred, 
                        const SnapArray &src, const SnapArray &dst) const
 //------------------------------------------------------------------------------
@@ -608,7 +730,9 @@ void Snap::save_fluxes(const Predicate &pred,
 
 //------------------------------------------------------------------------------
 void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                          const SnapArray &qtot) const
+                          const SnapArray &qtot, const SnapArray &vdelt,
+                          const SnapArray &dinv, const SnapArray *time_flux_in,
+                          const SnapArray *time_flux_out) const
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
@@ -627,8 +751,12 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       // Legion can't prove that some of the region requirements
       // are non-interfering with it's current projection analysis
       MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, qtot, 
+                                vdelt, dinv, time_flux_in[corner],
+                                time_flux_out[corner], 
                                 group, corner, ghost_offsets);
       MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, qtot, 
+                                vdelt, dinv, time_flux_in[corner],
+                                time_flux_out[corner], 
                                 group, corner, ghost_offsets);
       bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
@@ -725,6 +853,9 @@ std::vector<std::vector<Point<3> > > Snap::chunk_wavefronts;
 double Snap::dt;
 int Snap::cmom;
 int Snap::num_octants;
+double Snap::hi;
+double Snap::hj;
+double Snap::hk;
 double* Snap::mu;
 double* Snap::w;
 double *Snap::wmu;
@@ -827,6 +958,12 @@ int Snap::lma[4];
   read_int(f, "popout", dump_population);
   read_bool(f, "swp_typ", minikba_sweep);
   read_bool(f, "angcpy", single_angle_copy);
+  if (single_angle_copy)
+  {
+    printf("ERROR: angcpy=1 is not currently supported.\n");
+    printf("Legion SNAP currently requires two copies of angle flux\n");
+    exit(1);
+  }
   fclose(f);
   if (!minikba_sweep)
   {
@@ -947,6 +1084,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 
   cmom = num_moments;
   num_octants = 2;
+  hi = 2.0 / (lx / double(nx));
+  hj = 2.0 / (ly / double(ny));
+  hk = 2.0 / (lz / double(nz));
   const size_t buffer_size = num_angles * sizeof(double);
   mu = (double*)malloc(buffer_size);
   w = (double*)malloc(buffer_size);
@@ -1166,6 +1306,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   CalcInnerSource::preregister_all_variants();
   TestInnerConvergence::preregister_all_variants();
   MiniKBATask::preregister_all_variants();
+  ExpandCrossSection::preregister_all_variants();
+  ExpandScatteringCrossSection::preregister_all_variants();
+  CalculateGeometryParam::preregister_all_variants();
   // Register projection functors
   Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
                         new SnapSweepProjectionFunctor());
@@ -1254,15 +1397,6 @@ SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
     else
       ghost_fields.insert(*it);
   }
-}
-
-//------------------------------------------------------------------------------
-SnapArray::SnapArray(const SnapArray &rhs)
-  : ctx(rhs.ctx), runtime(rhs.runtime)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
 }
 
 //------------------------------------------------------------------------------

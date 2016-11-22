@@ -30,11 +30,12 @@ ALT_MAPPERS     ?= 0		# Include alternative mappers (not recommended)
 # Put the binary file name here
 OUTFILE		?= snap
 # List all the application source files here
-GEN_SRC		?= main.cc \
-		   snap.cc \
-		   init.cc \
+GEN_SRC		?= main.cc  \
+		   snap.cc  \
+		   init.cc  \
 		   outer.cc \
 		   inner.cc \
+		   expxs.cc \
 		   sweep.cc	# .cc files
 GEN_GPU_SRC	?=		# .cu files
 

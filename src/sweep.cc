@@ -21,6 +21,9 @@ using namespace LegionRuntime::Accessor;
 //------------------------------------------------------------------------------
 MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                          const SnapArray &flux, const SnapArray &qtot,
+                         const SnapArray &vdelt, const SnapArray &dinv, 
+                         const SnapArray &time_flux_in, 
+                         const SnapArray &time_flux_out,
                          int group, int corner, const int ghost_offsets[3])
   : SnapTask<MiniKBATask>(snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()),
                           pred), mini_kba_args(MiniKBAArgs(corner, group))
@@ -36,6 +39,14 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
   // will be contributing to it
   flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                   group_field, Snap::SWEEP_PROJECTION);
+  vdelt.add_region_requirement(READ_ONLY, *this, group_field);
+  // Add the dinv array for this field
+  dinv.add_projection_requirement(READ_ONLY, *this,
+                                  group_field, Snap::SWEEP_PROJECTION);
+  time_flux_in.add_projection_requirement(READ_ONLY, *this,
+                                          group_field, Snap::SWEEP_PROJECTION);
+  time_flux_out.add_projection_requirement(WRITE_DISCARD, *this,
+                                           group_field, Snap::SWEEP_PROJECTION);
   // Then add our writing ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
   {
@@ -95,12 +106,32 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   assert(task->arglen == sizeof(MiniKBAArgs));
   const MiniKBAArgs *args = reinterpret_cast<const MiniKBAArgs*>(task->args);
     
+  // This implementation of the sweep assumes three dimensions
+  assert(Snap::num_dims == 3);
+
   RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
     regions[0].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<MomentQuad>();
   RegionAccessor<AccessorType::Generic,double> fa_flux = 
     regions[1].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>();
+
+  // No types here since the size of these fields are dependent
+  // on the number of angles
+  const double vdelt = regions[2].get_field_accessor(
+      SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>().read(
+      DomainPoint::from_point<1>(Point<1>::ZEROES()));
+  RegionAccessor<AccessorType::Generic> fa_dinv = 
+    regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
+  RegionAccessor<AccessorType::Generic> fa_ghostx = 
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS].privilege_fields.begin()));
+  RegionAccessor<AccessorType::Generic> fa_ghosty = 
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].privilege_fields.begin()));
+  RegionAccessor<AccessorType::Generic> fa_ghostz = 
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].privilege_fields.begin()));
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -119,12 +150,13 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   const unsigned total_wavefronts = Snap::chunk_wavefronts.size();
 
   // Local arrays
-  double *psi = (double*)malloc(Snap::num_angles * sizeof(double));
-  double *pc = (double*)malloc(Snap::num_angles * sizeof(double));
+  const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
+  double *psi = (double*)malloc(angle_buffer_size);
+  double *pc = (double*)malloc(angle_buffer_size);
+  double *temp_array = (double*)malloc(angle_buffer_size);
 
-  // Inline the computation of vdelt
-  const double vdelt = (Snap::time_dependent ? 
-    2.0 / (Snap::dt * double(Snap::num_groups - args->group + 1)) : 0.0);
+  typedef std::map<Point<3>,double*,Point<3>::STLComparator> PreviousMap;
+  PreviousMap previous_x, previous_y, previous_z;
 
   // Iterate over wavefronts
   for (unsigned wavefront = 0; wavefront < total_wavefronts; wavefront++)
@@ -167,21 +199,148 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       for (unsigned ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] = psi[ang];
       // X ghost cells
-
+      if (stride_x_positive) {
+        // reading from x-1 
+        Point<3> ghost_point = local_point;
+        ghost_point.x[0] -= 1;
+        if (it->x[0] == 0) {
+          // Ghost cell array
+          fa_ghostx.read_untyped(DomainPoint::from_point<3>(ghost_point),   
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::mu[ang] * Snap::hi;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_x.find(ghost_point);
+          assert(finder != previous_x.end());
+          double *previous = finder->second; 
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] + Snap::mu[ang] * Snap::hi;
+          free(previous);
+          previous_x.erase(finder);
+        }
+      } else {
+        // reading from x+1
+        Point<3> ghost_point = local_point;
+        ghost_point.x[0] += 1;
+        if (it->x[0] == (Snap::nx-1)) {
+          // Ghost cell array
+          fa_ghostx.read_untyped(DomainPoint::from_point<3>(ghost_point), 
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::mu[ang] * Snap::hi;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_x.find(ghost_point);
+          assert(finder != previous_x.end());
+          double *previous = finder->second; 
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] * Snap::mu[ang] * Snap::hi;
+          free(previous);
+          previous_x.erase(finder);
+        }
+      }
       // Y ghost cells
-
+      if (stride_y_positive) {
+        // reading from y-1
+        Point<3> ghost_point = local_point;
+        ghost_point.x[1] -= 1;
+        if (it->x[1] == 0) {
+          // Ghost cell array
+          fa_ghosty.read_untyped(DomainPoint::from_point<3>(ghost_point), 
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::eta[ang] * Snap::hj;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_y.find(ghost_point);
+          assert(finder != previous_y.end());
+          double *previous = finder->second;
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] * Snap::eta[ang] * Snap::hj;
+          free(previous);
+          previous_y.erase(finder);
+        }
+      } else {
+        // reading from y+1
+        Point<3> ghost_point = local_point;
+        ghost_point.x[1] += 1;
+        if (it->x[1] == (Snap::ny-1)) {
+          // Ghost cell array
+          fa_ghosty.read_untyped(DomainPoint::from_point<3>(ghost_point), 
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::eta[ang] * Snap::hj;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_y.find(ghost_point);
+          assert(finder != previous_y.end());
+          double *previous = finder->second;
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] * Snap::eta[ang] * Snap::hj;
+          free(previous);
+          previous_y.erase(finder);
+        }
+      }
       // Z ghost cells
+      if (stride_z_positive) {
+        // reading from z-1
+        Point<3> ghost_point = local_point;
+        ghost_point.x[2] -= 1;
+        if (it->x[2] == 0) {
+          // Ghost cell array
+          fa_ghostz.read_untyped(DomainPoint::from_point<3>(ghost_point), 
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::xi[ang] * Snap::hk;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_z.find(ghost_point);
+          assert(finder != previous_z.end());
+          double *previous = finder->second;
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] * Snap::xi[ang] * Snap::hk;
+          free(previous);
+          previous_z.erase(finder);
+        }
+      } else {
+        // reading from z+1
+        Point<3> ghost_point = local_point;
+        ghost_point.x[2] += 1;
+        if (it->x[2] == (Snap::nz-1)) {
+          // Ghost cell array
+          fa_ghostz.read_untyped(DomainPoint::from_point<3>(ghost_point), 
+                                 temp_array, angle_buffer_size);
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += temp_array[ang] * Snap::xi[ang] * Snap::hk;
+        } else {
+          // Same array
+          PreviousMap::iterator finder = previous_z.find(ghost_point);
+          assert(finder != previous_z.end());
+          double *previous = finder->second;
+          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+            pc[ang] += previous[ang] * Snap::xi[ang] * Snap::hk;
+          free(previous);
+          previous_z.erase(finder);
+        }
+      }
+      // See if we're doing anything time dependent
       if (vdelt != 0.0) 
       {
-        
+                
       }
-      // Dinv
+      // Multiple by the precomputed denominator inverse
+      fa_dinv.read_untyped(DomainPoint::from_point<3>(local_point),
+                           temp_array, angle_buffer_size);
+      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        pc[ang] *= temp_array[ang];
 
     }
   }
 
   free(psi);
   free(pc);
+  free(temp_array);
 #endif
 }
 

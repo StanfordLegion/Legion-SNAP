@@ -23,7 +23,7 @@ using namespace Legion;
 
 class MiniKBATask : public SnapTask<MiniKBATask> {
 public:
-  static const int NON_GHOST_REQUIREMENTS = 2;
+  static const int NON_GHOST_REQUIREMENTS = 3;
 public:
   struct MiniKBAArgs {
   public:
@@ -40,6 +40,8 @@ public:
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, bool even, 
               const SnapArray &flux, const SnapArray &qtot,
+              const SnapArray &vdelt, const SnapArray &dinv, 
+              const SnapArray &time_flux_in, const SnapArray &time_flux_out,
               int group, int corner, const int ghost_offsets[3]);
 public:
   void dispatch_wavefront(int wavefront, const Domain &launch_domain, 

@@ -28,7 +28,7 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
-#define MINI_KBA_NON_GHOST_REQUIREMENTS   5
+#define MINI_KBA_NON_GHOST_REQUIREMENTS   7
 
 using namespace Legion;
 using namespace Legion::Mapping;
@@ -49,17 +49,23 @@ public:
     CALC_INNER_SOURCE_TASK_ID,
     TEST_INNER_CONVERGENCE_TASK_ID,
     MINI_KBA_TASK_ID,
+    EXPAND_CROSS_SECTION_TASK_ID,
+    EXPAND_SCATTERING_CROSS_SECTION_TASK_ID,
+    CALCULATE_GEOMETRY_PARAM_TASK_ID,
     LAST_TASK_ID, // must be last
   };
-#define SNAP_TASK_NAMES           \
-    "Top Level Task",             \
-    "Initialize Material",        \
-    "Initialize Source",          \
-    "Calc Outer Source",          \
-    "Test Outer Convergence",     \
-    "Calc Inner Source",          \
-    "Test Inner Convergence",     \
-    "Mini KBA",                   
+#define SNAP_TASK_NAMES                 \
+    "Top Level Task",                   \
+    "Initialize Material",              \
+    "Initialize Source",                \
+    "Calc Outer Source",                \
+    "Test Outer Convergence",           \
+    "Calc Inner Source",                \
+    "Test Inner Convergence",           \
+    "Mini KBA",                         \
+    "Expand Cross Section",             \
+    "Expand Scattering Cross Section",  \
+    "Calcuate Geometry Param"
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
@@ -187,10 +193,13 @@ public:
 protected:
   void initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
                              const SnapArray &sigs, const SnapArray &slgg) const;
+  void initialize_velocity(const SnapArray &vel, const SnapArray &vdelt) const;
   void save_fluxes(const Predicate &pred,
                    const SnapArray &src, const SnapArray &dst) const;
   void perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                      const SnapArray &qtot) const;
+                      const SnapArray &qtot, const SnapArray &vdelt,
+                      const SnapArray &dinv, const SnapArray *time_flux_in,
+                      const SnapArray *time_flux_out) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -203,12 +212,14 @@ private:
   IndexPartition spatial_ip;
   IndexSpace material_is;
   IndexSpace slgg_is;
+  IndexSpace point_is;
 private:
   FieldSpace group_fs;
   FieldSpace group_and_ghost_fs;
   FieldSpace moment_fs;
   FieldSpace flux_moment_fs;
   FieldSpace mat_fs;
+  FieldSpace angle_fs;
 private:
   std::vector<Domain> wavefront_domains[8];
 public:
@@ -254,7 +265,7 @@ public:
   static int dump_kplane; // originally kplane 0,1,2
   static int dump_population;  // originally popout
   static bool minikba_sweep; // originally swp_typ
-  static bool single_angle_copy; // originall angcpy
+  static bool single_angle_copy; // originally angcpy
 public: // derived
   static int num_corners; // orignally ncor
   // Indexed by wavefront number and the point number
@@ -265,6 +276,7 @@ public:
   static double dt; 
   static int cmom;
   static int num_octants;
+  static double hi, hj, hk;
   static double *mu; // num angles
   static double *w; // num angles
   static double *wmu; // num angles
@@ -273,6 +285,7 @@ public:
   static double *xi; // num angles
   static double *wxi; // num angles
   static double *ec; // num angles x num moments x num_octants
+  static double *dinv; // num_angles x nx x ny x nz x 
   static int lma[4];
 public:
   // Snap mapper derived from the default mapper
@@ -426,7 +439,6 @@ public:
             Context ctx, Runtime *runtime, const char *name);
   ~SnapArray(void);
 private:
-  SnapArray(const SnapArray &rhs);
   SnapArray& operator=(const SnapArray &rhs);
 public:
   inline LogicalRegion get_region(void) const { return lr; }
@@ -471,6 +483,13 @@ public:
   {
     launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
     launcher.region_requirements.back().privilege_fields = regular_fields;
+  }
+  template<typename T>
+  inline void add_region_requirement(PrivilegeMode priv, T&launcher,
+                                     Snap::SnapFieldID field) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(field);
   }
 protected:
   const Context ctx;
