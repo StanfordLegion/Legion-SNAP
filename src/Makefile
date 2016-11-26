@@ -36,7 +36,8 @@ GEN_SRC		?= main.cc  \
 		   outer.cc \
 		   inner.cc \
 		   expxs.cc \
-		   sweep.cc	# .cc files
+		   sweep.cc \
+		   mms.cc	# .cc files
 GEN_GPU_SRC	?=		# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile

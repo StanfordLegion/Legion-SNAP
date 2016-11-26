@@ -52,6 +52,9 @@ public:
     EXPAND_CROSS_SECTION_TASK_ID,
     EXPAND_SCATTERING_CROSS_SECTION_TASK_ID,
     CALCULATE_GEOMETRY_PARAM_TASK_ID,
+    MMS_INIT_TASK_ID,
+    MMS_SCALE_TASK_ID,
+    MMS_VERIFY_TASK_ID,
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES                 \
@@ -65,7 +68,10 @@ public:
     "Mini KBA",                         \
     "Expand Cross Section",             \
     "Expand Scattering Cross Section",  \
-    "Calcuate Geometry Param"
+    "Calcuate Geometry Param",          \
+    "MMS Initialization",               \
+    "MMS Scale",                        \
+    "MMS Verification"
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
@@ -190,7 +196,6 @@ public:
 public:
   void setup(void);
   void transport_solve(void);
-  void output(void);
 protected:
   void initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
                              const SnapArray &sigs, const SnapArray &slgg) const;

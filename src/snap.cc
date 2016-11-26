@@ -19,6 +19,7 @@
 #include "inner.h"
 #include "sweep.h"
 #include "expxs.h"
+#include "mms.h"
 
 #include <cstdio>
 
@@ -329,6 +330,17 @@ void Snap::transport_solve(void)
     time_flux_odd[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
                                      ctx, runtime, name_buffer);
   }
+  // Only necessary for MMS
+  SnapArray *qim[8];
+  const bool do_mms = (source_layout == MMS_SOURCE);
+  if (do_mms) {
+    for (int i = 0; i < 8; i++) {
+      char name_buffer[64];
+      snprintf(name_buffer, 63, "qim %d", i);
+      qim[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
+                             ctx, runtime, name_buffer);
+    }
+  }
 
   // Initialize our data
   flux0.initialize();
@@ -360,6 +372,15 @@ void Snap::transport_solve(void)
   for (int i = 0; i < 8; i++) {
     time_flux_even[i]->initialize();
     time_flux_odd[i]->initialize();
+  }
+  
+  if (do_mms) {
+    for (int i = 0; i < 8; i++)
+      qim[i]->initialize();
+    for (int i = 0; i < 8; i++) {
+      MMSInit init_mms(*this, *(qim[i]), i);
+      init_mms.dispatch(ctx, runtime);
+    }
   }
 
   // Launch some tasks to initialize the application data
@@ -419,6 +440,23 @@ void Snap::transport_solve(void)
     {
       CalculateGeometryParam geom(*this, t_xs, vdelt, dinv, g);
       geom.dispatch(ctx, runtime);
+    }
+    // Scale the manufactured solution for time
+    if (do_mms) 
+    {
+      if (cy == 0) {
+        const double time = dt * 0.5;
+        for (int i = 0; i < 8; i++) {
+          MMSScale scale_mms(*this, *(qim[i]), time);
+          scale_mms.dispatch(ctx, runtime);
+        }
+      } else {
+        const double sf = double(2 * cy + 1) / double(2 * cy - 1);
+        for (int i = 0; i < 8; i++) {
+          MMSScale scale_mms(*this, *(qim[i]), sf);
+          scale_mms.dispatch(ctx, runtime);
+        }
+      }
     }
     outer_converged_tests.clear();
     Predicate outer_pred = Predicate::TRUE_PRED;
@@ -488,16 +526,18 @@ void Snap::transport_solve(void)
       }
     }
   }
+  if (do_mms) {
+    MMSVerify verify_mms(*this, flux0); 
+    verify_mms.dispatch(ctx, runtime);
+  }
   for (int i = 0; i < 8; i++) {
     delete time_flux_even[i];
     delete time_flux_odd[i];
   }
-}
-
-//------------------------------------------------------------------------------
-void Snap::output(void)
-//------------------------------------------------------------------------------
-{
+  if (do_mms) {
+    for (int i = 0; i < 8; i++)
+      delete qim[i];
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -780,7 +820,6 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
   Snap snap(ctx, runtime); 
   snap.setup();
   snap.transport_solve();
-  snap.output();
 }
 
 static void skip_line(FILE *f)
