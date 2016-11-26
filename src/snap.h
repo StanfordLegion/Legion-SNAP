@@ -28,7 +28,7 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
-#define MINI_KBA_NON_GHOST_REQUIREMENTS   7
+#define MINI_KBA_NON_GHOST_REQUIREMENTS   8
 
 using namespace Legion;
 using namespace Legion::Mapping;
@@ -86,6 +86,7 @@ public:
     NO_REDUCTION_ID = 0,
     AND_REDUCTION_ID = 1,
     SUM_REDUCTION_ID = 2,
+    QUAD_REDUCTION_ID = 3,
   };
   enum SnapFieldID {
     FID_SINGLE = 0, // For field spaces with just one field
@@ -197,8 +198,9 @@ protected:
   void save_fluxes(const Predicate &pred,
                    const SnapArray &src, const SnapArray &dst) const;
   void perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                      const SnapArray &qtot, const SnapArray &vdelt,
-                      const SnapArray &dinv, SnapArray *time_flux_in[8],
+                      const SnapArray &fluxm, const SnapArray &qtot, 
+                      const SnapArray &vdelt, const SnapArray &dinv, 
+                      const SnapArray &t_xs, SnapArray *time_flux_in[8], 
                       SnapArray *time_flux_out[8]) const;
 private:
   const Context ctx;
@@ -593,6 +595,18 @@ public:
   const double& operator[](const int index) const { return vals[index]; }
 public:
   double vals[4];
+};
+
+class QuadReduction {
+public:
+  static const Snap::SnapReductionID REDOP_ID = Snap::QUAD_REDUCTION_ID;
+public:
+  typedef MomentQuad LHS;
+  typedef MomentQuad RHS;
+  static const MomentQuad identity;
+public:
+  template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
+  template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
 };
 
 #endif // __SNAP_H__

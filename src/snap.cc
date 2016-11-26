@@ -446,7 +446,7 @@ void Snap::transport_solve(void)
         save_fluxes(inner_pred, flux0, flux0pi);
         flux0.initialize();
         // Perform the sweeps
-        perform_sweeps(inner_pred, flux0, qtot, vdelt, dinv,
+        perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
                        even_time_step ? time_flux_even : time_flux_odd,
                        even_time_step ? time_flux_odd : time_flux_even); 
         // Test for inner convergence
@@ -725,8 +725,9 @@ void Snap::save_fluxes(const Predicate &pred,
 
 //------------------------------------------------------------------------------
 void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                          const SnapArray &qtot, const SnapArray &vdelt,
-                          const SnapArray &dinv, SnapArray *time_flux_in[8],
+                          const SnapArray &fluxm, const SnapArray &qtot, 
+                          const SnapArray &vdelt, const SnapArray &dinv, 
+                          const SnapArray &t_xs, SnapArray *time_flux_in[8],
                           SnapArray *time_flux_out[8]) const
 //------------------------------------------------------------------------------
 {
@@ -745,13 +746,13 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       // We alternate between even and odd ghost fields since
       // Legion can't prove that some of the region requirements
       // are non-interfering with it's current projection analysis
-      MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, qtot, 
-                                vdelt, dinv, *time_flux_in[corner],
-                                *time_flux_out[corner], 
+      MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, fluxm, 
+                                qtot, vdelt, dinv, t_xs, 
+                                *time_flux_in[corner], *time_flux_out[corner],
                                 group, corner, ghost_offsets);
-      MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, qtot, 
-                                vdelt, dinv, *time_flux_in[corner],
-                                *time_flux_out[corner], 
+      MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, fluxm,
+                                qtot, vdelt, dinv, t_xs,
+                                *time_flux_in[corner], *time_flux_out[corner],
                                 group, corner, ghost_offsets);
       bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
@@ -1317,6 +1318,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
   Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP_ID);
+  Runtime::register_reduction_op<QuadReduction>(QuadReduction::REDOP_ID);
 }
 
 //------------------------------------------------------------------------------
@@ -1693,5 +1695,57 @@ void SumReduction::fold<false>(RHS &rhs1, RHS rhs2)
     oldval.as_int = *target;
     newval.as_float = oldval.as_float + rhs2;
   } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+}
+
+const MomentQuad QuadReduction::identity = MomentQuad();
+
+//------------------------------------------------------------------------------
+template<>
+void QuadReduction::apply<true>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  for (int i = 0; i < 4; i++)
+    lhs[i] += rhs[i];
+}
+
+//------------------------------------------------------------------------------
+template<>
+void QuadReduction::apply<false>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  for (int i = 0; i < 4; i++)
+  {
+    long *target = (long *)&lhs[i];
+    union { long as_int; double as_float; } oldval, newval;
+    do {
+      oldval.as_int = *target;
+      newval.as_float = oldval.as_float + rhs[i];
+    } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int)); 
+  } 
+}
+
+//------------------------------------------------------------------------------
+template<>
+void QuadReduction::fold<true>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  for (int i = 0; i < 4; i++)
+    rhs1[i] += rhs2[i];
+}
+
+//------------------------------------------------------------------------------
+template<>
+void QuadReduction::fold<false>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  for (int i = 0; i < 4; i++)
+  {
+    long *target = (long *)&rhs1[i];
+    union { long as_int; double as_float; } oldval, newval;
+    do {
+      oldval.as_int = *target;
+      newval.as_float = oldval.as_float + rhs2[i];
+    } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int)); 
+  }
 }
 

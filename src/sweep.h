@@ -39,9 +39,11 @@ public:
   static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, bool even, 
-              const SnapArray &flux, const SnapArray &qtot,
-              const SnapArray &vdelt, const SnapArray &dinv, 
-              const SnapArray &time_flux_in, const SnapArray &time_flux_out,
+              const SnapArray &flux, const SnapArray &fluxm,
+              const SnapArray &qtot, const SnapArray &vdelt, 
+              const SnapArray &dinv, const SnapArray &t_xs, 
+              const SnapArray &time_flux_in, 
+              const SnapArray &time_flux_out,
               int group, int corner, const int ghost_offsets[3]);
 public:
   void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
