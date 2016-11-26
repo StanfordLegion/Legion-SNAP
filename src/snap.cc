@@ -1355,9 +1355,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
           new SnapGhostProjectionFunctor(dim, offset));
     }
   // Finally register our reduction operators
-  Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP_ID);
-  Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP_ID);
-  Runtime::register_reduction_op<QuadReduction>(QuadReduction::REDOP_ID);
+  Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
+  Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP);
+  Runtime::register_reduction_op<QuadReduction>(QuadReduction::REDOP);
 }
 
 //------------------------------------------------------------------------------

@@ -21,10 +21,8 @@
 
 using namespace Legion;
 
-class InitMaterial : public SnapTask<InitMaterial> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::INIT_MATERIAL_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class InitMaterial : public SnapTask<InitMaterial,
+                                     Snap::INIT_MATERIAL_TASK_ID> {
 public:
   InitMaterial(const Snap &snap, const SnapArray &mat);
 public:
@@ -34,10 +32,7 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class InitSource : public SnapTask<InitSource> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::INIT_SOURCE_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class InitSource : public SnapTask<InitSource, Snap::INIT_SOURCE_TASK_ID> {
 public:
   InitSource(const Snap &snap, const SnapArray &qi);
 public:

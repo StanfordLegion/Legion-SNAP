@@ -26,7 +26,8 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
                                  const SnapArray &mat, const SnapArray &q2rgp0, 
                                  const SnapArray &q2grpm, 
                                  const SnapArray &flux0, const SnapArray &fluxm)
-  : SnapTask<CalcOuterSource>(snap, snap.get_launch_bounds(), pred)
+  : SnapTask<CalcOuterSource, Snap::CALC_OUTER_SOURCE_TASK_ID>(
+      snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   qi.add_projection_requirement(READ_ONLY, *this); // qi0
@@ -165,7 +166,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
                                            const SnapArray &flux0po,
                                            const Future &inner_converged,
                                            const Future &true_future)
-  : SnapTask<TestOuterConvergence>(snap, snap.get_launch_bounds(), pred)
+  : SnapTask<TestOuterConvergence, Snap::TEST_OUTER_CONVERGENCE_TASK_ID,
+             Snap::AND_REDUCTION_ID>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   flux0.add_projection_requirement(READ_ONLY, *this);

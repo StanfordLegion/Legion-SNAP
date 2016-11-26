@@ -25,7 +25,8 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
                                const SnapArray &s_xs, const SnapArray &flux0,
                                const SnapArray &fluxm, const SnapArray &q2grp0,
                                const SnapArray &q2grpm, const SnapArray &qtot)
-  : SnapTask<CalcInnerSource>(snap, snap.get_launch_bounds(), pred)
+  : SnapTask<CalcInnerSource, Snap::CALC_INNER_SOURCE_TASK_ID>(
+      snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   s_xs.add_projection_requirement(READ_ONLY, *this);
@@ -133,7 +134,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
                                            const SnapArray &flux0,
                                            const SnapArray &flux0pi,
                                            const Future &true_future)
-  : SnapTask<TestInnerConvergence>(snap, snap.get_launch_bounds(), pred)
+  : SnapTask<TestInnerConvergence, Snap::TEST_INNER_CONVERGENCE_TASK_ID,
+             Snap::AND_REDUCTION_ID>(snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   flux0.add_projection_requirement(READ_ONLY, *this);

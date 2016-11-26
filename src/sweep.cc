@@ -26,8 +26,9 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                          const SnapArray &time_flux_in, 
                          const SnapArray &time_flux_out,
                          int group, int corner, const int ghost_offsets[3])
-  : SnapTask<MiniKBATask>(snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()),
-                          pred), mini_kba_args(MiniKBAArgs(corner, group))
+  : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID>(
+      snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()), pred), 
+    mini_kba_args(MiniKBAArgs(corner, group))
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&mini_kba_args, sizeof(mini_kba_args));

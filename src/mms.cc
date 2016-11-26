@@ -20,8 +20,8 @@ using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
 MMSInit::MMSInit(const Snap &snap, const SnapArray &qim, int c)
-  : SnapTask<MMSInit>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED),
-    corner(c)
+  : SnapTask<MMSInit, Snap::MMS_INIT_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), corner(c)
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&corner, sizeof(corner));
@@ -47,8 +47,8 @@ MMSInit::MMSInit(const Snap &snap, const SnapArray &qim, int c)
 
 //------------------------------------------------------------------------------
 MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
-  : SnapTask<MMSScale>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED),
-    scale_factor(f)
+  : SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), scale_factor(f)
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&scale_factor, sizeof(scale_factor));
@@ -74,7 +74,8 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
 
 //------------------------------------------------------------------------------
 MMSVerify::MMSVerify(const Snap &snap, const SnapArray &flux)
-  : SnapTask<MMSVerify>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
+  : SnapTask<MMSVerify, Snap::MMS_VERIFY_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
 {
   flux.add_projection_requirement(READ_ONLY, *this);

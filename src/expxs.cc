@@ -21,8 +21,8 @@ using namespace LegionRuntime::Accessor;
 //------------------------------------------------------------------------------
 ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
                            const SnapArray &mat, const SnapArray &xs, int g)
-  : SnapTask<ExpandCrossSection>(snap, snap.get_launch_bounds(), 
-                                 Predicate::TRUE_PRED), group(g)
+  : SnapTask<ExpandCrossSection, Snap::EXPAND_CROSS_SECTION_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), group(g)
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&group, sizeof(group));
@@ -89,8 +89,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 //------------------------------------------------------------------------------
 ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap, 
   const SnapArray &slgg, const SnapArray &mat, const SnapArray &s_xs, int g)
-  : SnapTask<ExpandScatteringCrossSection>(snap, snap.get_launch_bounds(), 
-                                 Predicate::TRUE_PRED), group(g)
+  : SnapTask<ExpandScatteringCrossSection, 
+             Snap::EXPAND_SCATTERING_CROSS_SECTION_TASK_ID>(
+                 snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), group(g)
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&group, sizeof(group));
@@ -160,8 +161,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 CalculateGeometryParam::CalculateGeometryParam(const Snap &snap, 
                                   const SnapArray &t_xs, const SnapArray &vdelt, 
                                   const SnapArray &dinv, int g)
-  : SnapTask<CalculateGeometryParam>(snap, snap.get_launch_bounds(), 
-                                     Predicate::TRUE_PRED), group(g)
+  : SnapTask<CalculateGeometryParam,
+             Snap::CALCULATE_GEOMETRY_PARAM_TASK_ID>(
+                 snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), group(g)
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&group, sizeof(group));

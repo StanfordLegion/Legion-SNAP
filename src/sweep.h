@@ -21,7 +21,7 @@
 
 using namespace Legion;
 
-class MiniKBATask : public SnapTask<MiniKBATask> {
+class MiniKBATask : public SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID> {
 public:
   static const int NON_GHOST_REQUIREMENTS = 3;
 public:
@@ -34,9 +34,6 @@ public:
     int corner;
     int group;
   };
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::MINI_KBA_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, bool even, 
               const SnapArray &flux, const SnapArray &fluxm,

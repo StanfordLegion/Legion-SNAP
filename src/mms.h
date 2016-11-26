@@ -19,10 +19,7 @@
 #include "snap.h"
 #include "legion.h"
 
-class MMSInit : public SnapTask<MMSInit> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::MMS_INIT_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class MMSInit : public SnapTask<MMSInit, Snap::MMS_INIT_TASK_ID> {
 public:
   MMSInit(const Snap &snap, const SnapArray &qim, int corner);
 public:
@@ -34,10 +31,7 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class MMSScale : public SnapTask<MMSScale> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::MMS_SCALE_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class MMSScale : public SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID> {
 public:
   MMSScale(const Snap &snap, const SnapArray &qim, double factor);
 public:
@@ -49,10 +43,7 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class MMSVerify : public SnapTask<MMSVerify> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::MMS_VERIFY_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class MMSVerify : public SnapTask<MMSVerify, Snap::MMS_VERIFY_TASK_ID> {
 public:
   MMSVerify(const Snap &snap, const SnapArray &flux);
 public:

@@ -21,10 +21,8 @@
 
 using namespace Legion;
 
-class CalcInnerSource : public SnapTask<CalcInnerSource> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::CALC_INNER_SOURCE_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class CalcInnerSource : public SnapTask<CalcInnerSource, 
+                                        Snap::CALC_INNER_SOURCE_TASK_ID> {
 public:
   CalcInnerSource(const Snap &snap, const Predicate &pred,
                   const SnapArray &s_xs, const SnapArray &flux0,
@@ -40,10 +38,9 @@ public:
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class TestInnerConvergence : public SnapTask<TestInnerConvergence> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::TEST_INNER_CONVERGENCE_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
+class TestInnerConvergence : public SnapTask<TestInnerConvergence,
+                                             Snap::TEST_INNER_CONVERGENCE_TASK_ID,
+                                             Snap::AND_REDUCTION_ID> {
 public:
   TestInnerConvergence(const Snap &snap, const Predicate &pred,
                        const SnapArray &flux0, const SnapArray &flux0pi,

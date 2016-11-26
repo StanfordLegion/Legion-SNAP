@@ -308,35 +308,36 @@ public:
   };
 };
 
-template<typename T>
+template<typename T, Snap::SnapTaskID TASK_ID, 
+         Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID>
 class SnapTask : public IndexLauncher {
 public:
   SnapTask(const Snap &snap, const Rect<3> &launch_domain, const Predicate &pred)
-    : IndexLauncher(T::TASK_ID, Domain::from_rect<3>(launch_domain), 
+    : IndexLauncher(TASK_ID, Domain::from_rect<3>(launch_domain), 
                     TaskArgument(), ArgumentMap(), pred) { }
 public:
   void dispatch(Context ctx, Runtime *runtime, bool block = false)
   { 
     log_snap.info("Dispatching Task %s (ID %d)", 
-        Snap::task_names[T::TASK_ID], T::TASK_ID);
+        Snap::task_names[TASK_ID], TASK_ID);
     if (block) {
       FutureMap fm = runtime->execute_index_space(ctx, *this);
       fm.wait_all_results(true/*silence warnings*/);
     } else
       runtime->execute_index_space(ctx, *this);
   }
-  template<typename REDOP>
+  template<typename OP>
   Future dispatch(Context ctx, Runtime *runtime, bool block = false)
   {
-    assert(REDOP::REDOP_ID == T::REDOP);
+    assert(OP::REDOP == REDOP);
     log_snap.info("Dispatching Task %s (ID %d) with Reduction %d", 
-                  Snap::task_names[T::TASK_ID], T::TASK_ID, T::REDOP);
+                  Snap::task_names[TASK_ID], TASK_ID, REDOP);
     if (block) {
-      Future f = runtime->execute_index_space(ctx, *this, T::REDOP);
+      Future f = runtime->execute_index_space(ctx, *this, REDOP);
       f.get_void_result(true/*silence warnings*/);
       return f;
     } else
-      return runtime->execute_index_space(ctx, *this, T::REDOP);
+      return runtime->execute_index_space(ctx, *this, REDOP);
   }
 public:
   static void preregister_all_variants(void)
@@ -346,7 +347,7 @@ public:
   }
   static void register_task_name(Runtime *runtime)
   {
-    runtime->attach_name(T::TASK_ID, Snap::task_names[T::TASK_ID]);
+    runtime->attach_name(TASK_ID, Snap::task_names[TASK_ID]);
   }
 public:
   template<void (*TASK_PTR)(const Task*,
@@ -378,15 +379,15 @@ protected:
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
-    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
-    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+    strncat(variant_name, Snap::task_names[TASK_ID], 123);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<
-      SnapTask<T>::template snap_task_wrapper<TASK_PTR> >(registrar, 
-                                                Snap::task_names[T::TASK_ID]);
+      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<TASK_PTR> >(
+          registrar, Snap::task_names[TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
@@ -394,15 +395,15 @@ protected:
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
-    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
-    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+    strncat(variant_name, Snap::task_names[TASK_ID], 123);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,
-      SnapTask<T>::template snap_task_wrapper<RET_T,TASK_PTR> >(
-                                       registrar, Snap::task_names[T::TASK_ID]);
+      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<RET_T,TASK_PTR> >(
+                                         registrar, Snap::task_names[TASK_ID]);
   }
 protected:
   // For registering GPU variants
@@ -412,15 +413,15 @@ protected:
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
-    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
-    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+    strncat(variant_name, Snap::task_names[TASK_ID], 123);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<
-      SnapTask<T>::template snap_task_wrapper<TASK_PTR> >(registrar,
-                                                Snap::task_names[T::TASK_ID]);
+      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<TASK_PTR> >(
+          registrar, Snap::task_names[TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
@@ -428,15 +429,15 @@ protected:
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
-    strncat(variant_name, Snap::task_names[T::TASK_ID], 123);
-    TaskVariantRegistrar registrar(T::TASK_ID, true/*global*/,
+    strncat(variant_name, Snap::task_names[TASK_ID], 123);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,
-      SnapTask<T>::template snap_task_wrapper<RET_T,TASK_PTR> >(
-                                       registrar, Snap::task_names[T::TASK_ID]);
+      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<RET_T,TASK_PTR> >(
+                                         registrar, Snap::task_names[TASK_ID]);
   }
 };
 
@@ -560,7 +561,7 @@ protected:
 
 class AndReduction {
 public:
-  static const Snap::SnapReductionID REDOP_ID = Snap::AND_REDUCTION_ID;
+  static const Snap::SnapReductionID REDOP = Snap::AND_REDUCTION_ID;
 public:
   typedef bool LHS;
   typedef bool RHS;
@@ -572,7 +573,7 @@ public:
 
 class SumReduction {
 public:
-  static const Snap::SnapReductionID REDOP_ID = Snap::SUM_REDUCTION_ID;
+  static const Snap::SnapReductionID REDOP = Snap::SUM_REDUCTION_ID;
 public:
   typedef double LHS;
   typedef double RHS;
@@ -604,7 +605,7 @@ public:
 
 class QuadReduction {
 public:
-  static const Snap::SnapReductionID REDOP_ID = Snap::QUAD_REDUCTION_ID;
+  static const Snap::SnapReductionID REDOP = Snap::QUAD_REDUCTION_ID;
 public:
   typedef MomentQuad LHS;
   typedef MomentQuad RHS;

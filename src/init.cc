@@ -20,7 +20,8 @@ using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
 InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
-  : SnapTask<InitMaterial>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
+  : SnapTask<InitMaterial,Snap::INIT_MATERIAL_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
 {
   mat.add_projection_requirement(READ_WRITE, *this);
@@ -100,7 +101,8 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 
 //------------------------------------------------------------------------------
 InitSource::InitSource(const Snap &snap, const SnapArray &qi)
-  : SnapTask<InitSource>(snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
+  : SnapTask<InitSource, Snap::INIT_SOURCE_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
 {
   qi.add_projection_requirement(READ_WRITE, *this);

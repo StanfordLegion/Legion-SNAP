@@ -21,10 +21,8 @@
 
 using namespace Legion;
 
-class ExpandCrossSection : public SnapTask<ExpandCrossSection> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::EXPAND_CROSS_SECTION_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class ExpandCrossSection : public SnapTask<ExpandCrossSection,
+                                           Snap::EXPAND_CROSS_SECTION_TASK_ID> {
 public:
   ExpandCrossSection(const Snap &snap, const SnapArray &sig, 
                      const SnapArray &mat, const SnapArray &xs, int group);
@@ -40,10 +38,8 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class ExpandScatteringCrossSection : public SnapTask<ExpandScatteringCrossSection> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::EXPAND_SCATTERING_CROSS_SECTION_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class ExpandScatteringCrossSection : public SnapTask<ExpandScatteringCrossSection,
+                                    Snap::EXPAND_SCATTERING_CROSS_SECTION_TASK_ID> {
 public:
   ExpandScatteringCrossSection(const Snap &snap, const SnapArray &slgg,
                                const SnapArray &mat, const SnapArray &s_xs, int group);
@@ -59,10 +55,8 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class CalculateGeometryParam : public SnapTask<CalculateGeometryParam> {
-public:
-  static const Snap::SnapTaskID TASK_ID = Snap::CALCULATE_GEOMETRY_PARAM_TASK_ID;
-  static const Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID;
+class CalculateGeometryParam : public SnapTask<CalculateGeometryParam,
+                                               Snap::CALCULATE_GEOMETRY_PARAM_TASK_ID> {
 public:
   CalculateGeometryParam(const Snap &snap, const SnapArray &t_xs, 
                          const SnapArray &vdelt, const SnapArray &dinv, int group);
