@@ -30,6 +30,10 @@
 #endif
 #define MINI_KBA_NON_GHOST_REQUIREMENTS   8
 
+#ifndef PI
+#define PI (3.14159265358979)
+#endif
+
 using namespace Legion;
 using namespace Legion::Mapping;
 using namespace LegionRuntime::Arrays;
@@ -52,7 +56,8 @@ public:
     EXPAND_CROSS_SECTION_TASK_ID,
     EXPAND_SCATTERING_CROSS_SECTION_TASK_ID,
     CALCULATE_GEOMETRY_PARAM_TASK_ID,
-    MMS_INIT_TASK_ID,
+    MMS_INIT_FLUX_TASK_ID,
+    MMS_INIT_SOURCE_TASK_ID,
     MMS_SCALE_TASK_ID,
     MMS_VERIFY_TASK_ID,
     LAST_TASK_ID, // must be last
@@ -69,7 +74,8 @@ public:
     "Expand Cross Section",             \
     "Expand Scattering Cross Section",  \
     "Calcuate Geometry Param",          \
-    "MMS Initialization",               \
+    "MMS Init Flux",                    \
+    "MMS Init Source",                  \
     "MMS Scale",                        \
     "MMS Verification"
   static const char* task_names[LAST_TASK_ID];

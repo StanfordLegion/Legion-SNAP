@@ -332,6 +332,10 @@ void Snap::transport_solve(void)
   }
   // Only necessary for MMS
   SnapArray *qim[8];
+  SnapArray ref_flux(simulation_is, spatial_ip, group_fs, 
+                     ctx, runtime, "ref_flux");
+  SnapArray ref_fluxm(simulation_is, spatial_ip, flux_moment_fs, 
+                      ctx, runtime, "ref_fluxm");
   const bool do_mms = (source_layout == MMS_SOURCE);
   if (do_mms) {
     for (int i = 0; i < 8; i++) {
@@ -375,11 +379,14 @@ void Snap::transport_solve(void)
   }
   
   if (do_mms) {
-    for (int i = 0; i < 8; i++)
-      qim[i]->initialize();
+    ref_flux.initialize();
+    ref_fluxm.initialize();
+    MMSInitFlux init_mms_flux(*this, ref_flux, ref_fluxm);
+    init_mms_flux.dispatch(ctx, runtime);
     for (int i = 0; i < 8; i++) {
-      MMSInit init_mms(*this, *(qim[i]), i);
-      init_mms.dispatch(ctx, runtime);
+      qim[i]->initialize();
+      MMSInitSource init_mms_source(*this, ref_flux, ref_fluxm, *(qim[i]), i);
+      init_mms_source.dispatch(ctx, runtime);
     }
   }
 
@@ -527,7 +534,7 @@ void Snap::transport_solve(void)
     }
   }
   if (do_mms) {
-    MMSVerify verify_mms(*this, flux0); 
+    MMSVerify verify_mms(*this, flux0, ref_flux); 
     verify_mms.dispatch(ctx, runtime);
   }
   for (int i = 0; i < 8; i++) {
@@ -1344,6 +1351,10 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   ExpandCrossSection::preregister_all_variants();
   ExpandScatteringCrossSection::preregister_all_variants();
   CalculateGeometryParam::preregister_all_variants();
+  MMSInitFlux::preregister_cpu_variants();
+  MMSInitSource::preregister_cpu_variants();
+  MMSScale::preregister_cpu_variants();
+  MMSVerify::preregister_cpu_variants();
   // Register projection functors
   Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
                         new SnapSweepProjectionFunctor());

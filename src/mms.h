@@ -19,9 +19,21 @@
 #include "snap.h"
 #include "legion.h"
 
-class MMSInit : public SnapTask<MMSInit, Snap::MMS_INIT_TASK_ID> {
+class MMSInitFlux : public SnapTask<MMSInitFlux, Snap::MMS_INIT_FLUX_TASK_ID> {
 public:
-  MMSInit(const Snap &snap, const SnapArray &qim, int corner);
+  MMSInitFlux(const Snap &snap, const SnapArray &ref_flux, 
+              const SnapArray &ref_fluxm);
+public:
+  static void preregister_cpu_variants(void);
+public:
+  static void cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
+class MMSInitSource : public SnapTask<MMSInitSource, Snap::MMS_INIT_SOURCE_TASK_ID> {
+public:
+  MMSInitSource(const Snap &snap, const SnapArray &ref_flux, 
+                const SnapArray &ref_fluxm, const SnapArray &qim, int corner);
 public:
   const int corner;
 public:
@@ -45,7 +57,7 @@ public:
 
 class MMSVerify : public SnapTask<MMSVerify, Snap::MMS_VERIFY_TASK_ID> {
 public:
-  MMSVerify(const Snap &snap, const SnapArray &flux);
+  MMSVerify(const Snap &snap, const SnapArray &flux, const SnapArray &ref_flux);
 public:
   static void preregister_cpu_variants(void);
 public:
