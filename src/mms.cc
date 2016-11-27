@@ -168,7 +168,8 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
 
 //------------------------------------------------------------------------------
 MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
-                             const SnapArray &ref_fluxm, 
+                             const SnapArray &ref_fluxm, const SnapArray &mat,
+                             const SnapArray &sigt, const SnapArray &slgg,
                              const SnapArray &qim,int c)
   : SnapTask<MMSInitSource, Snap::MMS_INIT_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), corner(c)
@@ -177,6 +178,9 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
   global_arg = TaskArgument(&corner, sizeof(corner));
   ref_flux.add_projection_requirement(READ_ONLY, *this);
   ref_fluxm.add_projection_requirement(READ_ONLY, *this);
+  mat.add_projection_requirement(READ_ONLY, *this);
+  sigt.add_region_requirement(READ_ONLY, *this); 
+  slgg.add_region_requirement(READ_ONLY, *this);
   qim.add_projection_requirement(READ_WRITE, *this);
 }
 
@@ -193,7 +197,149 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  assert(task->arglen == sizeof(int));
+  const int corner = *((int*)task->args);
+  const double is = (0x1 & corner) ? 1.0 : -1.0;
+  const double js = (0x2 & corner) ? 1.0 : -1.0;
+  const double ks = (0x4 & corner) ? 1.0 : -1.0;
 
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+
+  const double a = PI / Snap::lx;
+  const double b = PI / Snap::ly;
+  const double c = PI / Snap::lz;
+  const double dx = Snap::lx / double(Snap::nx);
+  const double dy = Snap::ly / double(Snap::ny);
+  const double dz = Snap::lz / double(Snap::nz);
+
+  double *ib = (double*)malloc((Snap::nx+1) * sizeof(double));
+  double *jb = (double*)malloc((Snap::ny+1) * sizeof(double));
+  double *kb = (double*)malloc((Snap::nz+1) * sizeof(double));
+
+  ib[0] = subgrid_bounds.lo[0] * dx;
+  for (int i = 1; i <= Snap::nx; i++)
+    ib[i] = ib[i-1] + dx;
+  jb[0] = subgrid_bounds.lo[1] * dy;
+  for (int j = 1; j <= Snap::ny; j++)
+    jb[j] = jb[j-1] + dx;
+  kb[0] = subgrid_bounds.lo[2] * dz;
+  for (int k = 1; k <= Snap::nz; k++)
+    kb[k] = kb[k-1] + dx; 
+
+  double *cx = (double*)malloc(Snap::nx * sizeof(double));
+  double *sx = (double*)malloc(Snap::nx * sizeof(double));
+  double *cy = (double*)malloc(Snap::ny * sizeof(double));
+  double *sy = (double*)malloc(Snap::ny * sizeof(double));
+  double *cz = (double*)malloc(Snap::nz * sizeof(double));
+  double *sz = (double*)malloc(Snap::nz * sizeof(double));
+  
+  mms_trigint<true/*COS*/>(Snap::nx, a, dx, ib, cx);
+  mms_trigint<false/*SIN*/>(Snap::nx, a, dx, ib, sx);
+  if (Snap::num_dims > 1) {
+    mms_trigint<true/*COS*/>(Snap::ny, b, dy, jb, cy);
+    mms_trigint<false/*SIN*/>(Snap::ny, b, dy, jb, sy);
+    if (Snap::num_dims > 2) {
+      mms_trigint<true/*COS*/>(Snap::nz, c, dz, kb, cz);
+      mms_trigint<false/*SIN*/>(Snap::nz, c, dz, kb, sz);
+    } else {
+      for (int k = 0; k < Snap::nz; k++)
+        cz[k] = 1.0;
+      for (int k = 0; k < Snap::nz; k++)
+        sz[k] = 0.0;
+    }
+  } else {
+    for (int j = 0; j < Snap::ny; j++)
+      cy[j] = 1.0;
+    for (int j = 0; j < Snap::ny; j++)
+      sy[j] = 0.0;
+    for (int k = 0; k < Snap::nz; k++)
+      cz[k] = 1.0;
+    for (int k = 0; k < Snap::nz; k++)
+      sz[k] = 0.0;
+  }
+
+  const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
+  double *angle_buffer = (double*)malloc(angle_buffer_size);
+
+  RegionAccessor<AccessorType::Generic,int> fa_mat = 
+    regions[2].get_field_accessor(Snap::FID_SINGLE).typeify<int>(); 
+
+  unsigned g = 1;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+      regions[1].get_field_accessor(*it).typeify<MomentTriple>();
+    RegionAccessor<AccessorType::Generic,double> fa_sigt = 
+      regions[3].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
+      regions[4].get_field_accessor(*it).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic> fa_qim = 
+      regions[5].get_field_accessor(*it);
+
+    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
+      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+      const int i = itr.p[0] - subgrid_bounds.lo[0];
+      const int j = itr.p[1] - subgrid_bounds.lo[1];
+      const int k = itr.p[2] - subgrid_bounds.lo[2];
+
+      const int mat = fa_mat.read(dp);
+      const double sigt = fa_sigt.read(DomainPoint::from_point<1>(Point<1>(mat)));
+      const double ref_flux = fa_flux.read(dp);
+      const double flux_update = sigt * ref_flux;
+
+      const MomentTriple ref_fluxm = fa_fluxm.read(dp);
+
+      fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);      
+      for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+        angle_buffer[ang] += (double(g) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
+        angle_buffer[ang] += flux_update;
+        if (Snap::num_dims > 1)
+          angle_buffer[ang] += (double(g) * js * Snap::eta[ang] * cx[i] * sy[j] * cz[k]);
+        if (Snap::num_dims > 2)
+          angle_buffer[ang] += (double(g) * ks * Snap::xi[ang] * cx[i] * cy[j] * sz[k]);
+        unsigned gp_idx = 0;
+        for (std::set<FieldID>::const_iterator gp = 
+              task->regions[0].privilege_fields.begin(); gp !=
+              task->regions[0].privilege_fields.end(); gp++, gp_idx++) {
+          RegionAccessor<AccessorType::Generic,double> fa_flux_gp = 
+            regions[0].get_field_accessor(*gp).typeify<double>();
+          const double flux_gp = fa_flux_gp.read(dp);
+          const int slgg_point[2] = { mat, gp_idx };
+          const MomentQuad quad = 
+            fa_slgg.read(DomainPoint::from_point<2>(Point<2>(slgg_point)));
+          angle_buffer[ang] -= (quad[0] * flux_gp);
+          int lm = 1;
+          for (int l = 1; l < Snap::num_moments; l++) {
+            for (int ll = 0; ll < Snap::lma[l]; ll++) {
+              const int offset = corner * Snap::num_angles * Snap::num_moments + 
+                                  lm * Snap::num_angles + ang;
+              assert((lm-1) < 3);
+              angle_buffer[ang] -= (Snap::ec[offset] * quad[l] * ref_fluxm[lm-1]);
+              lm = lm + 1;
+            }
+          }
+        }
+      }
+      fa_qim.write_untyped(dp, angle_buffer, angle_buffer_size);
+    }
+  }
+
+  free(ib);
+  free(jb);
+  free(kb);
+  free(cx);
+  free(sx);
+  free(cy);
+  free(sy);
+  free(cz);
+  free(sz);
+  free(angle_buffer);
 #endif
 }
 

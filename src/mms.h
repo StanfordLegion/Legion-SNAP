@@ -33,7 +33,9 @@ public:
 class MMSInitSource : public SnapTask<MMSInitSource, Snap::MMS_INIT_SOURCE_TASK_ID> {
 public:
   MMSInitSource(const Snap &snap, const SnapArray &ref_flux, 
-                const SnapArray &ref_fluxm, const SnapArray &qim, int corner);
+                const SnapArray &ref_fluxm, const SnapArray &mat,
+                const SnapArray &sigt, const SnapArray &slgg,
+                const SnapArray &qim, int corner);
 public:
   const int corner;
 public:

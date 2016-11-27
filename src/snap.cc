@@ -385,7 +385,8 @@ void Snap::transport_solve(void)
     init_mms_flux.dispatch(ctx, runtime);
     for (int i = 0; i < 8; i++) {
       qim[i]->initialize();
-      MMSInitSource init_mms_source(*this, ref_flux, ref_fluxm, *(qim[i]), i);
+      MMSInitSource init_mms_source(*this, ref_flux, ref_fluxm, mat,
+                                    sigt, slgg, *(qim[i]), i);
       init_mms_source.dispatch(ctx, runtime);
     }
   }
