@@ -16,6 +16,8 @@
 #include "snap.h"
 #include "sweep.h"
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
@@ -43,7 +45,6 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                                   group_field, Snap::SWEEP_PROJECTION);
   fluxm.add_projection_requirement(Snap::QUAD_REDUCTION_ID, *this,
                                    group_field, Snap::SWEEP_PROJECTION);
-  vdelt.add_region_requirement(READ_ONLY, *this, group_field);
   // Add the dinv array for this field
   dinv.add_projection_requirement(READ_ONLY, *this,
                                   group_field, Snap::SWEEP_PROJECTION);
@@ -62,7 +63,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     flux.add_projection_requirement(WRITE_DISCARD, *this, 
                                     ghost_write, Snap::SWEEP_PROJECTION);
   }
-  assert(region_requirements.size() <= MINI_KBA_NON_GHOST_REQUIREMENTS);
+  assert(region_requirements.size() == MINI_KBA_NON_GHOST_REQUIREMENTS);
   // Add our reading ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
   {
@@ -74,6 +75,8 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     Snap::SnapProjectionID proj_id = SNAP_GHOST_PROJECTION(i, ghost_offsets[i]);
     flux.add_projection_requirement(READ_ONLY, *this, ghost_read, proj_id);
   }
+  // This one last since it's not a projection requirement
+  vdelt.add_region_requirement(READ_ONLY, *this, group_field);
 }
 
 //------------------------------------------------------------------------------
@@ -109,6 +112,8 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Mini-KBA Sweep");
+
   assert(task->arglen == sizeof(MiniKBAArgs));
   const MiniKBAArgs *args = reinterpret_cast<const MiniKBAArgs*>(task->args);
     
@@ -119,46 +124,44 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
     regions[0].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<MomentQuad>();
   RegionAccessor<AccessorType::Generic,double> fa_flux = 
-    regions[1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>();
+    regions[1].get_accessor().typeify<double>();
   RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
-    regions[2].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<MomentQuad>();
+    regions[2].get_accessor().typeify<MomentQuad>();
 
   // No types here since the size of these fields are dependent
   // on the number of angles
-  const double vdelt = regions[3].get_field_accessor(
+  const double vdelt = regions[regions.size()-1].get_field_accessor(
       SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>().read(
       DomainPoint::from_point<1>(Point<1>::ZEROES()));
   RegionAccessor<AccessorType::Generic> fa_dinv = 
-    regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
   RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
-    regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
   RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
-    regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group));
   RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-    regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>();
+    regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(args->group)).typeify<double>();
 
   // Output ghost regions
   RegionAccessor<AccessorType::Generic> fa_ghostx_out = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[7].get_field_accessor(
+        *(task->regions[7].privilege_fields.begin()));
   RegionAccessor<AccessorType::Generic> fa_ghosty_out = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[8].get_field_accessor(
+        *(task->regions[8].privilege_fields.begin()));
   RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[9].get_field_accessor(
+        *(task->regions[9].privilege_fields.begin()));
   // Input ghost regions
   RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+3].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS].privilege_fields.begin()));
   RegionAccessor<AccessorType::Generic> fa_ghosty_in = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+4].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].privilege_fields.begin()));
   RegionAccessor<AccessorType::Generic> fa_ghostz_in = 
-    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+5].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(args->group));
+    regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(
+        *(task->regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].privilege_fields.begin()));
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());

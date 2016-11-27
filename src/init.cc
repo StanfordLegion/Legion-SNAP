@@ -16,6 +16,8 @@
 #include "snap.h"
 #include "init.h"
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
@@ -40,6 +42,8 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Init Material");
+
   int i1 = 1, i2 = 1, j1 = 1, j2 = 1, k1 = 1, k2 = 1;
   switch (Snap::material_layout)
   {
@@ -121,6 +125,8 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Init Source");
+
   const int nx_gl = Snap::nx * Snap::nx_chunks;
   const int ny_gl = Snap::ny * Snap::ny_chunks;
   const int nz_gl = Snap::nz * Snap::nz_chunks;

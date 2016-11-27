@@ -16,6 +16,8 @@
 #include "snap.h"
 #include "expxs.h"
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
@@ -52,6 +54,8 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Expand Cross Section");
+
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,double> fa_sig = 
     regions[0].get_field_accessor(
@@ -122,6 +126,8 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Expand Scattering Cross Section");
+
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
     regions[0].get_field_accessor(
@@ -195,6 +201,8 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Calculate Geometry Param");
+
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,double> fa_xs = 
     regions[0].get_field_accessor(

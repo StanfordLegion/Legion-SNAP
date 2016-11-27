@@ -18,6 +18,8 @@
 #include "snap.h"
 #include "inner.h"
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
@@ -60,6 +62,8 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Calc Inner Source");
+
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
@@ -163,6 +167,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Test Inner Convergence");
+
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
          task->regions[1].region.get_index_space());

@@ -18,6 +18,8 @@
 #include "snap.h"
 #include "outer.h"
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
@@ -62,6 +64,8 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Calc Outer Source");
+
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
@@ -196,6 +200,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running Test Outer Convergence");
+
   // If the inner loop didn't converge, then we can't either
   assert(!task->futures.empty());
   bool inner_converged = task->futures[0].get_result<bool>();

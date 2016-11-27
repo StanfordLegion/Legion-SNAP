@@ -95,9 +95,10 @@ void Snap::setup(void)
   // Make some of our other field spaces
   const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
   material_is = runtime->create_index_space(ctx,
-      Domain::from_rect<1>(Rect<1>(Point<1>(0), Point<1>(nmat-1))));
-  const int slgg_upper[2] = { nmat-1, num_groups-1 };
-  Rect<2> slgg_bounds(Point<2>::ZEROES(), Point<2>(slgg_upper));
+      Domain::from_rect<1>(Rect<1>(Point<1>(1), Point<1>(nmat))));
+  const int slgg_lower[2] = { 1, 0 };
+  const int slgg_upper[2] = { nmat, num_groups-1 };
+  Rect<2> slgg_bounds((Point<2>(slgg_lower)), Point<2>(slgg_upper));
   slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
   runtime->attach_name(slgg_is, "Scattering Index Space");
   point_is = runtime->create_index_space(ctx, 
@@ -571,9 +572,8 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
   sigs_region.wait_until_valid(true/*ignore warnings*/);
   slgg_region.wait_until_valid(true/*ignore warnings*/);
 
-  // Names reflect fortran numbering from original snap
-  const DomainPoint one = DomainPoint::from_point<1>(Point<1>(0));
-  const DomainPoint two = DomainPoint::from_point<1>(Point<1>(1));
+  const DomainPoint one = DomainPoint::from_point<1>(Point<1>(1));
+  const DomainPoint two = DomainPoint::from_point<1>(Point<1>(2));
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigt(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_siga(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigs(num_groups);
@@ -615,6 +615,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
         SNAP_ENERGY_GROUP_FIELD(g)).typeify<MomentQuad>();
 
   Point<2> p2 = Point<2>::ZEROES();
+  p2.x[0] = 1;
   if (num_groups == 1) {
     MomentQuad local;
     local[0] = fa_sigs[0].read(one);
@@ -654,7 +655,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      p2.x[0] = 1;
+      p2.x[0] = 2;
       for (unsigned g = 0; g < num_groups; g++) {
         p2.x[1] = g; 
         const DomainPoint dp = DomainPoint::from_point<2>(p2);
@@ -687,6 +688,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
   if (num_moments > 1) 
   {
     p2 = Point<2>::ZEROES();
+    p2.x[0] = 1;
     for (int m = 1; m < num_moments; m++) {
       for (int g = 0; g < num_groups; g++) {
         p2.x[1] = g;
@@ -699,7 +701,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      p2.x[0] = 1;
+      p2.x[0] = 2;
       for (int m = 1; m < num_moments; m++) {
         for (int g = 0; g < num_groups; g++) {
           p2.x[1] = g;

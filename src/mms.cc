@@ -21,6 +21,8 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 
+extern LegionRuntime::Logger::Category log_snap;
+
 using namespace LegionRuntime::Accessor;
 
 template<bool COS>
@@ -74,6 +76,8 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running MMS Init Flux");
+
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
@@ -200,6 +204,8 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running MMS Init Source");
+
   assert(task->arglen == sizeof(int));
   const int corner = *((int*)task->args);
   const double is = (0x1 & corner) ? 1.0 : -1.0;
@@ -371,6 +377,8 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running MMS Init Time Dependent");
+
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[1].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
@@ -426,6 +434,8 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running MMS Scale");
+
   assert(task->arglen == sizeof(double));
   const double scale_factor = *((double*)task->args);
 
@@ -480,6 +490,8 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
 {
   MomentTriple result;
 #ifndef NO_COMPUTE
+  log_snap.print("Running MMS Compare");
+
   double min = INFINITY;
   double max = -INFINITY;
   double sum = 0.0;
