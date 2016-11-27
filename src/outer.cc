@@ -166,8 +166,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
                                            const SnapArray &flux0po,
                                            const Future &inner_converged,
                                            const Future &true_future)
-  : SnapTask<TestOuterConvergence, Snap::TEST_OUTER_CONVERGENCE_TASK_ID,
-             Snap::AND_REDUCTION_ID>(snap, snap.get_launch_bounds(), pred)
+  : SnapTask<TestOuterConvergence, Snap::TEST_OUTER_CONVERGENCE_TASK_ID>(
+      snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
   flux0.add_projection_requirement(READ_ONLY, *this);

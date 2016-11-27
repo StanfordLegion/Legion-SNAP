@@ -40,8 +40,7 @@ public:
 };
 
 class TestOuterConvergence : public SnapTask<TestOuterConvergence,
-                                             Snap::TEST_OUTER_CONVERGENCE_TASK_ID,
-                                             Snap::AND_REDUCTION_ID> {
+                                             Snap::TEST_OUTER_CONVERGENCE_TASK_ID> {
 public:
   TestOuterConvergence(const Snap &snap, const Predicate &pred,
                        const SnapArray &flux0, const SnapArray &flux0po,

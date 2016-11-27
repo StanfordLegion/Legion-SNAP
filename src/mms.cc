@@ -18,6 +18,9 @@
 
 #include <cmath>
 
+#define MAX(x,y) (((x) > (y)) ? (x) : (y))
+#define MIN(x,y) (((x) < (y)) ? (x) : (y))
+
 using namespace LegionRuntime::Accessor;
 
 template<bool COS>
@@ -344,6 +347,63 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 }
 
 //------------------------------------------------------------------------------
+MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
+                                 const SnapArray &ref_flux, const SnapArray &qi)
+  : SnapTask<MMSInitTimeDependent, Snap::MMS_INIT_TIME_DEPENDENT_TASK_ID>(
+      snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
+//------------------------------------------------------------------------------
+{
+  v.add_region_requirement(READ_ONLY, *this);
+  ref_flux.add_projection_requirement(READ_WRITE, *this);
+  qi.add_projection_requirement(WRITE_DISCARD, *this);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void MMSInitTimeDependent::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void MMSInitTimeDependent::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+#ifndef NO_COMPUTE
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[1].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+
+  const double t_scale = Snap::total_sim_time - 0.5 * Snap::dt;
+
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_v = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_qi = 
+      regions[2].get_field_accessor(*it).typeify<double>();
+
+    const double vg = fa_v.read(DomainPoint::from_point<1>(Point<1>::ZEROES()));
+
+    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
+      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+     
+      const double ref_flux = fa_flux.read(dp);
+      // compute the source
+      fa_qi.write(dp, ref_flux / vg);
+      // Then scale the flux 
+      fa_flux.write(dp, ref_flux * t_scale);
+    }
+  }
+#endif
+}
+
+//------------------------------------------------------------------------------
 MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
   : SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), scale_factor(f)
@@ -396,9 +456,9 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
 }
 
 //------------------------------------------------------------------------------
-MMSVerify::MMSVerify(const Snap &snap, const SnapArray &flux, 
-                     const SnapArray &ref_flux)
-  : SnapTask<MMSVerify, Snap::MMS_VERIFY_TASK_ID>(
+MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux, 
+                       const SnapArray &ref_flux)
+  : SnapTask<MMSCompare, Snap::MMS_COMPARE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
 {
@@ -407,19 +467,139 @@ MMSVerify::MMSVerify(const Snap &snap, const SnapArray &flux,
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void MMSVerify::preregister_cpu_variants(void)
+/*static*/ void MMSCompare::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<MomentTriple,cpu_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void MMSVerify::cpu_implementation(const Task *task,
+/*static*/ MomentTriple MMSCompare::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
+  MomentTriple result;
 #ifndef NO_COMPUTE
+  double min = INFINITY;
+  double max = -INFINITY;
+  double sum = 0.0;
 
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+
+  const double tolr = 1.0e-12;
+
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_ref_flux = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+
+    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
+      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
+
+      const double flux = fa_flux.read(dp);
+      double ref_flux = fa_ref_flux.read(dp);
+
+      double df = 1.0;
+      if (ref_flux < tolr) {
+        ref_flux = 1.0;
+        df = 0.0;
+      }
+      df = fabs(flux / ref_flux - df);
+      if (df > max)
+        max = df;
+      if (df < min)
+        min = df;
+      sum += df;
+    }
+  }
+  result[0] = max;
+  result[1] = min;
+  result[2] = sum;
 #endif
+  return result;
+}
+
+const MomentTriple MMSReduction::identity = MomentTriple(INFINITY, -INFINITY, 0.0);
+
+//------------------------------------------------------------------------------
+template<>
+void MMSReduction::apply<true>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  if (rhs[0] > lhs[0])
+    lhs[0] = rhs[0];
+  if (rhs[1] < lhs[1])
+    lhs[1] = rhs[1];
+  lhs[2] += rhs[2];
+}
+
+//------------------------------------------------------------------------------
+template<>
+void MMSReduction::apply<false>(LHS &lhs, RHS rhs)
+//------------------------------------------------------------------------------
+{
+  union { long as_int; double as_float; } oldval, newval;
+
+  long *target = (long *)&lhs[0];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = MAX(oldval.as_float, rhs[0]);
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+
+  target = (long *)&lhs[1];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = MIN(oldval.as_float, rhs[1]);
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+
+  target = (long *)&lhs[2];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = oldval.as_float + rhs[2];
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+}
+
+//------------------------------------------------------------------------------
+template<>
+void MMSReduction::fold<true>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  if (rhs2[0] > rhs1[0])
+    rhs1[0] = rhs2[0];
+  if (rhs2[1] < rhs1[1])
+    rhs1[1] = rhs2[1];
+  rhs1[2] += rhs2[2];
+}
+
+//------------------------------------------------------------------------------
+template<>
+void MMSReduction::fold<false>(RHS &rhs1, RHS rhs2)
+//------------------------------------------------------------------------------
+{
+  union { long as_int; double as_float; } oldval, newval;
+
+  long *target = (long *)&rhs1[0];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = MAX(oldval.as_float, rhs2[0]);
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+
+  target = (long *)&rhs1[1];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = MIN(oldval.as_float, rhs2[1]);
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
+
+  target = (long *)&rhs1[2];
+  do {
+    oldval.as_int = *target;
+    newval.as_float = oldval.as_float + rhs2[2];
+  } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
 }
 

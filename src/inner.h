@@ -39,8 +39,7 @@ public:
 };
 
 class TestInnerConvergence : public SnapTask<TestInnerConvergence,
-                                             Snap::TEST_INNER_CONVERGENCE_TASK_ID,
-                                             Snap::AND_REDUCTION_ID> {
+                                             Snap::TEST_INNER_CONVERGENCE_TASK_ID> {
 public:
   TestInnerConvergence(const Snap &snap, const Predicate &pred,
                        const SnapArray &flux0, const SnapArray &flux0pi,

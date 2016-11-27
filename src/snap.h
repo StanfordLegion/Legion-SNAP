@@ -58,8 +58,9 @@ public:
     CALCULATE_GEOMETRY_PARAM_TASK_ID,
     MMS_INIT_FLUX_TASK_ID,
     MMS_INIT_SOURCE_TASK_ID,
+    MMS_INIT_TIME_DEPENDENT_TASK_ID,
     MMS_SCALE_TASK_ID,
-    MMS_VERIFY_TASK_ID,
+    MMS_COMPARE_TASK_ID,
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES                 \
@@ -76,8 +77,9 @@ public:
     "Calcuate Geometry Param",          \
     "MMS Init Flux",                    \
     "MMS Init Source",                  \
+    "MMS Init Time Dependent",          \
     "MMS Scale",                        \
-    "MMS Verification"
+    "MMS Compare"
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
@@ -99,6 +101,7 @@ public:
     AND_REDUCTION_ID = 1,
     SUM_REDUCTION_ID = 2,
     QUAD_REDUCTION_ID = 3,
+    MMS_REDUCTION_ID = 4,
   };
   enum SnapFieldID {
     FID_SINGLE = 0, // For field spaces with just one field
@@ -314,8 +317,7 @@ public:
   };
 };
 
-template<typename T, Snap::SnapTaskID TASK_ID, 
-         Snap::SnapReductionID REDOP = Snap::NO_REDUCTION_ID>
+template<typename T, Snap::SnapTaskID TASK_ID> 
 class SnapTask : public IndexLauncher {
 public:
   SnapTask(const Snap &snap, const Rect<3> &launch_domain, const Predicate &pred)
@@ -335,15 +337,14 @@ public:
   template<typename OP>
   Future dispatch(Context ctx, Runtime *runtime, bool block = false)
   {
-    assert(OP::REDOP == REDOP);
     log_snap.info("Dispatching Task %s (ID %d) with Reduction %d", 
-                  Snap::task_names[TASK_ID], TASK_ID, REDOP);
+                  Snap::task_names[TASK_ID], TASK_ID, OP::REDOP);
     if (block) {
-      Future f = runtime->execute_index_space(ctx, *this, REDOP);
+      Future f = runtime->execute_index_space(ctx, *this, OP::REDOP);
       f.get_void_result(true/*silence warnings*/);
       return f;
     } else
-      return runtime->execute_index_space(ctx, *this, REDOP);
+      return runtime->execute_index_space(ctx, *this, OP::REDOP);
   }
 public:
   static void preregister_all_variants(void)
@@ -392,7 +393,7 @@ protected:
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<
-      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<TASK_PTR> >(
+      SnapTask<T,TASK_ID>::template snap_task_wrapper<TASK_PTR> >(
           registrar, Snap::task_names[TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
@@ -408,7 +409,7 @@ protected:
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,
-      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<RET_T,TASK_PTR> >(
+      SnapTask<T,TASK_ID>::template snap_task_wrapper<RET_T,TASK_PTR> >(
                                          registrar, Snap::task_names[TASK_ID]);
   }
 protected:
@@ -426,7 +427,7 @@ protected:
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<
-      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<TASK_PTR> >(
+      SnapTask<T,TASK_ID>::template snap_task_wrapper<TASK_PTR> >(
           registrar, Snap::task_names[TASK_ID]);
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
@@ -442,7 +443,7 @@ protected:
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
     Runtime::preregister_task_variant<RET_T,
-      SnapTask<T,TASK_ID,REDOP>::template snap_task_wrapper<RET_T,TASK_PTR> >(
+      SnapTask<T,TASK_ID>::template snap_task_wrapper<RET_T,TASK_PTR> >(
                                          registrar, Snap::task_names[TASK_ID]);
   }
 };
@@ -591,7 +592,8 @@ public:
 
 struct MomentTriple {
 public:
-  MomentTriple(void) { for (int i = 0; i < 3; i++) vals[i] = 0.0; }
+  MomentTriple(double x = 0.0, double y = 0.0, double z = 0.0)
+    { vals[0] = x; vals[1] = y; vals[2] = z; }
 public:
   double& operator[](const int index) { return vals[index]; }
   const double& operator[](const int index) const { return vals[index]; }
@@ -601,7 +603,8 @@ public:
 
 struct MomentQuad {
 public:
-  MomentQuad(void) { for (int i = 0; i < 4; i++) vals[i] = 0.0; }
+  MomentQuad(double x = 0.0, double y = 0.0, double z = 0.0, double w = 0.0)
+    { vals[0] = x; vals[1] = y; vals[2] = z; vals[3] = w; }
 public:
   double& operator[](const int index) { return vals[index]; }
   const double& operator[](const int index) const { return vals[index]; }

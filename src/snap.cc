@@ -376,8 +376,22 @@ void Snap::transport_solve(void)
   for (int i = 0; i < 8; i++) {
     time_flux_even[i]->initialize();
     time_flux_odd[i]->initialize();
+  } 
+
+  // Launch some tasks to initialize the application data
+  if (material_layout != HOMOGENEOUS_LAYOUT)
+  {
+    InitMaterial init_material(*this, mat);
+    init_material.dispatch(ctx, runtime);
   }
-  
+  if (!do_mms && (source_layout != EVERYWHERE_SOURCE))
+  {
+    InitSource init_source(*this, qi);
+    init_source.dispatch(ctx, runtime);
+  }
+  initialize_scattering(sigt, siga, sigs, slgg);
+  initialize_velocity(vel, vdelt);
+
   if (do_mms) {
     ref_flux.initialize();
     ref_fluxm.initialize();
@@ -389,21 +403,11 @@ void Snap::transport_solve(void)
                                     sigt, slgg, *(qim[i]), i);
       init_mms_source.dispatch(ctx, runtime);
     }
+    if (time_dependent) {
+      MMSInitTimeDependent mms_time_dependent(*this, vel, ref_flux, qi); 
+      mms_time_dependent.dispatch(ctx, runtime);
+    }
   }
-
-  // Launch some tasks to initialize the application data
-  if (material_layout != HOMOGENEOUS_LAYOUT)
-  {
-    InitMaterial init_material(*this, mat);
-    init_material.dispatch(ctx, runtime);
-  }
-  if (source_layout != EVERYWHERE_SOURCE)
-  {
-    InitSource init_source(*this, qi);
-    init_source.dispatch(ctx, runtime);
-  }
-  initialize_scattering(sigt, siga, sigs, slgg);
-  initialize_velocity(vel, vdelt);
 
   // Tunables should be ready by now
   const unsigned outer_runahead = 
@@ -535,8 +539,13 @@ void Snap::transport_solve(void)
     }
   }
   if (do_mms) {
-    MMSVerify verify_mms(*this, flux0, ref_flux); 
-    verify_mms.dispatch(ctx, runtime);
+    MMSCompare compare_mms(*this, flux0, ref_flux); 
+    Future f = compare_mms.dispatch<MMSReduction>(ctx, runtime);
+    MomentTriple result = f.get_result<MomentTriple>(true/*silence warnings*/);
+    printf("MMS Max Diff: %.8g\n", result[0]);
+    printf("MMS Min Diff: %.8g\n", result[1]);
+    const size_t total_cells = nx * nx_chunks * ny * ny_chunks * nz * nz_chunks;
+    printf("MMS Avg Diff: %.8g\n", result[2]/double(total_cells));
   }
   for (int i = 0; i < 8; i++) {
     delete time_flux_even[i];
@@ -1354,8 +1363,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   CalculateGeometryParam::preregister_all_variants();
   MMSInitFlux::preregister_cpu_variants();
   MMSInitSource::preregister_cpu_variants();
+  MMSInitTimeDependent::preregister_cpu_variants();
   MMSScale::preregister_cpu_variants();
-  MMSVerify::preregister_cpu_variants();
+  MMSCompare::preregister_cpu_variants();
   // Register projection functors
   Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
                         new SnapSweepProjectionFunctor());
@@ -1370,6 +1380,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
   Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP);
   Runtime::register_reduction_op<QuadReduction>(QuadReduction::REDOP);
+  Runtime::register_reduction_op<MMSReduction>(MMSReduction::REDOP);
 }
 
 //------------------------------------------------------------------------------

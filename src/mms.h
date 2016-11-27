@@ -45,6 +45,18 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
+class MMSInitTimeDependent : public SnapTask<MMSInitTimeDependent, 
+                                             Snap::MMS_INIT_TIME_DEPENDENT_TASK_ID> {
+public:
+  MMSInitTimeDependent(const Snap &snap, const SnapArray &vel,
+                       const SnapArray &ref_flux, const SnapArray &qi);
+public:
+  static void preregister_cpu_variants(void);
+public:
+  static void cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
 class MMSScale : public SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID> {
 public:
   MMSScale(const Snap &snap, const SnapArray &qim, double factor);
@@ -57,14 +69,26 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
-class MMSVerify : public SnapTask<MMSVerify, Snap::MMS_VERIFY_TASK_ID> {
+class MMSCompare : public SnapTask<MMSCompare, Snap::MMS_COMPARE_TASK_ID> {
 public:
-  MMSVerify(const Snap &snap, const SnapArray &flux, const SnapArray &ref_flux);
+  MMSCompare(const Snap &snap, const SnapArray &flux, const SnapArray &ref_flux);
 public:
   static void preregister_cpu_variants(void);
 public:
-  static void cpu_implementation(const Task *task,
+  static MomentTriple cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
+class MMSReduction {
+public:
+  static const Snap::SnapReductionID REDOP = Snap::MMS_REDUCTION_ID;
+public:
+  typedef MomentTriple LHS;
+  typedef MomentTriple RHS;
+  static const MomentTriple identity;
+public:
+  template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
+  template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
 };
 
 #endif // __MMS_H__
