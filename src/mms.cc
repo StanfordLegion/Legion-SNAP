@@ -522,6 +522,8 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
         ref_flux = 1.0;
         df = 0.0;
       }
+      //printf("(%lld,%lld,%lld): %.8g %.8g\n", 
+      //        itr.p[0], itr.p[1], itr.p[2], flux, ref_flux);
       df = fabs(flux / ref_flux - df);
       if (df > max)
         max = df;
@@ -537,7 +539,7 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
   return result;
 }
 
-const MomentTriple MMSReduction::identity = MomentTriple(INFINITY, -INFINITY, 0.0);
+const MomentTriple MMSReduction::identity = MomentTriple(-INFINITY, INFINITY, 0.0);
 
 //------------------------------------------------------------------------------
 template<>
