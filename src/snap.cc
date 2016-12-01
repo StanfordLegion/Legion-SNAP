@@ -577,7 +577,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigt(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_siga(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigs(num_groups);
-  for (unsigned g = 0; g < num_groups; g++)
+  for (int g = 0; g < num_groups; g++)
   {
     fa_sigt[g] = sigt_region.get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
@@ -590,7 +590,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
   fa_sigt[0].write(one, 1.0);
   fa_siga[0].write(one, 0.5);
   fa_sigs[0].write(one, 0.5);
-  for (unsigned g = 1; g < num_groups; g++)
+  for (int g = 1; g < num_groups; g++)
   {
     fa_sigt[g].write(one, 0.01  * fa_sigt[g-1].read(one));
     fa_siga[g].write(one, 0.005 * fa_siga[g-1].read(one));
@@ -601,7 +601,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
     fa_sigt[0].write(two, 2.0);
     fa_siga[0].write(two, 0.8);
     fa_sigs[0].write(two, 1.2);
-    for (unsigned g = 1; g < num_groups; g++)
+    for (int g = 1; g < num_groups; g++)
     {
       fa_sigt[g].write(two, 0.01  * fa_sigt[g-1].read(two));
       fa_siga[g].write(two, 0.005 * fa_siga[g-1].read(two));
@@ -610,7 +610,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
   }
 
   std::vector<RegionAccessor<AccessorType::Generic,MomentQuad> > fa_slgg(num_groups); 
-  for (unsigned g = 0; g < num_groups; g++)
+  for (int g = 0; g < num_groups; g++)
     fa_slgg[g] = slgg_region.get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(g)).typeify<MomentQuad>();
 
@@ -627,14 +627,14 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
     }
   } else {
     MomentQuad local;
-    for (unsigned g = 0; g < num_groups; g++) {
+    for (int g = 0; g < num_groups; g++) {
       p2.x[1] = g; 
       const DomainPoint dp = DomainPoint::from_point<2>(p2);
       local[0] = 0.2 * fa_sigs[g].read(one);
       fa_slgg[g].write(dp, local);
       if (g > 0) {
         const double t = 1.0 / double(g);
-        for (unsigned g2 = 0; g2 < g; g2++) {
+        for (int g2 = 0; g2 < g; g2++) {
           local[0] = 0.1 * fa_sigs[g].read(one) * t;
           fa_slgg[g2].write(dp, local);
         }
@@ -645,7 +645,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
 
       if (g < (num_groups-1)) {
         const double t = 1.0 / double(num_groups-(g+1));
-        for (unsigned g2 = g+1; g2 < num_groups; g2++) {
+        for (int g2 = g+1; g2 < num_groups; g2++) {
           local[0] = 0.7 * fa_sigs[g].read(one) * t;
           fa_slgg[g2].write(dp, local);
         }
@@ -656,14 +656,14 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
       p2.x[0] = 2;
-      for (unsigned g = 0; g < num_groups; g++) {
+      for (int g = 0; g < num_groups; g++) {
         p2.x[1] = g; 
         const DomainPoint dp = DomainPoint::from_point<2>(p2);
         local[0] = 0.5 * fa_sigs[g].read(two);
         fa_slgg[g].write(dp, local);
         if (g > 0) {
           const double t = 1.0 / double(g);
-          for (unsigned g2 = 0; g2 < g; g2++) {
+          for (int g2 = 0; g2 < g; g2++) {
             local[0] = 0.1 * fa_sigs[g].read(two) * t;
             fa_slgg[g2].write(dp, local);
           }
@@ -674,7 +674,7 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
 
         if (g < (num_groups-1)) {
           const double t = 1.0 / double(num_groups-(g+1));
-          for (unsigned g2 = g+1; g2 < num_groups; g2++) {
+          for (int g2 = g+1; g2 < num_groups; g2++) {
             local[0] = 0.4 * fa_sigs[g].read(two) * t;
             fa_slgg[g2].write(dp, local);
           }

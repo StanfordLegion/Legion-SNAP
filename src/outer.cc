@@ -70,9 +70,9 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
   const bool multi_moment = (Snap::num_moments > 1);
-  const unsigned num_groups = task->regions[0].privilege_fields.size();
-  assert(num_groups == task->regions[1].privilege_fields.size());
-  assert(num_groups == task->regions[4].privilege_fields.size());
+  const int num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == int(task->regions[1].privilege_fields.size()));
+  assert(num_groups == int(task->regions[4].privilege_fields.size()));
   // Make the accessors for all the groups up front
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_qi0(num_groups);
   std::vector<RegionAccessor<AccessorType::Generic,double> > fa_flux0(num_groups);
@@ -80,7 +80,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   std::vector<RegionAccessor<AccessorType::Generic,MomentTriple> > 
     fa_fluxm(multi_moment ? num_groups : 0);
   // Field spaces are all the same so this is safe
-  unsigned g = 0;
+  int g = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
@@ -105,7 +105,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     {
       DomainPoint dp = DomainPoint::from_point<3>(itr.p);
       double qo0 = fa_qi0[g].read(dp);
-      for (unsigned g2 = 0; g2 < num_groups; g2++)
+      for (int g2 = 0; g2 < num_groups; g2++)
       {
         if (g == g2)
           continue;
@@ -125,7 +125,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       {
         DomainPoint dp = DomainPoint::from_point<3>(itr.p);
         MomentTriple qom;
-        for (unsigned g2 = 0; g2 < num_groups; g2++)
+        for (int g2 = 0; g2 < num_groups; g2++)
         {
           if (g == g2)
             continue;

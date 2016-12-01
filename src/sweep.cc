@@ -176,7 +176,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   const bool stride_x_positive = ((args->corner & 0x1) == 0);
   const bool stride_y_positive = ((args->corner & 0x2) == 0);
   const bool stride_z_positive = ((args->corner & 0x4) == 0);
-  const int origin_ints[3] = { 
+  const coord_t origin_ints[3] = { 
     (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]),
     (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]),
     (stride_z_positive ? subgrid_bounds.lo[2] : subgrid_bounds.hi[2]) };
@@ -233,20 +233,20 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       // Compute the angular source
       const DomainPoint dp = DomainPoint::from_point<3>(local_point);
       const MomentQuad quad = fa_qtot.read(dp);
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         psi[ang] = quad[0];
       if (Snap::num_moments > 1) {
         const int corner_offset = 
           args->corner * Snap::num_angles * Snap::num_moments;
         for (unsigned l = 1; 1 < Snap::num_moments; l++) {
           const int moment_offset = corner_offset + l * Snap::num_angles;
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+          for (int ang = 0; ang < Snap::num_angles; ang++) {
             psi[ang] += Snap::ec[moment_offset+ang] * quad[l];
           }
         }
       }
       // Compute the initial solution
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] = psi[ang];
       // X ghost cells
       if (stride_x_positive) {
@@ -281,7 +281,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           previous_x.erase(finder);
         }
       }
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] += psii[ang] * Snap::mu[ang] * Snap::hi;
       // Y ghost cells
       if (stride_y_positive) {
@@ -317,7 +317,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           previous_y.erase(finder);
         }
       }
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] += psij[ang] * Snap::eta[ang] * Snap::hj;
       // Z ghost cells
       if (stride_z_positive) {
@@ -353,52 +353,52 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           previous_z.erase(finder);
         }
       }
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] += psik[ang] * Snap::xi[ang] * Snap::hk;
       // See if we're doing anything time dependent
       if (vdelt != 0.0) 
       {
         fa_time_flux_in.read_untyped(DomainPoint::from_point<3>(local_point),
                                      time_flux_in, angle_buffer_size);
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           pc[ang] += vdelt * time_flux_in[ang];
       }
       // Multiple by the precomputed denominator inverse
       fa_dinv.read_untyped(DomainPoint::from_point<3>(local_point),
                            temp_array, angle_buffer_size);
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] *= temp_array[ang];
 
       if (Snap::flux_fixup) {
         // DO THE FIXUP
         unsigned old_negative_fluxes = 0;
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           hv_x[ang] = 1.0;
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           hv_y[ang] = 1.0;
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           hv_z[ang] = 1.0;
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           hv_t[ang] = 1.0;
         const double t_xs = fa_t_xs.read(DomainPoint::from_point<3>(local_point));
         while (true) {
           unsigned negative_fluxes = 0;
           // Figure out how many negative fluxes we have
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+          for (int ang = 0; ang < Snap::num_angles; ang++) {
             fx_hv_x[ang] = 2.0 * pc[ang] - psii[ang];
             if (fx_hv_x[ang] < 0.0) {
               hv_x[ang] = 0.0;
               negative_fluxes++;
             }
           }
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+          for (int ang = 0; ang < Snap::num_angles; ang++) {
             fx_hv_y[ang] = 2.0 * pc[ang] - psij[ang];
             if (fx_hv_y[ang] < 0.0) {
               hv_y[ang] = 0.0;
               negative_fluxes++;
             }
           }
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+          for (int ang = 0; ang < Snap::num_angles; ang++) {
             fx_hv_z[ang] = 2.0 * pc[ang] - psik[ang];
             if (fx_hv_z[ang] < 0.0) {
               hv_z[ang] = 0.0;
@@ -406,7 +406,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
             }
           }
           if (vdelt != 0.0) {
-            for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+            for (int ang = 0; ang < Snap::num_angles; ang++) {
               fx_hv_t[ang] = 2.0 * pc[ang] - time_flux_in[ang];
               if (fx_hv_t[ang] < 0.0) {
                 hv_t[ang] = 0.0;
@@ -418,7 +418,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
             break;
           old_negative_fluxes = negative_fluxes; 
           if (vdelt != 0.0) {
-            for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+            for (int ang = 0; ang < Snap::num_angles; ang++) {
               pc[ang] = psi[ang] + 0.5 * (
                   psii[ang] * Snap::mu[ang] * Snap::hi * (1.0 + hv_x[ang]) + 
                   psij[ang] * Snap::eta[ang] * Snap::hj * (1.0 + hv_y[ang]) + 
@@ -434,7 +434,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
                 pc[ang] /= den;
             }
           } else {
-            for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+            for (int ang = 0; ang < Snap::num_angles; ang++) {
               pc[ang] = psi[ang] + 0.5 * (
                   psii[ang] * Snap::mu[ang] * Snap::hi * (1.0 + hv_x[ang]) + 
                   psij[ang] * Snap::eta[ang] * Snap::hj * (1.0 + hv_y[ang]) +
@@ -451,31 +451,31 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           }
         }
         // Fixup done so compute the updated values
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psii[ang] = fx_hv_x[ang] * hv_x[ang];
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psij[ang] = fx_hv_y[ang] * hv_y[ang];
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psik[ang] = fx_hv_z[ang] * hv_z[ang];
         if (vdelt != 0.0)
         {
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+          for (int ang = 0; ang < Snap::num_angles; ang++)
             time_flux_out[ang] = fx_hv_t[ang] * hv_t[ang];
           fa_time_flux_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                          time_flux_out, angle_buffer_size);
         }
       } else {
         // NO FIXUP
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psii[ang] = 2.0 * pc[ang] - psii[ang]; 
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psij[ang] = 2.0 * pc[ang] - psij[ang];
-        for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+        for (int ang = 0; ang < Snap::num_angles; ang++)
           psik[ang] = 2.0 * pc[ang] - psik[ang];
         if (vdelt != 0.0) 
         {
           // Write out the outgoing temporal flux
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+          for (int ang = 0; ang < Snap::num_angles; ang++)
             time_flux_out[ang] = 2.0 * pc[ang] - time_flux_in[ang];
           fa_time_flux_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                          time_flux_out, angle_buffer_size);
@@ -567,7 +567,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       }
       // Finally we apply reductions to the flux moments
       double total = 0.0;
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+      for (int ang = 0; ang < Snap::num_angles; ang++) {
         psi[ang] = Snap::w[ang] * pc[ang]; 
         total += psi[ang];
       }
@@ -581,7 +581,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           unsigned offset = l * Snap::num_angles + 
             args->corner * Snap::num_angles * Snap::num_moments;
           total = 0.0;
-          for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+          for (int ang = 0; ang < Snap::num_angles; ang++) {
             total += Snap::ec[offset+ang] * psi[ang]; 
           }
           quad[l] = total;

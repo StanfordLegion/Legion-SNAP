@@ -305,7 +305,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
       const MomentTriple ref_fluxm = fa_fluxm.read(dp);
 
       fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);      
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++) {
+      for (int ang = 0; ang < Snap::num_angles; ang++) {
         angle_buffer[ang] += (double(g) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
         angle_buffer[ang] += flux_update;
         if (Snap::num_dims > 1)
@@ -319,7 +319,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
           RegionAccessor<AccessorType::Generic,double> fa_flux_gp = 
             regions[0].get_field_accessor(*gp).typeify<double>();
           const double flux_gp = fa_flux_gp.read(dp);
-          const int slgg_point[2] = { mat, gp_idx };
+          const coord_t slgg_point[2] = { mat, gp_idx };
           const MomentQuad quad = 
             fa_slgg.read(DomainPoint::from_point<2>(Point<2>(slgg_point)));
           angle_buffer[ang] -= (quad[0] * flux_gp);
@@ -456,7 +456,7 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
     {
       const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
       fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);
-      for (unsigned ang = 0; ang < Snap::num_angles; ang++)
+      for (int ang = 0; ang < Snap::num_angles; ang++)
         angle_buffer[ang] *= scale_factor;
       fa_qim.write_untyped(dp, angle_buffer, angle_buffer_size);
     }
