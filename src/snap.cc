@@ -1080,7 +1080,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     Point<3> start;
     for (int i = 0; i < num_dims; i++)
     {
-      start.x[i] = ((corner & (0x1 << i)) ? chunks[i] : 1);
+      start.x[i] = ((corner & (0x1 << i)) ? chunks[i]-1 : 0);
       strides[i].x[i] = ((corner & (0x1 << i)) ? -1 : 1);
     }
     std::set<DomainPoint> current_points;

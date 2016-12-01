@@ -128,6 +128,11 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
     regions[2].get_accessor().typeify<MomentQuad>();
 
+  // Reduction accessors don't support structured points yet
+  ByteOffset flux_offsets[3], fluxm_offsets[3];
+  double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+  MomentQuad *const fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+
   // No types here since the size of these fields are dependent
   // on the number of angles
   const double vdelt = regions[regions.size()-1].get_field_accessor(
@@ -566,7 +571,10 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         psi[ang] = Snap::w[ang] * pc[ang]; 
         total += psi[ang];
       }
-      fa_flux.reduce<SumReduction>(DomainPoint::from_point<3>(local_point), total);
+      double *local_flux = flux;
+      for (int i = 0; i < 3; i++)
+        local_flux += local_point[i] * flux_offsets[i];
+      SumReduction::fold<false>(*local_flux, total);
       if (Snap::num_moments > 1) {
         MomentQuad quad;
         for (int l = 1; l < Snap::num_moments; l++) {
@@ -578,7 +586,10 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           }
           quad[l] = total;
         }
-        fa_fluxm.reduce<QuadReduction>(DomainPoint::from_point<3>(local_point), quad);
+        MomentQuad *local_fluxm = fluxm;
+        for (int i = 0; i < 3; i++)
+          local_fluxm += local_point[i] * fluxm_offsets[i];
+        QuadReduction::fold<false>(*local_fluxm, quad);
       }
     }
   }
