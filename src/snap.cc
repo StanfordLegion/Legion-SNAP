@@ -43,18 +43,15 @@ void Snap::setup(void)
   // implementation because it makes a lot of indexing look 1-based. This
   // has virtually no overhead cause making overly large logical regions
   // doesn't result in any memory allocation.
-  int x_cells_per_chunk = nx / nx_chunks;
-  int y_cells_per_chunk = ny / ny_chunks;
-  int z_cells_per_chunk = nz / nz_chunks;
-  const int upper[3] = { (nx_chunks+2)*x_cells_per_chunk - 1,
-                         (ny_chunks+2)*y_cells_per_chunk - 1,
-                         (nz_chunks+2)*z_cells_per_chunk - 1 };
+  const int upper[3] = { (nx_chunks+2)*nx_per_chunk - 1,
+                         (ny_chunks+2)*ny_per_chunk - 1,
+                         (nz_chunks+2)*nz_per_chunk - 1 };
   simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
   simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   runtime->attach_name(simulation_is, "Simulation Space");
   // Create the disjoint partition of the index space 
-  const int bf[3] = { x_cells_per_chunk, y_cells_per_chunk, z_cells_per_chunk };
+  const int bf[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
   Point<3> blocking_factor(bf);
   Blockify<3> spatial_map(blocking_factor);
   spatial_ip = 
@@ -902,6 +899,9 @@ bool Snap::minikba_sweep = true;
 bool Snap::single_angle_copy = true;
 
 int Snap::num_corners = 1;
+int Snap::nx_per_chunk;
+int Snap::ny_per_chunk;
+int Snap::nz_per_chunk;
 std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
 std::vector<std::vector<Point<3> > > Snap::chunk_wavefronts;
 double Snap::dt;
@@ -1051,6 +1051,9 @@ int Snap::lma[4];
   // Some derived quantities
   for (int i = 0; i < num_dims; i++)
     num_corners *= 2;
+  nx_per_chunk = nx / nx_chunks;
+  ny_per_chunk = ny / ny_chunks;
+  nz_per_chunk = nz / nz_chunks;
   compute_wavefronts();
   compute_derived_globals();
 }
@@ -1080,7 +1083,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     Point<3> start;
     for (int i = 0; i < num_dims; i++)
     {
-      start.x[i] = ((corner & (0x1 << i)) ? chunks[i]-1 : 0);
+      start.x[i] = ((corner & (0x1 << i)) ? chunks[i] : 1);
       strides[i].x[i] = ((corner & (0x1 << i)) ? -1 : 1);
     }
     std::set<DomainPoint> current_points;
@@ -1110,16 +1113,19 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
       wavefront_number++;
     }
   }
+  const int nx_per_chunk = nx / nx_chunks;
+  const int ny_per_chunk = ny / ny_chunks;
+  const int nz_per_chunk = nz / nz_chunks;
   // Now compute the chunk wavefronts
   // Total number of wavefronts is nx + ny + nz - 2
-  const int total_wavefronts = nx + ny + nz - 2;
+  const int total_wavefronts = nx_per_chunk + ny_per_chunk + nz_per_chunk - 2;
   chunk_wavefronts.resize(total_wavefronts);
   int current_point[3];
-  for (current_point[0] = 0; current_point[0] < nx; current_point[0]++) 
+  for (current_point[0] = 0; current_point[0] < nx_per_chunk; current_point[0]++) 
   {
-    for (current_point[1] = 0; current_point[1] < ny; current_point[1]++)
+    for (current_point[1] = 0; current_point[1] < ny_per_chunk; current_point[1]++)
     {
-      for (current_point[2] = 0; current_point[2] < nz; current_point[2]++)
+      for (current_point[2] = 0; current_point[2] < nz_per_chunk; current_point[2]++)
       {
         const int wavefront = 
           current_point[0] + current_point[1] + current_point[2];

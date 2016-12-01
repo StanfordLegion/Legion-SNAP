@@ -269,7 +269,8 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         // reading from x+1
         Point<3> ghost_point = local_point;
         ghost_point.x[0] += 1;
-        if (it->x[0] == (Snap::nx-1)) {
+        // Local coordinates here
+        if (it->x[0] == 0) {
           // Ghost cell array
           fa_ghostx_in.read_untyped(DomainPoint::from_point<3>(ghost_point), 
                                     psii, angle_buffer_size);
@@ -278,6 +279,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           PreviousMap::iterator finder = previous_x.find(ghost_point);
           assert(finder != previous_x.end());
           free(psii);
+          psii = finder->second;
           previous_x.erase(finder);
         }
       }
@@ -304,7 +306,8 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         // reading from y+1
         Point<3> ghost_point = local_point;
         ghost_point.x[1] += 1;
-        if (it->x[1] == (Snap::ny-1)) {
+        // Local coordinates here
+        if (it->x[1] == 0) {
           // Ghost cell array
           fa_ghosty_in.read_untyped(DomainPoint::from_point<3>(ghost_point), 
                                     psij, angle_buffer_size);
@@ -340,7 +343,8 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         // reading from z+1
         Point<3> ghost_point = local_point;
         ghost_point.x[2] += 1;
-        if (it->x[2] == (Snap::nz-1)) {
+        // Local coordinates here
+        if (it->x[2] == 0) {
           // Ghost cell array
           fa_ghostz_in.read_untyped(DomainPoint::from_point<3>(ghost_point), 
                                     psik, angle_buffer_size);
@@ -485,11 +489,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       // X ghost
       if (stride_x_positive) {
         // Writing to x+1
-        if (it->x[0] == (Snap::nx-1)) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] += 1;   
-          fa_ghostx_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        if (it->x[0] == (Snap::nx_per_chunk-1)) {
+          // We write out on our own region
+          fa_ghostx_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psii, angle_buffer_size);
         } else {
           // Write to the local set
@@ -498,11 +500,10 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         }
       } else {
         // Writing to x-1
-        if (it->x[0] == 0) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] -= 1;
-          fa_ghostx_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        // Local coordinates here
+        if (it->x[0] == (Snap::nx_per_chunk-1)) {
+          // Write out on our own region
+          fa_ghostx_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psii, angle_buffer_size);
         } else {
           // Write to the local set
@@ -513,11 +514,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       // Y ghost
       if (stride_y_positive) {
         // Writing to y+1
-        if (it->x[1] == (Snap::ny-1)) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] += 1;
-          fa_ghosty_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        if (it->x[1] == (Snap::ny_per_chunk-1)) {
+          // Write out on our own region
+          fa_ghosty_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psij, angle_buffer_size);
         } else {
           // Write to the local set
@@ -526,11 +525,10 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
         }
       } else {
         // Writing to y-1
-        if (it->x[1] == 0) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] -= 1;
-          fa_ghosty_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        // Local coordinates here
+        if (it->x[1] == (Snap::ny_per_chunk-1)) {
+          // Write out on our own region
+          fa_ghosty_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psij, angle_buffer_size);
         } else {
           // Write to the local set
@@ -541,11 +539,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       // Z ghost
       if (stride_z_positive) {
         // Writing to z+1
-        if (it->x[2] == (Snap::nz-1)) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] += 1;
-          fa_ghostz_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        if (it->x[2] == (Snap::nz_per_chunk-1)) {
+          // Write out on our own region
+          fa_ghostz_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psik, angle_buffer_size);
         } else {
           // Write to the local set
@@ -553,11 +549,11 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           psik = (double*)malloc(angle_buffer_size);
         }
       } else {
-        if (it->x[2] == 0) {
-          // Write to the ghost cell region
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] -= 1;
-          fa_ghostz_out.write_untyped(DomainPoint::from_point<3>(ghost_point),
+        // Writing to z-1
+        // Local coordinates here
+        if (it->x[2] == (Snap::nz_per_chunk-1)) {
+          // Write out on our own region
+          fa_ghostz_out.write_untyped(DomainPoint::from_point<3>(local_point),
                                       psik, angle_buffer_size);
         } else {
           // Write to the local set

@@ -284,6 +284,9 @@ public:
   static bool single_angle_copy; // originally angcpy
 public: // derived
   static int num_corners; // orignally ncor
+  static int nx_per_chunk;
+  static int ny_per_chunk;
+  static int nz_per_chunk;
   // Indexed by wavefront number and the point number
   static std::vector<std::vector<DomainPoint> > wavefront_map[8];
   // Assume all chunks are the same size, original SNAP assumes this too
