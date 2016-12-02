@@ -483,7 +483,7 @@ void Snap::transport_solve(void)
       save_fluxes(outer_pred, flux0, flux0po);
       // Do the inner solve
       inner_converged_tests.clear();
-      Predicate inner_pred = Predicate::TRUE_PRED;
+      Predicate inner_pred = outer_pred;
       Future inner_converged;
       // The inner solve loop
       for (int inno=0; inno < max_inner_iters; ++inno)
@@ -494,7 +494,7 @@ void Snap::transport_solve(void)
         inner_src.dispatch(ctx, runtime);
         // Save the fluxes
         save_fluxes(inner_pred, flux0, flux0pi);
-        flux0.initialize();
+        flux0.initialize(inner_pred);
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
                        even_time_step ? time_flux_even : time_flux_odd,
@@ -1510,7 +1510,7 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 }
 
 //------------------------------------------------------------------------------
-void SnapArray::initialize(void) const
+void SnapArray::initialize(Predicate pred) const
 //------------------------------------------------------------------------------
 {
   assert(!regular_fields.empty());
@@ -1519,7 +1519,7 @@ void SnapArray::initialize(void) const
                                               *(regular_fields.begin()));
   void *buffer = malloc(field_size);
   memset(buffer, 0, field_size);
-  FillLauncher launcher(lr, lr, TaskArgument(buffer, field_size));
+  FillLauncher launcher(lr, lr, TaskArgument(buffer, field_size), pred);
   launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
   free(buffer);
@@ -1527,10 +1527,10 @@ void SnapArray::initialize(void) const
 
 //------------------------------------------------------------------------------
 template<typename T>
-void SnapArray::initialize(T value) const
+void SnapArray::initialize(T value, Predicate pred) const
 //------------------------------------------------------------------------------
 {
-  FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)));
+  FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)), pred);
   launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
 }

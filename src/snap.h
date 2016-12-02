@@ -466,9 +466,9 @@ public:
     { return regular_fields; }
   LogicalRegion get_subregion(const DomainPoint &color) const;
 public:
-  void initialize(void) const;
+  void initialize(Predicate pred = Predicate::TRUE_PRED) const;
   template<typename T>
-  void initialize(T value) const;
+  void initialize(T value, Predicate pred = Predicate::TRUE_PRED) const;
   PhysicalRegion map(void) const;
   void unmap(const PhysicalRegion &region) const;
 public:
