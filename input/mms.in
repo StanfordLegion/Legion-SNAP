@@ -14,11 +14,11 @@
   lz=0.6
   nmom=1
   nang=10
-  ng=4
+  ng=1
   epsi=1.0E-4
   iitm=5
   oitm=30
-  timedep=0
+  timedep=1
   tf=1.0
   nsteps=1
   mat_opt=0

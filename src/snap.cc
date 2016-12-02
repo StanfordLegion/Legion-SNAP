@@ -384,7 +384,7 @@ void Snap::transport_solve(void)
     InitMaterial init_material(*this, mat);
     init_material.dispatch(ctx, runtime);
   }
-  if (!do_mms && (source_layout != EVERYWHERE_SOURCE))
+  if (!do_mms)
   {
     InitSource init_source(*this, qi);
     init_source.dispatch(ctx, runtime);

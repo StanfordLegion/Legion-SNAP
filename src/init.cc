@@ -135,6 +135,8 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 
   switch (Snap::source_layout)
   {
+    case Snap::EVERYWHERE_SOURCE:
+      break;
     case Snap::CENTER_SOURCE:
       {
         i1 = nx_gl / 4 + 1;
