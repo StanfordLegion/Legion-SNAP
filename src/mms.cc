@@ -82,12 +82,12 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
-  double *tx = (double*)malloc(Snap::nx * sizeof(double));
-  double *ty = (double*)malloc(Snap::ny * sizeof(double));
-  double *tz = (double*)malloc(Snap::nz * sizeof(double));
-  double *ib = (double*)malloc((Snap::nx+1) * sizeof(double));
-  double *jb = (double*)malloc((Snap::ny+1) * sizeof(double));
-  double *kb = (double*)malloc((Snap::nz+1) * sizeof(double));
+  double *tx = (double*)malloc(Snap::nx_per_chunk * sizeof(double));
+  double *ty = (double*)malloc(Snap::ny_per_chunk * sizeof(double));
+  double *tz = (double*)malloc(Snap::nz_per_chunk * sizeof(double));
+  double *ib = (double*)malloc((Snap::nx_per_chunk+1) * sizeof(double));
+  double *jb = (double*)malloc((Snap::ny_per_chunk+1) * sizeof(double));
+  double *kb = (double*)malloc((Snap::nz_per_chunk+1) * sizeof(double));
 
   const double a = PI / Snap::lx;
   const double b = PI / Snap::ly;
@@ -96,28 +96,28 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
   const double dy = Snap::ly / double(Snap::ny);
   const double dz = Snap::lz / double(Snap::nz);
   ib[0] = subgrid_bounds.lo[0] * dx;
-  for (int i = 1; i <= Snap::nx; i++)
+  for (int i = 1; i <= Snap::nx_per_chunk; i++)
     ib[i] = ib[i-1] + dx;
   jb[0] = subgrid_bounds.lo[1] * dy;
-  for (int j = 1; j <= Snap::ny; j++)
+  for (int j = 1; j <= Snap::ny_per_chunk; j++)
     jb[j] = jb[j-1] + dx;
   kb[0] = subgrid_bounds.lo[2] * dz;
-  for (int k = 1; k <= Snap::nz; k++)
+  for (int k = 1; k <= Snap::nz_per_chunk; k++)
     kb[k] = kb[k-1] + dx;
 
-  mms_trigint<true/*COS*/>(Snap::nx, a, dx, ib, tx);
+  mms_trigint<true/*COS*/>(Snap::nx_per_chunk, a, dx, ib, tx);
   if (Snap::num_dims > 1) {
-    mms_trigint<true/*COS*/>(Snap::ny, b, dy, jb, ty);
+    mms_trigint<true/*COS*/>(Snap::ny_per_chunk, b, dy, jb, ty);
     if (Snap::num_dims > 2) {
-      mms_trigint<true/*COS*/>(Snap::nz, c, dz, kb, tz);
+      mms_trigint<true/*COS*/>(Snap::nz_per_chunk, c, dz, kb, tz);
     } else {
-      for (int k = 0; k < Snap::nz; k++)
+      for (int k = 0; k < Snap::nz_per_chunk; k++)
         tz[k] = 1.0;
     }
   } else {
-    for (int j = 0; j < Snap::ny; j++)
+    for (int j = 0; j < Snap::ny_per_chunk; j++)
       ty[j] = 1.0;
-    for (int k = 0; k < Snap::nz; k++)
+    for (int k = 0; k < Snap::nz_per_chunk; k++)
       tz[k] = 1.0;
   }
 
@@ -130,11 +130,11 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
       regions[0].get_field_accessor(*it).typeify<double>();
     for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {    
       int i = itr.p[0] - subgrid_bounds.lo[0];
-      assert(i < Snap::nx);
+      assert(i < Snap::nx_per_chunk);
       int j = itr.p[1] - subgrid_bounds.lo[1];
-      assert(j < Snap::ny);
+      assert(j < Snap::ny_per_chunk);
       int k = itr.p[2] - subgrid_bounds.lo[2];
-      assert(k < Snap::nz);
+      assert(k < Snap::nz_per_chunk);
       double value = (double(g) * tx[i] * ty[j] * tz[k]);
       fa_flux.write(DomainPoint::from_point<3>(itr.p), value);
     }
@@ -223,49 +223,49 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
   const double dy = Snap::ly / double(Snap::ny);
   const double dz = Snap::lz / double(Snap::nz);
 
-  double *ib = (double*)malloc((Snap::nx+1) * sizeof(double));
-  double *jb = (double*)malloc((Snap::ny+1) * sizeof(double));
-  double *kb = (double*)malloc((Snap::nz+1) * sizeof(double));
+  double *ib = (double*)malloc((Snap::nx_per_chunk+1) * sizeof(double));
+  double *jb = (double*)malloc((Snap::ny_per_chunk+1) * sizeof(double));
+  double *kb = (double*)malloc((Snap::nz_per_chunk+1) * sizeof(double));
 
   ib[0] = subgrid_bounds.lo[0] * dx;
-  for (int i = 1; i <= Snap::nx; i++)
+  for (int i = 1; i <= Snap::nx_per_chunk; i++)
     ib[i] = ib[i-1] + dx;
   jb[0] = subgrid_bounds.lo[1] * dy;
-  for (int j = 1; j <= Snap::ny; j++)
+  for (int j = 1; j <= Snap::ny_per_chunk; j++)
     jb[j] = jb[j-1] + dx;
   kb[0] = subgrid_bounds.lo[2] * dz;
-  for (int k = 1; k <= Snap::nz; k++)
+  for (int k = 1; k <= Snap::nz_per_chunk; k++)
     kb[k] = kb[k-1] + dx; 
 
-  double *cx = (double*)malloc(Snap::nx * sizeof(double));
-  double *sx = (double*)malloc(Snap::nx * sizeof(double));
-  double *cy = (double*)malloc(Snap::ny * sizeof(double));
-  double *sy = (double*)malloc(Snap::ny * sizeof(double));
-  double *cz = (double*)malloc(Snap::nz * sizeof(double));
-  double *sz = (double*)malloc(Snap::nz * sizeof(double));
+  double *cx = (double*)malloc(Snap::nx_per_chunk * sizeof(double));
+  double *sx = (double*)malloc(Snap::nx_per_chunk * sizeof(double));
+  double *cy = (double*)malloc(Snap::ny_per_chunk * sizeof(double));
+  double *sy = (double*)malloc(Snap::ny_per_chunk * sizeof(double));
+  double *cz = (double*)malloc(Snap::nz_per_chunk * sizeof(double));
+  double *sz = (double*)malloc(Snap::nz_per_chunk * sizeof(double));
   
-  mms_trigint<true/*COS*/>(Snap::nx, a, dx, ib, cx);
-  mms_trigint<false/*SIN*/>(Snap::nx, a, dx, ib, sx);
+  mms_trigint<true/*COS*/>(Snap::nx_per_chunk, a, dx, ib, cx);
+  mms_trigint<false/*SIN*/>(Snap::nx_per_chunk, a, dx, ib, sx);
   if (Snap::num_dims > 1) {
-    mms_trigint<true/*COS*/>(Snap::ny, b, dy, jb, cy);
-    mms_trigint<false/*SIN*/>(Snap::ny, b, dy, jb, sy);
+    mms_trigint<true/*COS*/>(Snap::ny_per_chunk, b, dy, jb, cy);
+    mms_trigint<false/*SIN*/>(Snap::ny_per_chunk, b, dy, jb, sy);
     if (Snap::num_dims > 2) {
-      mms_trigint<true/*COS*/>(Snap::nz, c, dz, kb, cz);
-      mms_trigint<false/*SIN*/>(Snap::nz, c, dz, kb, sz);
+      mms_trigint<true/*COS*/>(Snap::nz_per_chunk, c, dz, kb, cz);
+      mms_trigint<false/*SIN*/>(Snap::nz_per_chunk, c, dz, kb, sz);
     } else {
-      for (int k = 0; k < Snap::nz; k++)
+      for (int k = 0; k < Snap::nz_per_chunk; k++)
         cz[k] = 1.0;
-      for (int k = 0; k < Snap::nz; k++)
+      for (int k = 0; k < Snap::nz_per_chunk; k++)
         sz[k] = 0.0;
     }
   } else {
-    for (int j = 0; j < Snap::ny; j++)
+    for (int j = 0; j < Snap::ny_per_chunk; j++)
       cy[j] = 1.0;
-    for (int j = 0; j < Snap::ny; j++)
+    for (int j = 0; j < Snap::ny_per_chunk; j++)
       sy[j] = 0.0;
-    for (int k = 0; k < Snap::nz; k++)
+    for (int k = 0; k < Snap::nz_per_chunk; k++)
       cz[k] = 1.0;
-    for (int k = 0; k < Snap::nz; k++)
+    for (int k = 0; k < Snap::nz_per_chunk; k++)
       sz[k] = 0.0;
   }
 

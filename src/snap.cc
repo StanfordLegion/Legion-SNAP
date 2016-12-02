@@ -43,10 +43,11 @@ void Snap::setup(void)
   // implementation because it makes a lot of indexing look 1-based. This
   // has virtually no overhead cause making overly large logical regions
   // doesn't result in any memory allocation.
-  const int upper[3] = { (nx_chunks+2)*nx_per_chunk - 1,
-                         (ny_chunks+2)*ny_per_chunk - 1,
-                         (nz_chunks+2)*nz_per_chunk - 1 };
-  simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
+  const int lower[3] = { -nx_per_chunk, -ny_per_chunk, -nz_per_chunk };
+  const int upper[3] = { (nx_chunks+1)*nx_per_chunk - 1,
+                         (ny_chunks+1)*ny_per_chunk - 1,
+                         (nz_chunks+1)*nz_per_chunk - 1 };
+  simulation_bounds = Rect<3>(Point<3>(lower), Point<3>(upper));
   simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   runtime->attach_name(simulation_is, "Simulation Space");
@@ -61,9 +62,10 @@ void Snap::setup(void)
   // Launch bounds though ignore the boundary condition chunks
   // so they start at 1 and go to number of chunks, just like Fortran!
   const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
-  launch_bounds = Rect<3>(Point<3>::ONES(), Point<3>(chunks)); 
+  launch_bounds = Rect<3>(Point<3>::ZEROES(), 
+                          Point<3>(chunks) - Point<3>::ONES()); 
   // Create the ghost partitions for each subregion
-  Rect<3> color_space(Point<3>::ZEROES(), Point<3>(chunks) + Point<3>::ONES());
+  Rect<3> color_space(-Point<3>::ONES(), Point<3>(chunks));
   const char *ghost_names[3] = 
     { "Ghost X Partition", "Ghost Y Partition", "Ghost Z Partition" };
   for (GenericPointInRectIterator<3> itr(color_space); itr; itr++)
@@ -174,7 +176,7 @@ void Snap::setup(void)
             for (int dim = 0; dim < num_dims; dim++)
             {
               snprintf(name_buffer,63,"%s Even Flux for Corner %d of Group %d",
-                  ghost_field_names[dim], corner, dim);
+                  ghost_field_names[dim], corner, group);
               runtime->attach_name(group_and_ghost_fs, 
                                    ghost_fields[next++], name_buffer);
             }
@@ -184,7 +186,7 @@ void Snap::setup(void)
             for (int dim = 0; dim < num_dims; dim++)
             {
               snprintf(name_buffer,63,"%s Odd Flux for Corner %d of Group %d",
-                  ghost_field_names[dim], corner, dim);
+                  ghost_field_names[dim], corner, group);
               runtime->attach_name(group_and_ghost_fs, 
                                    ghost_fields[next++], name_buffer);
             }
@@ -1083,7 +1085,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     Point<3> start;
     for (int i = 0; i < num_dims; i++)
     {
-      start.x[i] = ((corner & (0x1 << i)) ? chunks[i] : 1);
+      start.x[i] = ((corner & (0x1 << i)) ? chunks[i]-1 : 0);
       strides[i].x[i] = ((corner & (0x1 << i)) ? -1 : 1);
     }
     std::set<DomainPoint> current_points;

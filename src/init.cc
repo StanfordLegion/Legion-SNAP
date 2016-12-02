@@ -49,15 +49,15 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
   {
     case Snap::CENTER_LAYOUT:
       {
-        const int nx_gl = Snap::nx * Snap::nx_chunks;
+        const int nx_gl = Snap::nx;
         i1 = nx_gl / 4 + 1;
         i2 = 3 * nx_gl / 4;
         if (Snap::num_dims > 1) {
-          const int ny_gl = Snap::ny * Snap::ny_chunks;
+          const int ny_gl = Snap::ny;
           j1 = ny_gl/ 4 + 1;
           j2 = 3 * ny_gl / 4;
           if (Snap::num_dims > 2) {
-            const int nz_gl = Snap::nz * Snap::nz_chunks;
+            const int nz_gl = Snap::nz;
             k1 = nz_gl / 4 + 1;
             k2 = 3 * nz_gl / 4;
           }
@@ -66,13 +66,13 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
       }
     case Snap::CORNER_LAYOUT:
       {
-        const int nx_gl = Snap::nx * Snap::nx_chunks;
+        const int nx_gl = Snap::nx;
         i2 = nx_gl / 2;
         if (Snap::num_dims > 1) {
-          const int ny_gl = Snap::ny * Snap::ny_chunks;
+          const int ny_gl = Snap::ny;
           j2 = ny_gl / 2;
           if (Snap::num_dims > 2) {
-            const int nz_gl = Snap::nz * Snap::nz_chunks;
+            const int nz_gl = Snap::nz;
             k2 = nz_gl / 2;
           }
         }
@@ -127,9 +127,9 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 #ifndef NO_COMPUTE
   log_snap.print("Running Init Source");
 
-  const int nx_gl = Snap::nx * Snap::nx_chunks;
-  const int ny_gl = Snap::ny * Snap::ny_chunks;
-  const int nz_gl = Snap::nz * Snap::nz_chunks;
+  const int nx_gl = Snap::nx;
+  const int ny_gl = Snap::ny;
+  const int nz_gl = Snap::nz;
 
   int i1 = 1, i2 = nx_gl, j1 = 1, j2 = ny_gl, k1 = 1, k2 = nz_gl;
 
