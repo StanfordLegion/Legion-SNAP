@@ -18,6 +18,7 @@
 
 #include "legion.h"
 #include "default_mapper.h"
+#include "snap_types.h"
 
 #include <cmath>
 #include <cstdio>
@@ -591,28 +592,6 @@ public:
 public:
   template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
-};
-
-struct MomentTriple {
-public:
-  MomentTriple(double x = 0.0, double y = 0.0, double z = 0.0)
-    { vals[0] = x; vals[1] = y; vals[2] = z; }
-public:
-  double& operator[](const int index) { return vals[index]; }
-  const double& operator[](const int index) const { return vals[index]; }
-public:
-  double vals[3];
-};
-
-struct MomentQuad {
-public:
-  MomentQuad(double x = 0.0, double y = 0.0, double z = 0.0, double w = 0.0)
-    { vals[0] = x; vals[1] = y; vals[2] = z; vals[3] = w; }
-public:
-  double& operator[](const int index) { return vals[index]; }
-  const double& operator[](const int index) const { return vals[index]; }
-public:
-  double vals[4];
 };
 
 class QuadReduction {

@@ -310,9 +310,9 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
                   continue;
                 int moment = 0;
                 MomentTriple csm;
-                for (int l = 1; l < Snap::num_moments; l++) {
-                  MomentQuad scat = *(slgg_ptrs[g1] + 
+                MomentQuad scat = *(slgg_ptrs[g1] + 
                       mat * slgg_offsets[0] + g2 * slgg_offsets[1]);
+                for (int l = 1; l < Snap::num_moments; l++) {
                   for (int j = 0; j < Snap::lma[l]; j++)
                     csm[moment+j] = scat[l];
                   moment += Snap::lma[l];
