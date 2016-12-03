@@ -28,7 +28,7 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
-#define MINI_KBA_NON_GHOST_REQUIREMENTS   10
+#define MINI_KBA_NON_GHOST_REQUIREMENTS   11
 
 #ifndef PI
 #define PI (3.14159265358979)
@@ -215,7 +215,7 @@ protected:
                       const SnapArray &fluxm, const SnapArray &qtot, 
                       const SnapArray &vdelt, const SnapArray &dinv, 
                       const SnapArray &t_xs, SnapArray *time_flux_in[8], 
-                      SnapArray *time_flux_out[8]) const;
+                      SnapArray *time_flux_out[8], SnapArray *qim[8]) const;
 private:
   const Context ctx;
   Runtime *const runtime;

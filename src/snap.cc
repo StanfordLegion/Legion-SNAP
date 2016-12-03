@@ -498,7 +498,7 @@ void Snap::transport_solve(void)
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
                        even_time_step ? time_flux_even : time_flux_odd,
-                       even_time_step ? time_flux_odd : time_flux_even); 
+                       even_time_step ? time_flux_odd : time_flux_even, qim); 
         // Test for inner convergence
         TestInnerConvergence inner_conv(*this, inner_pred, 
                                         flux0, flux0pi, true_future);
@@ -786,7 +786,8 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
                           const SnapArray &fluxm, const SnapArray &qtot, 
                           const SnapArray &vdelt, const SnapArray &dinv, 
                           const SnapArray &t_xs, SnapArray *time_flux_in[8],
-                          SnapArray *time_flux_out[8]) const
+                          SnapArray *time_flux_out[8],
+                          SnapArray *qim[8]) const
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
@@ -807,11 +808,11 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, fluxm, 
                                 qtot, vdelt, dinv, t_xs, 
                                 *time_flux_in[corner], *time_flux_out[corner],
-                                group, corner, ghost_offsets);
+                                *qim[corner], group, corner, ghost_offsets);
       MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, fluxm,
                                 qtot, vdelt, dinv, t_xs,
                                 *time_flux_in[corner], *time_flux_out[corner],
-                                group, corner, ghost_offsets);
+                                *qim[corner], group, corner, ghost_offsets);
       bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
       {
@@ -1013,7 +1014,9 @@ int Snap::lma[4];
   read_int(f, "kplane", dump_kplane);
   read_int(f, "popout", dump_population);
   read_bool(f, "swp_typ", minikba_sweep);
-  read_bool(f, "angcpy", single_angle_copy);
+  int angle_copies;
+  read_int(f, "angcpy", angle_copies);
+  single_angle_copy = (angle_copies == 1);
   if (single_angle_copy)
   {
     printf("ERROR: angcpy=1 is not currently supported.\n");
@@ -1085,8 +1088,8 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     Point<3> start;
     for (int i = 0; i < num_dims; i++)
     {
-      start.x[i] = ((corner & (0x1 << i)) ? chunks[i]-1 : 0);
-      strides[i].x[i] = ((corner & (0x1 << i)) ? -1 : 1);
+      start.x[i] = ((corner & (0x1 << i)) ? 0 : chunks[i]-1);
+      strides[i].x[i] = ((corner & (0x1 << i)) ? 1 : -1);
     }
     std::set<DomainPoint> current_points;
     current_points.insert(DomainPoint::from_point<3>(Point<3>(start)));
@@ -1611,7 +1614,7 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
 //------------------------------------------------------------------------------
 SnapGhostProjectionFunctor::SnapGhostProjectionFunctor(int d, int o)
   : ProjectionFunctor(), dim(d), offset(o),
-    color((offset == 0) ? Snap::LO_GHOST : Snap::HI_GHOST), 
+    color((offset == 0) ? Snap::HI_GHOST : Snap::LO_GHOST), 
     stride(get_stride(d,o))
 //------------------------------------------------------------------------------
 {
@@ -1638,7 +1641,7 @@ SnapGhostProjectionFunctor::SnapGhostProjectionFunctor(int d, int o)
 {
   assert(dim < 3);
   int result[3] = { 0, 0, 0 };
-  result[dim] = (offset == 0) ? -1 : 1;
+  result[dim] = (offset == 0) ? 1 : -1;
   return Point<3>(result);
 }
 

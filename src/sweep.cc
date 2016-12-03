@@ -27,6 +27,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                          const SnapArray &dinv, const SnapArray &t_xs,
                          const SnapArray &time_flux_in, 
                          const SnapArray &time_flux_out,
+                         const SnapArray &qim,
                          int group, int corner, const int ghost_offsets[3])
   : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID>(
       snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()), pred), 
@@ -63,6 +64,9 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     flux.add_projection_requirement(WRITE_DISCARD, *this, 
                                     ghost_write, Snap::SWEEP_PROJECTION);
   }
+  qim.add_projection_requirement(
+      (Snap::source_layout == Snap::MMS_SOURCE) ? READ_ONLY : NO_ACCESS, *this,
+                                  group_field, Snap::SWEEP_PROJECTION);
   assert(region_requirements.size() == MINI_KBA_NON_GHOST_REQUIREMENTS);
   // Add our reading ghost regions
   for (int i = 0; i < Snap::num_dims; i++)
@@ -157,6 +161,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
     regions[9].get_field_accessor(
         *(task->regions[9].privilege_fields.begin()));
+  RegionAccessor<AccessorType::Generic> fa_qim = 
+    regions[10].get_field_accessor(
+        *(task->regions[10].privilege_fields.begin()));
   // Input ghost regions
   RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
     regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(
@@ -173,9 +180,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
   // Figure out the origin point based on which corner we are
-  const bool stride_x_positive = ((args->corner & 0x1) == 0);
-  const bool stride_y_positive = ((args->corner & 0x2) == 0);
-  const bool stride_z_positive = ((args->corner & 0x4) == 0);
+  const bool stride_x_positive = ((args->corner & 0x1) != 0);
+  const bool stride_y_positive = ((args->corner & 0x2) != 0);
+  const bool stride_z_positive = ((args->corner & 0x4) != 0);
   const coord_t origin_ints[3] = { 
     (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]),
     (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]),
@@ -245,6 +252,15 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           }
         }
       }
+      // If we're doing MMS, there is an additional term
+      if (Snap::source_layout == Snap::MMS_SOURCE)
+      {
+        fa_qim.read_untyped(DomainPoint::from_point<3>(local_point),
+                            temp_array, angle_buffer_size);
+        for (int ang = 0; ang < Snap::num_angles; ang++)
+          psi[ang] += temp_array[ang];
+      }
+
       // Compute the initial solution
       for (int ang = 0; ang < Snap::num_angles; ang++)
         pc[ang] = psi[ang];

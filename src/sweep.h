@@ -41,6 +41,7 @@ public:
               const SnapArray &dinv, const SnapArray &t_xs, 
               const SnapArray &time_flux_in, 
               const SnapArray &time_flux_out,
+              const SnapArray &qim,
               int group, int corner, const int ghost_offsets[3]);
 public:
   void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
