@@ -123,6 +123,97 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 }
 
 //------------------------------------------------------------------------------
+/*static*/ void CalcInnerSource::fast_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+#ifndef NO_COMPUTE
+  log_snap.print("Running Fast Calc Inner Source");
+
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const bool multi_moment = (Snap::num_moments > 1);
+  const unsigned num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == task->regions[1].privilege_fields.size());
+  assert(num_groups == task->regions[2].privilege_fields.size());
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_sxs = 
+      regions[0].get_field_accessor(*it).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_q2grp0 = 
+      regions[2].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
+      regions[3].get_field_accessor(*it).typeify<MomentQuad>(); 
+
+    ByteOffset sxs_offsets[3], flux0_offsets[3], 
+               q2grp0_offsets[3], qtot_offsets[3];
+    MomentQuad *sxs_ptr = fa_sxs.raw_rect_ptr<3>(sxs_offsets);
+    double *flux0_ptr = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+    double *q2grp0_ptr = fa_q2grp0.raw_rect_ptr<3>(q2grp0_offsets);
+    MomentQuad *qtot_ptr = fa_qtot.raw_rect_ptr<3>(qtot_offsets);
+    if (multi_moment) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[4].get_field_accessor(*it).typeify<MomentTriple>();
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_q2grpm = 
+        regions[5].get_field_accessor(*it).typeify<MomentTriple>();
+
+      ByteOffset fluxm_offsets[3], q2grpm_offsets[3];
+      MomentTriple *fluxm_ptr = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+      MomentTriple *q2grpm_ptr = fa_q2grpm.raw_rect_ptr<3>(q2grpm_offsets);
+      for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
+        for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
+          for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+            MomentQuad sxs_quad = *(sxs_ptr + x * sxs_offsets[0] + 
+                y * sxs_offsets[1] + z * sxs_offsets[2]);
+            const double q0 = *(q2grp0_ptr + x * q2grp0_offsets[0] +
+                y * q2grp0_offsets[1] + z * q2grp0_offsets[2]);
+            const double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
+                y * flux0_offsets[1] + z * flux0_offsets[2]);
+            MomentQuad quad;
+            quad[0] = q0 + flux0 * sxs_quad[0]; 
+            MomentTriple qom = *(q2grpm_ptr + x * q2grpm_offsets[0] + 
+                y * q2grpm_offsets[1] + z * q2grpm_offsets[2]);
+            MomentTriple fluxm = *(fluxm_ptr + x * fluxm_offsets[0] +
+                y * fluxm_offsets[1] + z * fluxm_offsets[2]);
+            int moment = 0;
+            for (int l = 1; l < Snap::num_moments; l++) {
+              for (int i = 0; i < Snap::lma[l]; i++)
+                quad[moment+i+1] = qom[moment+i] + fluxm[moment+i] * sxs_quad[l];
+              moment += Snap::lma[l];
+            }
+            *(qtot_ptr + x * qtot_offsets[0] + y * qtot_offsets[1] + 
+                z * qtot_offsets[2]) = quad;
+          }
+        }
+      }
+    } else {
+      for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
+        for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
+          for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+            MomentQuad sxs_quad = *(sxs_ptr + x * sxs_offsets[0] + 
+                y * sxs_offsets[1] + z * sxs_offsets[2]);
+            const double q0 = *(q2grp0_ptr + x * q2grp0_offsets[0] +
+                y * q2grp0_offsets[1] + z * q2grp0_offsets[2]);
+            const double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
+                y * flux0_offsets[1] + z * flux0_offsets[2]);
+            MomentQuad quad;
+            quad[0] = q0 + flux0 * sxs_quad[0];
+            *(qtot_ptr + x * qtot_offsets[0] + y * qtot_offsets[1] + 
+                z * qtot_offsets[2]) = quad;
+          }
+        }
+      }
+    }
+  }
+#endif
+}
+
+//------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::gpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
@@ -201,6 +292,63 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
       df = fabs( (flux0 / flux0pi) - df );
       if (df > epsi)
         return false;
+    }
+  }
+  return true;
+#else
+  return false;
+#endif
+}
+
+//------------------------------------------------------------------------------
+/*static*/ bool TestInnerConvergence::fast_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+#ifndef NO_COMPUTE
+  log_snap.print("Running Fast Test Inner Convergence");
+
+  // Get the index space domain for iteration
+  assert(task->regions[0].region.get_index_space() == 
+         task->regions[1].region.get_index_space());
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const double tolr = 1.0e-12;
+  const double epsi = Snap::convergence_eps;
+  // Iterate over all the energy groups
+  assert(task->regions[0].privilege_fields.size() == 
+         task->regions[1].privilege_fields.size());
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0pi = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+
+    ByteOffset flux0_offsets[3], flux0pi_offsets[3];
+
+    double *flux0_ptr = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+    double *flux0pi_ptr = fa_flux0pi.raw_rect_ptr<3>(flux0pi_offsets);
+    for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
+      for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
+        for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+          double flux0pi = *(flux0pi_ptr + x * flux0pi_offsets[0] + 
+              y * flux0pi_offsets[1] + z * flux0pi_offsets[2]);
+          double df = 1.0;
+          if (fabs(flux0pi) < tolr) {
+            flux0pi = 1.0;
+            df = 0.0;
+          }
+          double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
+              y * flux0_offsets[1] + z * flux0_offsets[2]);
+          df = fabs( (flux0 / flux0pi) - df );
+          if (df > epsi)
+            return false;
+        }
+      }
     }
   }
   return true;
