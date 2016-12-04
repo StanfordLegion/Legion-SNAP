@@ -213,13 +213,88 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 #endif
 }
 
+#ifdef USE_GPU_KERNELS
+  extern void run_inner_source_single_moment(Rect<3>           subgrid_bounds,
+                                             const MomentQuad  *sxs_ptr,
+                                             const double      *flux0_ptr,
+                                             const double      *q2grp0_ptr,
+                                                   MomentQuad  *qtot_ptr,
+                                             ByteOffset        sxs_offsets[3],
+                                             ByteOffset        flux0_offsets[3],
+                                             ByteOffset        q2grp0_offsets[3],
+                                             ByteOffset        qtot_offsets[3]);
+  extern void run_inner_source_multi_moment(Rect<3> subgrid_bounds,
+                                            const MomentQuad   *sxs_ptr,
+                                            const double       *flux0_ptr,
+                                            const double       *q2grp0_ptr,
+                                            const MomentTriple *fluxm_ptr,
+                                            const MomentTriple *q2grpm_ptr,
+                                                  MomentQuad   *qtot_ptr,
+                                            ByteOffset         sxs_offsets[3],
+                                            ByteOffset         flux0_offsets[3],
+                                            ByteOffset         q2grp0_offsets[3],
+                                            ByteOffset         fluxm_offsets[3],
+                                            ByteOffset         q2grpm_offsets[3],
+                                            ByteOffset         qtot_offsets[3],
+                                            const int num_moments, const int lma[4]);
+#endif
+
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::gpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+#ifdef USE_GPU_KERNELS
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const bool multi_moment = (Snap::num_moments > 1);
+  const unsigned num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == task->regions[1].privilege_fields.size());
+  assert(num_groups == task->regions[2].privilege_fields.size());
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
+  {
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_sxs = 
+      regions[0].get_field_accessor(*it).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_q2grp0 = 
+      regions[2].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
+      regions[3].get_field_accessor(*it).typeify<MomentQuad>(); 
+
+    ByteOffset sxs_offsets[3], flux0_offsets[3], 
+               q2grp0_offsets[3], qtot_offsets[3];
+    MomentQuad *sxs_ptr = fa_sxs.raw_rect_ptr<3>(sxs_offsets);
+    double *flux0_ptr = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+    double *q2grp0_ptr = fa_q2grp0.raw_rect_ptr<3>(q2grp0_offsets);
+    MomentQuad *qtot_ptr = fa_qtot.raw_rect_ptr<3>(qtot_offsets);
+    if (multi_moment) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[4].get_field_accessor(*it).typeify<MomentTriple>();
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_q2grpm = 
+        regions[5].get_field_accessor(*it).typeify<MomentTriple>();
+
+      ByteOffset fluxm_offsets[3], q2grpm_offsets[3];
+      MomentTriple *fluxm_ptr = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+      MomentTriple *q2grpm_ptr = fa_q2grpm.raw_rect_ptr<3>(q2grpm_offsets);
+      run_inner_source_multi_moment(subgrid_bounds, sxs_ptr, flux0_ptr, q2grp0_ptr,
+                                    fluxm_ptr, q2grpm_ptr, qtot_ptr, sxs_offsets,
+                                    flux0_offsets, q2grp0_offsets, fluxm_offsets,
+                                    q2grpm_offsets, qtot_offsets, 
+                                    Snap::num_moments, Snap::lma);
+    } else {
+      run_inner_source_single_moment(subgrid_bounds, sxs_ptr, flux0_ptr, q2grp0_ptr,
+                                     qtot_ptr, sxs_offsets, flux0_offsets, 
+                                     q2grp0_offsets, qtot_offsets);
+    }
+  }
+#else
   assert(false);
+#endif
 #endif
 }
 

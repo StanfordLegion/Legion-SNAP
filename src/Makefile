@@ -38,7 +38,8 @@ GEN_SRC		?= main.cc  \
 		   expxs.cc \
 		   sweep.cc \
 		   mms.cc	# .cc files
-GEN_GPU_SRC	?=		# .cu files
+GEN_GPU_SRC	?= gpu_outer.cu \
+		   gpu_inner.cu	# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
 INC_FLAGS	?=
@@ -46,6 +47,11 @@ CC_FLAGS	?=
 NVCC_FLAGS	?=
 GASNET_FLAGS	?=
 LD_FLAGS	?=
+
+ifeq ($(strip $(USE_CUDA)),1)
+CC_FLAGS	+= -DUSE_GPU_KERNELS
+GPU_ARCH	= kepler
+endif
 
 ###########################################################################
 #

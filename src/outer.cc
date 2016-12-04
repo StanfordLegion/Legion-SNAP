@@ -333,6 +333,24 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 #endif
 }
 
+#ifdef USE_GPU_KERNELS
+  extern void run_flux0_outer_source(Rect<3> subgrid_bounds,
+                            std::vector<double*> &qi0_ptrs,
+                            std::vector<double*> &flux0_ptrs,
+                            std::vector<MomentQuad*> &slgg_ptrs,
+                            std::vector<double*> &qo0_ptrs, int *mat_ptr, 
+                            ByteOffset qi0_offsets[3], ByteOffset flux0_offsets[3],
+                            ByteOffset slgg_offsets[2], ByteOffset qo0_offsets[3],
+                            ByteOffset mat_offsets[3], const int num_groups);
+  extern void run_fluxm_outer_source(Rect<3> subgrid_bounds,
+                            std::vector<MomentTriple*> &fluxm_ptrs,
+                            std::vector<MomentQuad*> &slgg_ptrs,
+                            std::vector<MomentTriple*> &qom_ptrs, int *mat_ptr, 
+                            ByteOffset fluxm_offsets[3], ByteOffset slgg_offsets[2],
+                            ByteOffset mat_offsets[3], ByteOffset qom_offsets[3],
+                            const int num_groups, const int num_moments, const int lma[4]);
+#endif
+
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::gpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -340,8 +358,92 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 {
 #ifndef NO_COMPUTE
   log_snap.print("Running GPU Calc Outer Source");
-  // TODO: Implement GPU kernels
+#ifdef USE_GPU_KERNELS
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const bool multi_moment = (Snap::num_moments > 1);
+  const int num_groups = task->regions[0].privilege_fields.size();
+
+  std::vector<double*> qi0_ptrs(num_groups);
+  std::vector<double*> flux0_ptrs(num_groups);
+  std::vector<MomentQuad*> slgg_ptrs(num_groups);
+  std::vector<double*> qo0_ptrs(num_groups);
+
+  ByteOffset qi0_offsets[3], flux0_offsets[3], slgg_offsets[2], qo0_offsets[3];
+  // Get all our accessors and offsets
+  int g = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_qi0 = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
+      regions[2].get_field_accessor(*it).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic,double> fa_qo0 = 
+      regions[4].get_field_accessor(*it).typeify<double>();
+    if (g == 0) {
+      qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(qi0_offsets);
+      flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
+      qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(qo0_offsets);
+    } else {
+      ByteOffset temp[3];
+      qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(temp);
+      assert(temp == qi0_offsets);
+      flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
+      assert(temp == flux0_offsets);
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
+      assert(temp == slgg_offsets);
+      qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
+      assert(temp == qo0_offsets);
+    }
+  }
+  RegionAccessor<AccessorType::Generic,int> fa_mat = 
+    regions[3].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
+  ByteOffset mat_offsets[3];
+  int *mat_ptr = fa_mat.raw_rect_ptr<3>(mat_offsets);
+
+  run_flux0_outer_source(subgrid_bounds, qi0_ptrs, flux0_ptrs, slgg_ptrs, 
+                         qo0_ptrs, mat_ptr, qi0_offsets, flux0_offsets,
+                         slgg_offsets, qo0_offsets, mat_offsets, num_groups);
+
+  if (multi_moment) {
+    std::vector<MomentTriple*> fluxm_ptrs(num_groups);
+    std::vector<MomentTriple*> qom_ptrs(num_groups);
+
+    ByteOffset fluxm_offsets[3], qom_offsets[3];
+
+    int g = 0;
+    for (std::set<FieldID>::const_iterator it = 
+          task->regions[5].privilege_fields.begin(); it !=
+          task->regions[5].privilege_fields.end(); it++, g++)
+    {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[5].get_field_accessor(*it).typeify<MomentTriple>();
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_qom = 
+        regions[6].get_field_accessor(*it).typeify<MomentTriple>();
+      if (g == 0) {
+        fluxm_ptrs[g] = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+        qom_ptrs[g] = fa_qom.raw_rect_ptr<3>(qom_offsets);
+      } else {
+        ByteOffset temp[3];
+        fluxm_ptrs[g] = fa_fluxm.raw_rect_ptr<3>(temp);
+        assert(temp == fluxm_offsets);
+        qom_ptrs[g] = fa_qom.raw_rect_ptr<3>(temp);
+        assert(temp == qom_offsets);
+      }
+    }
+    run_fluxm_outer_source(subgrid_bounds, fluxm_ptrs, slgg_ptrs, qom_ptrs,
+                           mat_ptr, fluxm_offsets, slgg_offsets, mat_offsets,
+                           qom_offsets, num_groups, Snap::num_moments, Snap::lma);
+  }
+#else
   assert(false);
+#endif
 #endif
 }
 

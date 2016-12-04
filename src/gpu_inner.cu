@@ -26,11 +26,14 @@ void gpu_inner_source_single_moment(const MomentQuad  *sxs_ptr,
                                     ByteOffset        sxs_offsets[3],
                                     ByteOffset        flux0_offsets[3],
                                     ByteOffset        q2grp0_offsets[3],
-                                    ByteOffset        qtot_offsets[3])
+                                    ByteOffset        qtot_offsets[3],
+                                    const int         start_x,
+                                    const int         start_y,
+                                    const int         start_z)
 {
-  const int x = blockIdx.x * blockDim.x + threadIdx.x;
-  const int y = blockIdx.y * blockDim.y + threadIdx.y;
-  const int z = blockIdx.z * blockDim.z + threadIdx.z;
+  const int x = blockIdx.x * blockDim.x + threadIdx.x + start_x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y + start_y;
+  const int z = blockIdx.z * blockDim.z + threadIdx.z + start_z;
   // Straight up data parallel so nothing interesting to do
   sxs_ptr += x * sxs_offsets[0] + y * sxs_offsets[1] + z * sxs_offsets[2];
   MomentQuad sxs_quad = *sxs_ptr;
@@ -48,6 +51,36 @@ void gpu_inner_source_single_moment(const MomentQuad  *sxs_ptr,
   *qtot_ptr = quad;
 }
 
+__host__
+void run_inner_source_single_moment(Rect<3>           subgrid_bounds,
+                                    const MomentQuad  *sxs_ptr,
+                                    const double      *flux0_ptr,
+                                    const double      *q2grp0_ptr,
+                                          MomentQuad  *qtot_ptr,
+                                    ByteOffset        sxs_offsets[3],
+                                    ByteOffset        flux0_offsets[3],
+                                    ByteOffset        q2grp0_offsets[3],
+                                    ByteOffset        qtot_offsets[3])
+{
+  const int x_start = subgrid_bounds.lo[0];
+  const int y_start = subgrid_bounds.lo[1];
+  const int z_start = subgrid_bounds.lo[2];
+  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
+  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
+  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  assert((x_range % 8) == 0);
+  assert((y_range % 8) == 0);
+  assert((z_range % 4) == 0);
+
+  dim3 block(8,8,4);
+  dim3 grid(x_range/8, y_range/8, z_range/4);
+  gpu_inner_source_single_moment<<<grid,block>>>(sxs_ptr, flux0_ptr,
+                                                 q2grp0_ptr, qtot_ptr, 
+                                                 sxs_offsets, flux0_offsets, 
+                                                 q2grp0_offsets, qtot_offsets, 
+                                                 x_start, y_start, z_start);
+}
+
 __global__
 void gpu_inner_source_multi_moment(const MomentQuad   *sxs_ptr,
                                    const double       *flux0_ptr,
@@ -61,11 +94,13 @@ void gpu_inner_source_multi_moment(const MomentQuad   *sxs_ptr,
                                    ByteOffset         fluxm_offsets[3],
                                    ByteOffset         q2grpm_offsets[3],
                                    ByteOffset         qtot_offsets[3],
-                                   const int num_moments, const int lma[4])
+                                   const int num_moments, const int lma[4],
+                                   const int start_x, const int start_y,
+                                   const int start_z)
 {
-  const int x = blockIdx.x * blockDim.x + threadIdx.x;
-  const int y = blockIdx.y * blockDim.y + threadIdx.y;
-  const int z = blockIdx.z * blockDim.z + threadIdx.z;
+  const int x = blockIdx.x * blockDim.x + threadIdx.x + start_x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y + start_y;
+  const int z = blockIdx.z * blockDim.z + threadIdx.z + start_z;
   // Straight up data parallel so nothing interesting to do
   sxs_ptr += x * sxs_offsets[0] + y * sxs_offsets[1] + z * sxs_offsets[2];
   MomentQuad sxs_quad = *sxs_ptr;
@@ -96,21 +131,59 @@ void gpu_inner_source_multi_moment(const MomentQuad   *sxs_ptr,
   *qtot_ptr = quad;
 }
 
+__host__
+void run_inner_source_multi_moment(Rect<3> subgrid_bounds,
+                                   const MomentQuad   *sxs_ptr,
+                                   const double       *flux0_ptr,
+                                   const double       *q2grp0_ptr,
+                                   const MomentTriple *fluxm_ptr,
+                                   const MomentTriple *q2grpm_ptr,
+                                         MomentQuad   *qtot_ptr,
+                                   ByteOffset         sxs_offsets[3],
+                                   ByteOffset         flux0_offsets[3],
+                                   ByteOffset         q2grp0_offsets[3],
+                                   ByteOffset         fluxm_offsets[3],
+                                   ByteOffset         q2grpm_offsets[3],
+                                   ByteOffset         qtot_offsets[3],
+                                   const int num_moments, const int lma[4])
+{
+  const int x_start = subgrid_bounds.lo[0];
+  const int y_start = subgrid_bounds.lo[1];
+  const int z_start = subgrid_bounds.lo[2];
+  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
+  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
+  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  assert((x_range % 8) == 0);
+  assert((y_range % 8) == 0);
+  assert((z_range % 4) == 0);
+
+  dim3 block(8,8,4);
+  dim3 grid(x_range/8, y_range/8, z_range/4);
+  gpu_inner_source_multi_moment<<<grid,block>>>(sxs_ptr, flux0_ptr, q2grp0_ptr, 
+                                                fluxm_ptr, q2grpm_ptr, qtot_ptr, 
+                                                sxs_offsets, flux0_offsets,
+                                                q2grp0_offsets, fluxm_offsets, 
+                                                q2grpm_offsets, qtot_offsets, 
+                                                num_moments, lma, x_start,
+                                                y_start, z_start);
+}
+
 __global__
 void gpu_inner_convergence(const double *flux0_ptr, const double *flux0pi_ptr,
                            ByteOffset flux0_offsets[3],
                            ByteOffset flux0pi_offsets[3],
-                           const double epsi, int *total_converged)
+                           const double epsi, int *total_converged,
+                           const int start_x, const int start_y, const int start_z)
 {
   // We know there is never more than 32 warps in a CTA
   __shared__ int trampoline[32];
 
-  flux0_ptr += (blockIdx.x * blockDim.x + threadIdx.x) * flux0_offsets[0] + 
-    (blockIdx.y * blockDim.y + threadIdx.y) * flux0_offsets[1] + 
-    (blockIdx.z * blockDim.z + threadIdx.z) * flux0_offsets[2];
-  flux0pi_ptr += (blockIdx.x * blockDim.x + threadIdx.x) * flux0pi_offsets[0] +
-    (blockIdx.y * blockDim.y + threadIdx.y) * flux0pi_offsets[1] + 
-    (blockIdx.z * blockDim.z + threadIdx.z) * flux0pi_offsets[2];
+  const int x = blockIdx.x * blockDim.x + threadIdx.x + start_x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y + start_y;
+  const int z = blockIdx.z * blockDim.z + threadIdx.z + start_z;
+
+  flux0_ptr += x * flux0_offsets[0] + y * flux0_offsets[1] + z * flux0_offsets[2];
+  flux0pi_ptr += x * flux0pi_offsets[0] + y * flux0pi_offsets[1] + z * flux0pi_offsets[2];
 
   const double tolr = 1.0e-12;
 
