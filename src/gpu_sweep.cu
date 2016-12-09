@@ -13,17 +13,62 @@
  * limitations under the License.
  */
 
+#include <cstdio>
+
 #include "snap_types.h"
 #include "accessor.h"
 
 using namespace LegionRuntime::Accessor;
 
-// Assume no more than 2K angles
-__device__ double device_ec[2048* 4 * 8];
-__device__ double device_mu[2048];
-__device__ double device_eta[2048];
-__device__ double device_xi[2048];
-__device__ double device_w[2048];
+// Some bounds for use of GPU kernels, can be modified easily
+// Be careful about memory usage
+#define MAX_ANGLES  1024
+#define MAX_X_CHUNK 16
+#define MAX_Y_CHUNK 16
+
+// If you change MAX_CTA you should also adjust the mapper
+// to properly chunk the sweeps for the number of buffers
+#define MAX_CTA      32 // Only GP100 has more than 32 concurrent kernels
+
+// Create the planes and pencils for doing the sweeps
+__device__ double yflux_pencils[MAX_CTA][MAX_X_CHUNK][MAX_ANGLES];
+__device__ double zflux_planes[MAX_CTA][MAX_Y_CHUNK][MAX_Y_CHUNK][MAX_ANGLES];
+
+// Don't use the __constant__ qualifier here!
+// Each thread in a warp will be indexing on
+// a per angle basis and we don't want replays
+// when they don't all hit the same constant index
+__device__ double device_ec[8/*corners*/*4/*moments*/*MAX_ANGLES];
+__device__ double device_mu[MAX_ANGLES];
+__device__ double device_eta[MAX_ANGLES];
+__device__ double device_xi[MAX_ANGLES];
+__device__ double device_w[MAX_ANGLES];
+
+__host__
+void initialize_gpu_context(const double *ec_h, const double *mu_h,
+                            const double *eta_h, const double *xi_h,
+                            const double *w_h, const int num_angles,
+                            const int num_moments, const int num_octants,
+                            const int nx_per_chunk, const int ny_per_chunk)
+{
+  // Check the bounds first
+  if (num_angles > MAX_ANGLES)
+    printf("ERROR: adjust MAX_ANGLES in gpu_sweep.cu to %d", num_angles);
+  assert(num_angles <= MAX_ANGLES);
+  if (nx_per_chunk > MAX_X_CHUNK)
+    printf("ERROR: adjust MAX_X_CHUNK in gpu_sweep.cu to %d", nx_per_chunk);
+  assert(nx_per_chunk <= MAX_X_CHUNK);
+  if (ny_per_chunk > MAX_Y_CHUNK)
+    printf("ERROR: adjust MAX_Y_CHUNK in gpu_sweep.cu to %d", ny_per_chunk);
+  assert(ny_per_chunk <= MAX_Y_CHUNK);
+  
+  cudaMemcpyToSymbol(device_ec, ec_h, 
+                     num_angles * num_moments * num_octants * sizeof(double));
+  cudaMemcpyToSymbol(device_mu, mu_h, num_angles * sizeof(double));
+  cudaMemcpyToSymbol(device_eta, eta_h, num_angles * sizeof(double));
+  cudaMemcpyToSymbol(device_xi, xi_h, num_angles * sizeof(double));
+  cudaMemcpyToSymbol(device_w, w_h, num_angles * sizeof(double));
+}
 
 __device__ __forceinline__
 ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
@@ -103,8 +148,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                          const int num_moments, 
                                          const double hi, const double hj,
                                          const double hk, const double vdelt,
-                                         double *yflux_pencil,
-                                         double *zflux_plane)
+                                         const int cta_chunk)
 {
   __shared__ int int_trampoline[32];
   __shared__ double double_trampoline[32];
@@ -223,7 +267,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from y+1
@@ -240,7 +284,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -259,10 +303,9 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from z+1
@@ -277,10 +320,9 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -420,10 +462,9 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                         local_point, ang, psij[ang]);
         } else {
           // Write to the pencil
-          const int offset = x * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencil[offset + ang * blockDim.x + threadIdx.x] = psij[ang]; 
+            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -432,10 +473,9 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             angle_write(ghostz_out_ptr, ghostz_out_offsets,
                         local_point, ang, psik[ang]);
         } else {
-          const int offset = (y * x_range + x) * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_plane[offset + ang * blockDim.x + threadIdx.x] = psik[ang];
+            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -543,8 +583,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                          const int num_moments, 
                                          const double hi, const double hj,
                                          const double hk, const double vdelt,
-                                         double *yflux_pencil,
-                                         double *zflux_plane)
+                                         const int cta_chunk)
 {
   __shared__ double double_trampoline[32];
 
@@ -652,7 +691,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from y+1
@@ -669,7 +708,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -688,10 +727,9 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from z+1
@@ -706,10 +744,9 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -762,10 +799,9 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                         local_point, ang, psij[ang]);
         } else {
           // Write to the pencil
-          const int offset = x * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencil[offset + ang * blockDim.x + threadIdx.x] = psij[ang]; 
+            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -774,10 +810,9 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             angle_write(ghostz_out_ptr, ghostz_out_offsets, 
                         local_point, ang, psik[ang]);
         } else {
-          const int offset = (y * x_range + x) * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_plane[offset + ang * blockDim.x + threadIdx.x] = psik[ang];
+            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -882,9 +917,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, 
-                                         double *yflux_pencil,
-                                         double *zflux_plane)
+                                         const double hk, const int cta_chunk)
 {
   __shared__ int int_trampoline[32];
   __shared__ double double_trampoline[32];
@@ -1000,7 +1033,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from y+1
@@ -1017,7 +1050,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -1036,10 +1069,9 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from z+1
@@ -1054,10 +1086,9 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -1171,10 +1202,9 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                         local_point, ang, psij[ang]);
         } else {
           // Write to the pencil
-          const int offset = x * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencil[offset + ang * blockDim.x + threadIdx.x] = psij[ang]; 
+            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -1183,10 +1213,9 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             angle_write(ghostz_out_ptr, ghostz_out_offsets,
                         local_point, ang, psik[ang]);
         } else {
-          const int offset = (y * x_range + x) * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_plane[offset + ang * blockDim.x + threadIdx.x] = psik[ang];
+            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -1291,9 +1320,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, 
-                                         double *yflux_pencil,
-                                         double *zflux_plane)
+                                         const double hk, const int cta_chunk) 
 {
   __shared__ double double_trampoline[32];
 
@@ -1400,7 +1427,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from y+1
@@ -1417,7 +1444,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x * num_angles + ang * blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -1436,10 +1463,9 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                      ghost_point, ang);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         } else {
           // reading from z+1
@@ -1454,10 +1480,9 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                             ang*blockDim.x + threadIdx.x);
           } else {
             // Local array
-            const int offset = (y * x_range + x) * num_angles;
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[offset + ang * blockDim.x + threadIdx.x];
+              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
           }
         }
         #pragma unroll
@@ -1497,10 +1522,9 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                         local_point, ang, psij[ang]);
         } else {
           // Write to the pencil
-          const int offset = x * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencil[offset + ang * blockDim.x + threadIdx.x] = psij[ang]; 
+            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -1509,10 +1533,9 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             angle_write(ghostz_out_ptr, ghostz_out_offsets,
                         local_point, ang, psik[ang]);
         } else {
-          const int offset = (y * x_range + x) * num_angles;
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_plane[offset + ang * blockDim.x + threadIdx.x] = psik[ang];
+            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -1577,6 +1600,217 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             }
           }
         }
+      }
+    }
+  }
+}
+
+__host__
+void run_sweep(const Point<3> origin, 
+               const MomentQuad *qtot_ptr,
+                     double     *flux_ptr,
+                     MomentQuad *fluxm_ptr,
+               const double     *dinv_ptr,
+               const double     *time_flux_in_ptr,
+                     double     *time_flux_out_ptr,
+               const double     *t_xs_ptr,
+                     double     *ghostx_out_ptr,
+                     double     *ghosty_out_ptr,
+                     double     *ghostz_out_ptr,
+               const double     *qim_ptr,
+               const double     *ghostx_in_ptr,
+               const double     *ghosty_in_ptr,
+               const double     *ghostz_in_ptr,
+               const ByteOffset qtot_offsets[3],
+               const ByteOffset flux_offsets[3],
+               const ByteOffset fluxm_offsets[3],
+               const ByteOffset dinv_offsets[3],
+               const ByteOffset time_flux_in_offsets[3],
+               const ByteOffset time_flux_out_offsets[3],
+               const ByteOffset t_xs_offsets[3],
+               const ByteOffset ghostx_out_offsets[3],
+               const ByteOffset ghosty_out_offsets[3],
+               const ByteOffset ghostz_out_offsets[3],
+               const ByteOffset qim_offsets[3],
+               const ByteOffset ghostx_in_offsets[3],
+               const ByteOffset ghosty_in_offsets[3],
+               const ByteOffset ghostz_in_offsets[3],
+               const int x_range, const int y_range, 
+               const int z_range, const int corner,
+               const bool stride_x_positive,
+               const bool stride_y_positive,
+               const bool stride_z_positive,
+               const bool mms_source, 
+               const int num_moments, 
+               const double hi, const double hj,
+               const double hk, const double vdelt,
+               const int cta_chunk, const int num_angles,
+               const bool fixup)
+{
+  // Figure out how many angles per thread we need
+  const int max_threads_per_cta = 1024;
+  const int angles_per_thread = 
+    (num_angles + max_threads_per_cta - 1) / max_threads_per_cta;
+  // Have to be evenly divisible for now
+  assert((num_angles % angles_per_thread) == 0);
+  const int threads_per_cta = num_angles / angles_per_thread;
+  dim3 block(threads_per_cta, 1, 1);
+  // Teehee screw SKED!
+  dim3 grid(1,1,1);
+  if (fixup) {
+    // Need fixup
+    if (vdelt != 0.0) {
+      // Time dependent
+      switch (angles_per_thread)
+      {
+        case 1:
+          {
+            gpu_time_dependent_sweep_with_fixup<1><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
+                time_flux_out_ptr, t_xs_ptr, ghostx_out_ptr, ghosty_out_ptr,
+                ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
+                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
+                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
+                t_xs_offsets, ghostx_out_offsets, ghosty_out_offsets,
+                ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
+                ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
+                z_range, corner, stride_x_positive, stride_y_positive,
+                stride_z_positive, mms_source, num_moments, hi, hj, hk,
+                vdelt, cta_chunk);
+            break;
+          }
+        case 2:
+          {
+            gpu_time_dependent_sweep_with_fixup<2><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
+                time_flux_out_ptr, t_xs_ptr, ghostx_out_ptr, ghosty_out_ptr,
+                ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
+                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
+                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
+                t_xs_offsets, ghostx_out_offsets, ghosty_out_offsets,
+                ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
+                ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
+                z_range, corner, stride_x_positive, stride_y_positive,
+                stride_z_positive, mms_source, num_moments, hi, hj, hk,
+                vdelt, cta_chunk);
+            break;
+          }
+        default:
+          printf("WOW that is a lot of angles! Add more cases!\n");
+          assert(false);
+      }
+    } else {
+      // Time independent
+      switch (angles_per_thread)
+      {
+        case 1:
+          {
+            gpu_time_independent_sweep_with_fixup<1><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
+                ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
+                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive,
+                mms_source, num_moments, hi, hj, hk, cta_chunk);
+            break;
+          }
+        case 2:
+          {
+            gpu_time_independent_sweep_with_fixup<2><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
+                ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
+                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive,
+                mms_source, num_moments, hi, hj, hk, cta_chunk);
+            break;
+          }
+        default:
+          printf("WOW that is a lot of angles! Add more cases!\n");
+          assert(false);
+      }
+    }
+  } else {
+    // No fixup
+    if (vdelt != 0.0) {
+      // Time dependent
+      switch (angles_per_thread)
+      {
+        case 1:
+          {
+            gpu_time_dependent_sweep_without_fixup<1><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
+                time_flux_out_ptr, ghostx_out_ptr, ghosty_out_ptr,
+                ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
+                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
+                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets, 
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive, 
+                mms_source, num_moments, hi, hj, hk, vdelt, cta_chunk);
+            break;
+          }
+        case 2:
+          {
+            gpu_time_dependent_sweep_without_fixup<2><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
+                time_flux_out_ptr, ghostx_out_ptr, ghosty_out_ptr,
+                ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
+                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
+                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets, 
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive, 
+                mms_source, num_moments, hi, hj, hk, vdelt, cta_chunk);
+            break;
+          }
+        default:
+          printf("WOW that is a lot of angles! Add more cases!\n");
+          assert(false);
+      }
+    } else {
+      // Time independent
+      switch (angles_per_thread)
+      {
+        case 1:
+          {
+            gpu_time_independent_sweep_without_fixup<1><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
+                ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
+                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive,
+                mms_source, num_moments, hi, hj, hk, cta_chunk);
+            break;
+          }
+        case 2:
+          {
+            gpu_time_independent_sweep_without_fixup<2><<<grid,block>>>(origin,
+                qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
+                ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
+                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
+                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
+                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
+                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                stride_x_positive, stride_y_positive, stride_z_positive,
+                mms_source, num_moments, hi, hj, hk, cta_chunk);
+            break;
+          }
+        default:
+          printf("WOW that is a lot of angles! Add more cases!\n");
+          assert(false);
       }
     }
   }
