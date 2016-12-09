@@ -432,13 +432,56 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 #endif
 }
 
+#ifdef USE_GPU_KERNELS
+extern bool run_inner_convergence(Rect<3> subgrid_bounds,
+                                  std::vector<double*> flux0_ptrs,
+                                  std::vector<double*> flux0pi_ptrs,
+                                  ByteOffset flux0_offsets[3], 
+                                  ByteOffset flux0pi_offsets[3],
+                                  const double epsi);
+#endif
+
 //------------------------------------------------------------------------------
 /*static*/ bool TestInnerConvergence::gpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
+  log_snap.print("Running GPU Test Inner Convergence");
+#ifdef USE_GPU_KERNELS
+  std::vector<double*> flux0_ptrs(task->regions[0].privilege_fields.size());
+  std::vector<double*> flux0pi_ptrs(flux0_ptrs.size());
+  ByteOffset flux0_offsets[3], flux0pi_offsets[3];
+  unsigned idx = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, idx++)
+  {
+    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
+      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux0pi = 
+      regions[1].get_field_accessor(*it).typeify<double>();
+    if (idx == 0) {
+      flux0_ptrs[idx] = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+      flux0pi_ptrs[idx] = fa_flux0pi.raw_rect_ptr<3>(flux0pi_offsets);
+    } else {
+      ByteOffset temp_offsets[3];
+      flux0_ptrs[idx] = fa_flux0.raw_rect_ptr<3>(temp_offsets);
+      assert(temp_offsets == flux0_offsets);
+      flux0pi_ptrs[idx] = fa_flux0pi.raw_rect_ptr<3>(temp_offsets);
+      assert(temp_offsets == flux0pi_offsets);
+    }
+  }
+
+  Domain dom = runtime->get_index_space_domain(ctx, 
+          task->regions[0].region.get_index_space());
+  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  const double epsi = Snap::convergence_eps;
+  return run_inner_convergence(subgrid_bounds, flux0_ptrs, flux0pi_ptrs,
+                               flux0_offsets, flux0pi_offsets, epsi);
+#else
   assert(false);
+#endif
 #endif
   return false;
 }

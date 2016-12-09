@@ -537,3 +537,43 @@ void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
   }
 }
 
+__host__
+bool run_outer_convergence(Rect<3> subgrid_bounds,
+                           std::vector<double*> flux0_ptrs,
+                           std::vector<double*> flux0po_ptrs,
+                           ByteOffset flux0_offsets[3], 
+                           ByteOffset flux0po_offsets[3],
+                           const double epsi)
+{
+  int *converged_d;
+  cudaMalloc((void**)&converged_d, sizeof(int));
+  // Initialize the result
+  cudaMemset(converged_d, 0/*value*/, 1/*count*/); 
+  // Launch the kernels
+  const int x_start = subgrid_bounds.lo[0];
+  const int y_start = subgrid_bounds.lo[1];
+  const int z_start = subgrid_bounds.lo[2];
+  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
+  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
+  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  assert((x_range % 8) == 0);
+  assert((y_range % 4) == 0);
+  assert((z_range % 4) == 0);
+  dim3 block(8,4,4);
+  dim3 grid(x_range/8, y_range/4, z_range/4);
+
+  assert(flux0_ptrs.size() == flux0po_ptrs.size());
+  for (unsigned idx = 0; idx < flux0_ptrs.size(); idx++) {
+    gpu_outer_convergence<<<grid,block>>>(flux0_ptrs[idx], flux0po_ptrs[idx],
+                                          flux0_offsets, flux0po_offsets,
+                                          epsi, converged_d, 
+                                          x_start, y_start, z_start);
+  }
+  // Copy back: CUDA hijack synchronizes for us
+  int converged_h;
+  cudaMemcpy(&converged_h, converged_d, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaFree(converged_d);
+  // We've converged if the total converged points are the number of tests
+  return (converged_h == int(x_range * y_range * z_range * flux0_ptrs.size()));
+}
+
