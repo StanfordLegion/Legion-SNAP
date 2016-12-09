@@ -290,8 +290,6 @@ public: // derived
   static int nz_per_chunk;
   // Indexed by wavefront number and the point number
   static std::vector<std::vector<DomainPoint> > wavefront_map[8];
-  // Assume all chunks are the same size, original SNAP assumes this too
-  static std::vector<std::vector<Point<3> > > chunk_wavefronts;
 public:
   static double dt; 
   static int cmom;

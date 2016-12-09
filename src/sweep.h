@@ -54,6 +54,10 @@ public:
 public:
   static void cpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static void sse_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static void avx_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
   static void gpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };

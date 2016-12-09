@@ -906,7 +906,6 @@ int Snap::nx_per_chunk;
 int Snap::ny_per_chunk;
 int Snap::nz_per_chunk;
 std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
-std::vector<std::vector<Point<3> > > Snap::chunk_wavefronts;
 double Snap::dt;
 int Snap::cmom;
 int Snap::num_octants;
@@ -1116,27 +1115,6 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
       }
       current_points = next_points;
       wavefront_number++;
-    }
-  }
-  const int nx_per_chunk = nx / nx_chunks;
-  const int ny_per_chunk = ny / ny_chunks;
-  const int nz_per_chunk = nz / nz_chunks;
-  // Now compute the chunk wavefronts
-  // Total number of wavefronts is nx + ny + nz - 2
-  const int total_wavefronts = nx_per_chunk + ny_per_chunk + nz_per_chunk - 2;
-  chunk_wavefronts.resize(total_wavefronts);
-  int current_point[3];
-  for (current_point[0] = 0; current_point[0] < nx_per_chunk; current_point[0]++) 
-  {
-    for (current_point[1] = 0; current_point[1] < ny_per_chunk; current_point[1]++)
-    {
-      for (current_point[2] = 0; current_point[2] < nz_per_chunk; current_point[2]++)
-      {
-        const int wavefront = 
-          current_point[0] + current_point[1] + current_point[2];
-        assert(wavefront < total_wavefronts);
-        chunk_wavefronts[wavefront].push_back(Point<3>(current_point)); 
-      }
     }
   }
 }
