@@ -619,9 +619,9 @@ inline ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
 }
 
 inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
-                                  const Point<3> &point, size_t angle_buffer_size)
+                                  const Point<3> &point)
 {
-  return (__m128d*)(ptr + ((offsets * point) * angle_buffer_size));
+  return (__m128d*)(ptr + (offsets * point));
 }
 
 //------------------------------------------------------------------------------
@@ -801,7 +801,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           if (x == 0) {
             // Ghost cell array
             memcpy(psii, get_sse_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                  ghost_point, angle_buffer_size), angle_buffer_size);
+                                           ghost_point), angle_buffer_size);
           } 
           // Else nothing: psii already contains next flux
         } else {
@@ -812,7 +812,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           if (x == 0) {
             // Ghost cell array
             memcpy(psii, get_sse_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                  ghost_point, angle_buffer_size), angle_buffer_size);
+                                           ghost_point), angle_buffer_size);
           }
           // Else nothing: psii already contains next flux
         }
@@ -828,8 +828,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           ghost_point.x[1] -= 1;
           if (y == 0) {
             // Ghost cell array
-            psij = get_sse_angle_ptr(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psij = get_sse_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, ghost_point);
           } else {
             // Local array
             psij = yflux_pencil + x * num_vec_angles;
@@ -841,8 +840,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Local coordinates here
           if (y == 0) {
             // Ghost cell array
-            psij = get_sse_angle_ptr(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psij = get_sse_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, ghost_point);
           } else {
             // Local array
             psij = yflux_pencil + x * num_vec_angles;
@@ -860,8 +858,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           ghost_point.x[2] -= 1;
           if (z == 0) {
             // Ghost cell array
-            psik = get_sse_angle_ptr(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psik = get_sse_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, ghost_point);
           } else {
             // Local array
             psik = zflux_plane + (y * x_range + x) * num_vec_angles;
@@ -873,8 +870,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Local coordinates here
           if (z == 0) {
             // Ghost cell array
-            psik = get_sse_angle_ptr(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psik = get_sse_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, ghost_point);
           } else {
             // Local array
             psik = zflux_plane + (y * x_range + x) * num_vec_angles;
@@ -886,7 +882,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
                   _mm_set1_pd(Snap::hk)));
         // See if we're doing anything time dependent
         __m128d *time_flux_in = get_sse_angle_ptr(time_flux_in_ptr,
-              time_flux_in_offsets, local_point, angle_buffer_size);
+                                time_flux_in_offsets, local_point);
         if (vdelt != 0.0) 
         {
           for (int ang = 0; ang < num_vec_angles; ang++)
@@ -894,8 +890,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
                   _mm_set1_pd(vdelt), time_flux_in[ang]));
         }
         // Multiple by the precomputed denominator inverse
-        __m128d *dinv = get_sse_angle_ptr(dinv_ptr, dinv_offsets, 
-                                          local_point, angle_buffer_size);
+        __m128d *dinv = get_sse_angle_ptr(dinv_ptr, dinv_offsets, local_point);
         for (int ang = 0; ang < num_vec_angles; ang++)
           pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
 
@@ -1043,8 +1038,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           {
             // Write out the outgoing temporal flux 
             __m128d *time_flux_out = 
-              get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets,
-                                local_point, angle_buffer_size);
+              get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(time_flux_out+ang), 
                   _mm_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1061,8 +1055,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           {
             // Write out the outgoing temporal flux 
             __m128d *time_flux_out = 
-              get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets,
-                                local_point, angle_buffer_size);
+              get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(time_flux_out+ang), 
                   _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), time_flux_in[ang]));
@@ -1073,8 +1066,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Writing to x+1
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
-            __m128d *target = get_sse_angle_ptr(ghostx_out_ptr, ghostx_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghostx_out_ptr, 
+                              ghostx_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1084,8 +1077,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Local coordinates here
           if (x == (Snap::nx_per_chunk-1)) {
             // Write out on our own region
-            __m128d *target = get_sse_angle_ptr(ghostx_out_ptr, ghostx_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghostx_out_ptr, 
+                              ghostx_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1096,8 +1089,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Writing to y+1
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m128d *target = get_sse_angle_ptr(ghosty_out_ptr, ghosty_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghosty_out_ptr, 
+                              ghosty_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1107,8 +1100,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Local coordinates here
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m128d *target = get_sse_angle_ptr(ghosty_out_ptr, ghosty_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghosty_out_ptr, 
+                              ghosty_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1118,8 +1111,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
         if (stride_z_positive) {
           // Writing to z+1
           if (z == (Snap::nz_per_chunk-1)) {
-            __m128d *target = get_sse_angle_ptr(ghostz_out_ptr, ghostz_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghostz_out_ptr, 
+                              ghostz_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1129,8 +1122,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Local coordinates here
           if (z == (Snap::nz_per_chunk-1)) {
             // Write out on our own region
-            __m128d *target = get_sse_angle_ptr(ghostz_out_ptr, ghostz_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m128d *target = get_sse_angle_ptr(ghostz_out_ptr, 
+                              ghostz_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1177,9 +1170,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
 }
 
 inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[3],
-                                  const Point<3> &point, size_t angle_buffer_size)
+                                  const Point<3> &point)
 {
-  return (__m256d*)(ptr + ((offsets * point) * angle_buffer_size));
+  return (__m256d*)(ptr + (offsets * point));
 }
 
 inline __m256d* malloc_avx_aligned(size_t size)
@@ -1368,7 +1361,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (x == 0) {
             // Ghost cell array
             memcpy(psii, get_avx_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                  ghost_point, angle_buffer_size), angle_buffer_size);
+                                           ghost_point), angle_buffer_size);
           } 
           // Else nothing: psii already contains next flux
         } else {
@@ -1379,7 +1372,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (x == 0) {
             // Ghost cell array
             memcpy(psii, get_avx_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                  ghost_point, angle_buffer_size), angle_buffer_size);
+                                           ghost_point), angle_buffer_size);
           }
           // Else nothing: psii already contains next flux
         }
@@ -1396,8 +1389,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           ghost_point.x[1] -= 1;
           if (y == 0) {
             // Ghost cell array
-            psij = get_avx_angle_ptr(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psij = get_avx_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, ghost_point);
           } else {
             // Local array
             psij = yflux_pencil + x * num_vec_angles;
@@ -1409,8 +1401,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Local coordinates here
           if (y == 0) {
             // Ghost cell array
-            psij = get_avx_angle_ptr(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psij = get_avx_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, ghost_point);
           } else {
             // Local array
             psij = yflux_pencil + x * num_vec_angles;
@@ -1429,8 +1420,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           ghost_point.x[2] -= 1;
           if (z == 0) {
             // Ghost cell array
-            psik = get_avx_angle_ptr(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psik = get_avx_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, ghost_point);
           } else {
             // Local array
             psik = zflux_plane + (y * x_range + x) * num_vec_angles;
@@ -1442,8 +1432,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Local coordinates here
           if (z == 0) {
             // Ghost cell array
-            psik = get_avx_angle_ptr(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, angle_buffer_size);
+            psik = get_avx_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, ghost_point);
           } else {
             // Local array
             psik = zflux_plane + (y * x_range + x) * num_vec_angles;
@@ -1457,7 +1446,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
         // See if we're doing anything time dependent
         __m256d *time_flux_in = get_avx_angle_ptr(time_flux_in_ptr,
-              time_flux_in_offsets, local_point, angle_buffer_size);
+                                time_flux_in_offsets, local_point);
         if (vdelt != 0.0) 
         {
           for (int ang = 0; ang < num_vec_angles; ang++)
@@ -1465,8 +1454,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                   _mm256_set1_pd(vdelt), time_flux_in[ang]));
         }
         // Multiple by the precomputed denominator inverse
-        __m256d *dinv = get_avx_angle_ptr(dinv_ptr, dinv_offsets, 
-                                          local_point, angle_buffer_size);
+        __m256d *dinv = get_avx_angle_ptr(dinv_ptr, dinv_offsets, local_point);
         for (int ang = 0; ang < num_vec_angles; ang++)
           pc[ang] = _mm256_mul_pd(pc[ang], dinv[ang]);
 
@@ -1650,8 +1638,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           {
             // Write out the outgoing temporal flux 
             __m256d *time_flux_out = 
-              get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets,
-                                local_point, angle_buffer_size);
+              get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(time_flux_out+ang), 
                   _mm256_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1671,8 +1658,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           {
             // Write out the outgoing temporal flux 
             __m256d *time_flux_out = 
-              get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets,
-                                local_point, angle_buffer_size);
+              get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(time_flux_out+ang), 
                   _mm256_sub_pd( _mm256_mul_pd( _mm256_set1_pd(2.0), 
@@ -1685,8 +1671,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Writing to x+1
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
-            __m256d *target = get_avx_angle_ptr(ghostx_out_ptr, ghostx_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghostx_out_ptr, 
+                              ghostx_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1696,8 +1682,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Local coordinates here
           if (x == (Snap::nx_per_chunk-1)) {
             // Write out on our own region
-            __m256d *target = get_avx_angle_ptr(ghostx_out_ptr, ghostx_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghostx_out_ptr, 
+                              ghostx_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1708,8 +1694,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Writing to y+1
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m256d *target = get_avx_angle_ptr(ghosty_out_ptr, ghosty_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghosty_out_ptr, 
+                              ghosty_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1719,8 +1705,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Local coordinates here
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m256d *target = get_avx_angle_ptr(ghosty_out_ptr, ghosty_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghosty_out_ptr, 
+                              ghosty_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1730,8 +1716,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
         if (stride_z_positive) {
           // Writing to z+1
           if (z == (Snap::nz_per_chunk-1)) {
-            __m256d *target = get_avx_angle_ptr(ghostz_out_ptr, ghostz_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghostz_out_ptr, 
+                              ghostz_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1741,8 +1727,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Local coordinates here
           if (z == (Snap::nz_per_chunk-1)) {
             // Write out on our own region
-            __m256d *target = get_avx_angle_ptr(ghostz_out_ptr, ghostz_out_offsets,
-                                                local_point, angle_buffer_size);
+            __m256d *target = get_avx_angle_ptr(ghostz_out_ptr, 
+                              ghostz_out_offsets, local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psik[ang]);
           } 
