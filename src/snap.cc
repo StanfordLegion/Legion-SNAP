@@ -450,24 +450,36 @@ void Snap::transport_solve(void)
     // is just an artifact off SNAP and not a more general property of PARTISN, 
     // SNAP developers have now confirmed this so we'll leave this
     // here to be consistent with the original implementation of SNAP
-    for (int g = 0; g < num_groups; g++)
+    for (int g = 0; g < num_groups; g += energy_group_chunks)
     {
-      ExpandCrossSection expxs(*this, siga, mat, a_xs, g);
+      int group_stop = g + energy_group_chunks - 1;
+      if (group_stop >= num_groups)
+        group_stop = num_groups - 1;
+      ExpandCrossSection expxs(*this, siga, mat, a_xs, g, group_stop);
       expxs.dispatch(ctx, runtime);
     }
-    for (int g = 0; g < num_groups; g++)
+    for (int g = 0; g < num_groups; g += energy_group_chunks)
     {
-      ExpandCrossSection expxs(*this, sigt, mat, t_xs, g);
+      int group_stop = g + energy_group_chunks - 1;
+      if (group_stop >= num_groups)
+        group_stop = num_groups - 1;
+      ExpandCrossSection expxs(*this, sigt, mat, t_xs, g, group_stop);
       expxs.dispatch(ctx, runtime);
     }
-    for (int g = 0; g < num_groups; g++)
+    for (int g = 0; g < num_groups; g += energy_group_chunks)
     {
-      ExpandScatteringCrossSection expxs(*this, slgg, mat, s_xs, g);
+      int group_stop = g + energy_group_chunks - 1;
+      if (group_stop >= num_groups)
+        group_stop = num_groups - 1;
+      ExpandScatteringCrossSection expxs(*this, slgg, mat, s_xs, g, group_stop);
       expxs.dispatch(ctx, runtime);
     }
-    for (int g = 0; g < num_groups; g++)
+    for (int g = 0; g < num_groups; g += energy_group_chunks)
     {
-      CalculateGeometryParam geom(*this, t_xs, vdelt, dinv, g);
+      int group_stop = g + energy_group_chunks - 1;
+      if (group_stop >= num_groups)
+        group_stop = num_groups - 1;
+      CalculateGeometryParam geom(*this, t_xs, vdelt, dinv, g, group_stop);
       geom.dispatch(ctx, runtime);
     }
     // Scale the manufactured solution for time

@@ -77,6 +77,241 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   cudaMemcpyToSymbol(device_w, w_h, num_angles * sizeof(double));
 }
 
+// This is from expxs but it uses the same constants
+template<int GROUPS>
+__global__
+void gpu_geometry_param(const double *xs_ptrs[GROUPS],
+                              double *dinv_ptrs[GROUPS],
+                        const ByteOffset xs_offsets[3],
+                        const ByteOffset dinv_offsets[3],
+                        double vdelt[GROUPS], const double hi,
+                        const double hj, const double hk,
+                        const Point<3> origin, const int angles_per_thread)
+{
+  const int x = origin.x[0] + blockIdx.x;
+  const int y = origin.x[1] + blockIdx.y;
+  const int z = origin.x[2] + blockIdx.z;
+  for (int i = 0; i < angles_per_thread; i++) {
+    const int ang = i * blockDim.x + threadIdx.x;
+
+    const double sum = hi * device_mu[ang] + hj * device_eta[ang] + hk * device_xi[ang];
+    #pragma unroll
+    for (int g = 0; g < GROUPS; g++) {
+      const double *xs_ptr = xs_ptrs[g] + x * xs_offsets[0] + 
+                                          y * xs_offsets[1] + z * xs_offsets[2];
+      double val;
+      asm volatile("ld.global.cs.f64 %0, [%1];" : "=d"(val) : "l"(xs_ptr+ang) : "memory");
+      val += sum + vdelt[g]; 
+      double *dinv_ptr = dinv_ptrs[g] + x * dinv_offsets[0] + 
+                                        y * dinv_offsets[1] + z * dinv_offsets[2];
+      asm volatile("st.global.cs.f64 [%0], %1;" : : "l"(dinv_ptr+ang), "d"(val) : "memory");
+    }
+  }
+}
+
+template<int GROUPS>
+__host__
+void gpu_geometry_param_launcher(const std::vector<double*> &xs_ptrs,
+                                 const std::vector<double*> &dinv_ptrs,
+                                 const ByteOffset xs_offsets[3],
+                                 const ByteOffset dinv_offsets[3],
+                                 const std::vector<double> &vdelts,
+                                 const double hi, const double hj, const double hk,
+                                 const Point<3> &origin,
+                                 const dim3 &grid, const dim3 &block,
+                                 const int angles_per_thread)
+{
+  const double *xs_buffer[GROUPS];
+  for (int g = 0; g < GROUPS; g++)
+    xs_buffer[g] = xs_ptrs[g];
+  double *dinv_buffer[GROUPS];
+  for (int g = 0; g < GROUPS; g++)
+    dinv_buffer[g] = dinv_ptrs[g];
+  double vdelt_buffer[GROUPS];
+  for (int g = 0; g < GROUPS; g++)
+    vdelt_buffer[g] = vdelts[g];
+
+  gpu_geometry_param<GROUPS><<<grid,block>>>(xs_buffer, dinv_buffer,
+                                             xs_offsets, dinv_offsets,
+                                             vdelt_buffer, hi, hj, hk, 
+                                             origin, angles_per_thread);
+}
+
+__host__
+void run_geometry_param(const std::vector<double*> &xs_ptrs,
+                        const std::vector<double*> &dinv_ptrs,
+                        const ByteOffset xs_offsets[3],
+                        const ByteOffset dinv_offsets[3],
+                        const std::vector<double> &vdelts,
+                        const double hi, const double hj, const double hk,
+                        const Rect<3> &subgrid_bounds, const int num_angles)
+{
+  // Figure out the launch bounds, then dispatch
+  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1; 
+  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
+  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+
+  const int max_threads_per_cta = 1024;
+  const int angles_per_thread = 
+    (num_angles + max_threads_per_cta - 1) / max_threads_per_cta;
+  // Have to be evenly divisible for now
+  assert((num_angles % angles_per_thread) == 0);
+  const int threads_per_cta = num_angles / angles_per_thread;
+  dim3 block(threads_per_cta, 1, 1);
+  dim3 grid(x_range, y_range, z_range);
+  // TODO: Replace template foolishness with terra
+  assert(xs_ptrs.size() == dinv_ptrs.size());
+  switch (xs_ptrs.size())
+  {
+    case 1:
+      {
+        gpu_geometry_param_launcher<1>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 2:
+      {
+        gpu_geometry_param_launcher<2>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 3:
+      {
+        gpu_geometry_param_launcher<3>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 4:
+      {
+        gpu_geometry_param_launcher<4>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 5:
+      {
+        gpu_geometry_param_launcher<5>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 6:
+      {
+        gpu_geometry_param_launcher<6>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 7:
+      {
+        gpu_geometry_param_launcher<7>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 8:
+      {
+        gpu_geometry_param_launcher<8>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 9:
+      {
+        gpu_geometry_param_launcher<9>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 10:
+      {
+        gpu_geometry_param_launcher<10>(xs_ptrs, dinv_ptrs,
+                                        xs_offsets, dinv_offsets,
+                                        vdelts, hi, hj, hk, 
+                                        subgrid_bounds.lo, 
+                                        grid, block, angles_per_thread);
+        break;
+      }
+    case 11:
+      {
+        gpu_geometry_param_launcher<11>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 12:
+      {
+        gpu_geometry_param_launcher<12>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 13:
+      {
+        gpu_geometry_param_launcher<13>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 14:
+      {
+        gpu_geometry_param_launcher<14>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 15:
+      {
+        gpu_geometry_param_launcher<15>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    case 16:
+      {
+        gpu_geometry_param_launcher<16>(xs_ptrs, dinv_ptrs,
+                                       xs_offsets, dinv_offsets,
+                                       vdelts, hi, hj, hk, 
+                                       subgrid_bounds.lo, 
+                                       grid, block, angles_per_thread);
+        break;
+      }
+    default:
+      assert(false); // need more cases
+  }
+}
+
 __device__ __forceinline__
 ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
 {

@@ -467,9 +467,9 @@ extern bool run_inner_convergence(Rect<3> subgrid_bounds,
     } else {
       ByteOffset temp_offsets[3];
       flux0_ptrs[idx] = fa_flux0.raw_rect_ptr<3>(temp_offsets);
-      assert(temp_offsets == flux0_offsets);
+      assert(offsets_match<3>(temp_offsets, flux0_offsets));
       flux0pi_ptrs[idx] = fa_flux0pi.raw_rect_ptr<3>(temp_offsets);
-      assert(temp_offsets == flux0pi_offsets);
+      assert(offsets_match<3>(temp_offsets, flux0pi_offsets));
     }
   }
 
