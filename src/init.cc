@@ -42,7 +42,7 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Init Material");
+  log_snap.info("Running Init Material");
 
   int i1 = 1, i2 = 1, j1 = 1, j2 = 1, k1 = 1, k2 = 1;
   switch (Snap::material_layout)
@@ -125,7 +125,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Init Source");
+  log_snap.info("Running Init Source");
 
   const int nx_gl = Snap::nx;
   const int ny_gl = Snap::ny;
@@ -194,6 +194,44 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
       fa_qi.write(dp, 1.0);
     }
   }
+#endif
+}
+
+//------------------------------------------------------------------------------
+InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
+  : SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID>(
+      snap, launch, Predicate::TRUE_PRED)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void InitGPUSweep::preregister_gpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+}
+
+#ifdef USE_GPU_KERNELS
+extern void initialize_gpu_context(const double *ec_h, const double *mu_h,
+                                   const double *eta_h, const double *xi_h,
+                                   const double *w_h, const int num_angles,
+                                   const int num_moments, const int num_octants,
+                                   const int nx_per_chunk, const int ny_per_chunk);
+#endif
+
+//------------------------------------------------------------------------------
+/*static*/ void InitGPUSweep::gpu_implementation(const Task *task,
+    const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime) 
+//------------------------------------------------------------------------------
+{
+  log_snap.info("Running Init GPU Sweep");
+#ifdef USE_GPU_KERNELS
+  initialize_gpu_context(Snap::ec, Snap::mu, Snap::eta, Snap::xi, Snap::w,
+                         Snap::num_angles, Snap::num_moments, Snap::num_octants,
+                         Snap::nx_per_chunk, Snap::ny_per_chunk);
+#else
+  assert(false); 
 #endif
 }
 

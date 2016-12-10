@@ -282,6 +282,9 @@ void Snap::transport_solve(void)
   // Same thing with the inner loop
   Future inner_runahead_future = 
     runtime->select_tunable_value(ctx, INNER_RUNAHEAD_TUNABLE);
+  // Also get the energy group chunk factor for sweeps
+  Future sweep_energy_chunks_future = 
+    runtime->select_tunable_value(ctx, SWEEP_ENERGY_CHUNKS_TUNABLE);
 
   // Create our important arrays
   SnapArray flux0(simulation_is, spatial_ip, group_and_ghost_fs, 
@@ -389,6 +392,18 @@ void Snap::transport_solve(void)
     InitSource init_source(*this, qi);
     init_source.dispatch(ctx, runtime);
   }
+#ifdef USE_GPU_KERNELS
+  {
+    Future f_gpus = runtime->select_tunable_value(ctx, 
+        DefaultMapper::DEFAULT_TUNABLE_GLOBAL_GPUS);
+    int num_gpus = f_gpus.get_result<int>(true/*silence warnings*/);
+    assert(num_gpus > 0);
+    Rect<3> gpu_bounds(Point<3>::ZEROES(), Point<3>::ZEROES());
+    gpu_bounds.hi.x[0] = num_gpus - 1;
+    InitGPUSweep init_sweep(*this, gpu_bounds);
+    init_sweep.dispatch(ctx, runtime, true/*block*/);
+  }
+#endif
   initialize_scattering(sigt, siga, sigs, slgg);
   initialize_velocity(vel, vdelt);
 
@@ -416,6 +431,8 @@ void Snap::transport_solve(void)
   const unsigned inner_runahead = 
     inner_runahead_future.get_result<unsigned>(true/*silence warnings*/);
   assert(inner_runahead > 0);
+  const int energy_group_chunks = 
+    sweep_energy_chunks_future.get_result<int>(true/*silence warnings*/);
   // Loop over time steps
   std::deque<Future> outer_converged_tests;
   std::deque<Future> inner_converged_tests;
@@ -498,7 +515,8 @@ void Snap::transport_solve(void)
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
                        even_time_step ? time_flux_even : time_flux_odd,
-                       even_time_step ? time_flux_odd : time_flux_even, qim); 
+                       even_time_step ? time_flux_odd : time_flux_even, 
+                       qim, energy_group_chunks); 
         // Test for inner convergence
         TestInnerConvergence inner_conv(*this, inner_pred, 
                                         flux0, flux0pi, true_future);
@@ -787,7 +805,7 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
                           const SnapArray &vdelt, const SnapArray &dinv, 
                           const SnapArray &t_xs, SnapArray *time_flux_in[8],
                           SnapArray *time_flux_out[8],
-                          SnapArray *qim[8]) const
+                          SnapArray *qim[8], int energy_group_chunks) const
 //------------------------------------------------------------------------------
 {
   // Loop over the corners
@@ -798,9 +816,13 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
     for (int i = 0; i < num_dims; i++)
       ghost_offsets[i] = (corner & (0x1 << i)) >> i;
     const std::vector<Domain> &launch_domains = wavefront_domains[corner];
-    // Then loop over the energy groups
-    for (int group = 0; group < num_groups; group++)
+    // Then loop over the energy groups by chunks
+    for (int group = 0; group < num_groups; group+=energy_group_chunks)
     {
+      int group_stop = group + energy_group_chunks - 1;
+      // Clamp to the upper bound
+      if (group_stop >= num_groups)
+        group_stop = num_groups-1;
       // Launch the sweep from this corner for the given field
       // We alternate between even and odd ghost fields since
       // Legion can't prove that some of the region requirements
@@ -808,11 +830,13 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       MiniKBATask mini_kba_even(*this, pred, true/*even*/, flux, fluxm, 
                                 qtot, vdelt, dinv, t_xs, 
                                 *time_flux_in[corner], *time_flux_out[corner],
-                                *qim[corner], group, corner, ghost_offsets);
+                                *qim[corner], group, group_stop, 
+                                corner, ghost_offsets);
       MiniKBATask mini_kba_odd(*this, pred, false/*even*/, flux, fluxm,
                                 qtot, vdelt, dinv, t_xs,
                                 *time_flux_in[corner], *time_flux_out[corner],
-                                *qim[corner], group, corner, ghost_offsets);
+                                *qim[corner], group, group_stop,
+                                corner, ghost_offsets);
       bool even = true;
       for (unsigned idx = 0; idx < launch_domains.size(); idx++)
       {
@@ -1344,6 +1368,8 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   // Now register all the task variants
   InitMaterial::preregister_cpu_variants();
   InitSource::preregister_cpu_variants();
+#ifdef USE_GPU_KERNELS
+  InitGPUSweep::preregister_gpu_variants();
   CalcOuterSource::preregister_all_variants();
   TestOuterConvergence::preregister_all_variants();
   CalcInnerSource::preregister_all_variants();
@@ -1352,6 +1378,16 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   ExpandCrossSection::preregister_all_variants();
   ExpandScatteringCrossSection::preregister_all_variants();
   CalculateGeometryParam::preregister_all_variants();
+#else
+  CalcOuterSource::preregister_cpu_variants();
+  TestOuterConvergence::preregister_cpu_variants();
+  CalcInnerSource::preregister_cpu_variants();
+  TestInnerConvergence::preregister_cpu_variants();
+  MiniKBATask::preregister_cpu_variants();
+  ExpandCrossSection::preregister_cpu_variants();
+  ExpandScatteringCrossSection::preregister_cpu_variants();
+  CalculateGeometryParam::preregister_cpu_variants();
+#endif
   MMSInitFlux::preregister_cpu_variants();
   MMSInitSource::preregister_cpu_variants();
   MMSInitTimeDependent::preregister_cpu_variants();
@@ -1413,6 +1449,11 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
     case INNER_RUNAHEAD_TUNABLE:
       {
         runtime->pack_tunable<unsigned>(8, output);
+        break;
+      }
+    case SWEEP_ENERGY_CHUNKS_TUNABLE:
+      {
+        runtime->pack_tunable<int>(1, output);
         break;
       }
     default:

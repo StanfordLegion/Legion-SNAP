@@ -30,6 +30,8 @@ using namespace LegionRuntime::Accessor;
 // to properly chunk the sweeps for the number of buffers
 #define MAX_CTA      32 // Only GP100 has more than 32 concurrent kernels
 
+// We'll dynamically allocate the CTA chunks
+__device__ unsigned available_chunks[MAX_CTA];
 // Create the planes and pencils for doing the sweeps
 __device__ double yflux_pencils[MAX_CTA][MAX_X_CHUNK][MAX_ANGLES];
 __device__ double zflux_planes[MAX_CTA][MAX_Y_CHUNK][MAX_Y_CHUNK][MAX_ANGLES];
@@ -62,6 +64,11 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
     printf("ERROR: adjust MAX_Y_CHUNK in gpu_sweep.cu to %d", ny_per_chunk);
   assert(ny_per_chunk <= MAX_Y_CHUNK);
   
+  // Set all the available chunks to 1 indicating that they are all available
+  unsigned available[MAX_CTA];
+  for (int i = 0; i < MAX_CTA; i++)
+    available[i] = 1;
+  cudaMemcpyToSymbol(available_chunks, available, MAX_CTA * sizeof(unsigned));
   cudaMemcpyToSymbol(device_ec, ec_h, 
                      num_angles * num_moments * num_octants * sizeof(double));
   cudaMemcpyToSymbol(device_mu, mu_h, num_angles * sizeof(double));
@@ -147,8 +154,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, const double vdelt,
-                                         const int cta_chunk)
+                                         const double hk, const double vdelt)
 {
   __shared__ int int_trampoline[32];
   __shared__ double double_trampoline[32];
@@ -175,6 +181,28 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   unsigned warpid;
   asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+
+  // Get a chunk for this CTA
+  if ((warpid == 0) && (laneid == 0)) {
+    // Start at our SM ID to avoid contention
+    int smid;
+    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
+    int chunk = -1;
+    while (chunk < 0) {
+      #pragma unroll
+      for (int i = 0; i < MAX_CTA; i++) {
+        int offset = (smid + i) % MAX_CTA;
+        if (atomicDec(available_chunks+offset, 0) == 1) {
+          chunk = offset;
+          break;
+        }
+      }
+    }
+    int_trampoline[0] = chunk;
+  }
+  __syncthreads();
+  const int cta_chunk = int_trampoline[0];
+  __syncthreads();
 
   const double tolr = 1.0e-12;
 
@@ -543,6 +571,8 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
       }
     }
   }
+  // Release our CTA chunk back to the pool
+  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -582,9 +612,9 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, const double vdelt,
-                                         const int cta_chunk)
+                                         const double hk, const double vdelt)
 {
+  __shared__ int int_trampoline;
   __shared__ double double_trampoline[32];
 
   double psi[THR_ANGLES];
@@ -601,6 +631,28 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   unsigned warpid;
   asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+
+  // Get a chunk for this CTA
+  if ((warpid == 0) && (laneid == 0)) {
+    // Start at our SM ID to avoid contention
+    int smid;
+    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
+    int chunk = -1;
+    while (chunk < 0) {
+      #pragma unroll
+      for (int i = 0; i < MAX_CTA; i++) {
+        int offset = (smid + i) % MAX_CTA;
+        if (atomicDec(available_chunks+offset, 0) == 1) {
+          chunk = offset;
+          break;
+        }
+      }
+    }
+    int_trampoline = chunk;
+  }
+  __syncthreads();
+  const int cta_chunk = int_trampoline;
+  __syncthreads();
 
   for (int z = 0; z < z_range; z++) {
     for (int y = 0; y < y_range; y++) {
@@ -880,6 +932,8 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
       }
     }
   }
+  // Release our CTA chunk back to the pool
+  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -917,7 +971,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, const int cta_chunk)
+                                         const double hk)
 {
   __shared__ int int_trampoline[32];
   __shared__ double double_trampoline[32];
@@ -941,6 +995,28 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   unsigned warpid;
   asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+
+  // Get a chunk for this CTA
+  if ((warpid == 0) && (laneid == 0)) {
+    // Start at our SM ID to avoid contention
+    int smid;
+    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
+    int chunk = -1;
+    while (chunk < 0) {
+      #pragma unroll
+      for (int i = 0; i < MAX_CTA; i++) {
+        int offset = (smid + i) % MAX_CTA;
+        if (atomicDec(available_chunks+offset, 0) == 1) {
+          chunk = offset;
+          break;
+        }
+      }
+    }
+    int_trampoline[0] = chunk;
+  }
+  __syncthreads();
+  const int cta_chunk = int_trampoline[0];
+  __syncthreads();
 
   const double tolr = 1.0e-12;
 
@@ -1283,6 +1359,8 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
       }
     }
   }
+  // Release our CTA chunk back to the pool
+  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -1320,8 +1398,9 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                          const bool mms_source, 
                                          const int num_moments, 
                                          const double hi, const double hj,
-                                         const double hk, const int cta_chunk) 
+                                         const double hk) 
 {
+  __shared__ int int_trampoline;
   __shared__ double double_trampoline[32];
 
   double psi[THR_ANGLES];
@@ -1337,6 +1416,28 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   unsigned warpid;
   asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+
+  // Get a chunk for this CTA
+  if ((warpid == 0) && (laneid == 0)) {
+    // Start at our SM ID to avoid contention
+    int smid;
+    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
+    int chunk = -1;
+    while (chunk < 0) {
+      #pragma unroll
+      for (int i = 0; i < MAX_CTA; i++) {
+        int offset = (smid + i) % MAX_CTA;
+        if (atomicDec(available_chunks+offset, 0) == 1) {
+          chunk = offset;
+          break;
+        }
+      }
+    }
+    int_trampoline = chunk;
+  }
+  __syncthreads();
+  const int cta_chunk = int_trampoline;
+  __syncthreads();
 
   for (int z = 0; z < z_range; z++) {
     for (int y = 0; y < y_range; y++) {
@@ -1603,10 +1704,12 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
       }
     }
   }
+  // Release our CTA chunk back to the pool
+  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 __host__
-void run_sweep(const Point<3> origin, 
+void run_gpu_sweep(const Point<3> origin, 
                const MomentQuad *qtot_ptr,
                      double     *flux_ptr,
                      MomentQuad *fluxm_ptr,
@@ -1644,8 +1747,7 @@ void run_sweep(const Point<3> origin,
                const int num_moments, 
                const double hi, const double hj,
                const double hk, const double vdelt,
-               const int cta_chunk, const int num_angles,
-               const bool fixup)
+               const int num_angles, const bool fixup)
 {
   // Figure out how many angles per thread we need
   const int max_threads_per_cta = 1024;
@@ -1675,8 +1777,7 @@ void run_sweep(const Point<3> origin,
                 ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
                 ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
                 z_range, corner, stride_x_positive, stride_y_positive,
-                stride_z_positive, mms_source, num_moments, hi, hj, hk,
-                vdelt, cta_chunk);
+                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt);
             break;
           }
         case 2:
@@ -1691,8 +1792,7 @@ void run_sweep(const Point<3> origin,
                 ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
                 ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
                 z_range, corner, stride_x_positive, stride_y_positive,
-                stride_z_positive, mms_source, num_moments, hi, hj, hk,
-                vdelt, cta_chunk);
+                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt);
             break;
           }
         default:
@@ -1714,7 +1814,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, hi, hj, hk, cta_chunk);
+                mms_source, num_moments, hi, hj, hk);
             break;
           }
         case 2:
@@ -1728,7 +1828,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, hi, hj, hk, cta_chunk);
+                mms_source, num_moments, hi, hj, hk);
             break;
           }
         default:
@@ -1754,7 +1854,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, hi, hj, hk, vdelt, cta_chunk);
+                mms_source, num_moments, hi, hj, hk, vdelt);
             break;
           }
         case 2:
@@ -1769,7 +1869,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, hi, hj, hk, vdelt, cta_chunk);
+                mms_source, num_moments, hi, hj, hk, vdelt);
             break;
           }
         default:
@@ -1791,7 +1891,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, hi, hj, hk, cta_chunk);
+                mms_source, num_moments, hi, hj, hk);
             break;
           }
         case 2:
@@ -1805,7 +1905,7 @@ void run_sweep(const Point<3> origin,
                 qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
                 ghostz_in_offsets, x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, hi, hj, hk, cta_chunk);
+                mms_source, num_moments, hi, hj, hk);
             break;
           }
         default:

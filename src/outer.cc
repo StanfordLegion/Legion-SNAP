@@ -64,7 +64,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Calc Outer Source");
+  log_snap.info("Running Calc Outer Source");
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -159,7 +159,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Fast Calc Outer Source");
+  log_snap.info("Running Fast Calc Outer Source");
 
   // Note: there's no real need for vectors here, it's all about blocking
   // for caches into order to get good memory locality
@@ -357,7 +357,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running GPU Calc Outer Source");
+  log_snap.info("Running GPU Calc Outer Source");
 #ifdef USE_GPU_KERNELS
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -484,7 +484,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Test Outer Convergence");
+  log_snap.info("Running Test Outer Convergence");
 
   // If the inner loop didn't converge, then we can't either
   assert(!task->futures.empty());
@@ -540,7 +540,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Fast Test Outer Convergence");
+  log_snap.info("Running Fast Test Outer Convergence");
 
   // If the inner loop didn't converge, then we can't either
   assert(!task->futures.empty());
@@ -610,7 +610,7 @@ extern bool run_outer_convergence(Rect<3> subgrid_bounds,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running GPU Test Outer Convergence");
+  log_snap.info("Running GPU Test Outer Convergence");
 #ifdef USE_GPU_KERNELS
   std::vector<double*> flux0_ptrs(task->regions[0].privilege_fields.size());
   std::vector<double*> flux0po_ptrs(flux0_ptrs.size());

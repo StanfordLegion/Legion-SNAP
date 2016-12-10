@@ -27,12 +27,15 @@ public:
 public:
   struct MiniKBAArgs {
   public:
-    MiniKBAArgs(int c, int g)
-      : wavefront(0), corner(c), group(g) { }
+    MiniKBAArgs(int c, int start, int stop, bool e)
+      : wavefront(0), corner(c), group_start(start), 
+        group_stop(stop), even(e) { }
   public:
     int wavefront;
     int corner;
-    int group;
+    int group_start;
+    int group_stop; // inclusive
+    bool even;
   };
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, bool even, 
@@ -41,8 +44,9 @@ public:
               const SnapArray &dinv, const SnapArray &t_xs, 
               const SnapArray &time_flux_in, 
               const SnapArray &time_flux_out,
-              const SnapArray &qim,
-              int group, int corner, const int ghost_offsets[3]);
+              const SnapArray &qim, int group_start,
+              int group_stop, int corner, 
+              const int ghost_offsets[3]);
 public:
   void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
                           Context cxt, Runtime *runtime);

@@ -76,7 +76,7 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running MMS Init Flux");
+  log_snap.info("Running MMS Init Flux");
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -204,7 +204,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running MMS Init Source");
+  log_snap.info("Running MMS Init Source");
 
   assert(task->arglen == sizeof(int));
   const int corner = *((int*)task->args);
@@ -377,7 +377,7 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running MMS Init Time Dependent");
+  log_snap.info("Running MMS Init Time Dependent");
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[1].region.get_index_space());
@@ -434,7 +434,7 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running MMS Scale");
+  log_snap.info("Running MMS Scale");
 
   assert(task->arglen == sizeof(double));
   const double scale_factor = *((double*)task->args);
@@ -490,7 +490,7 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
 {
   MomentTriple result;
 #ifndef NO_COMPUTE
-  log_snap.print("Running MMS Compare");
+  log_snap.info("Running MMS Compare");
 
   double min = INFINITY;
   double max = -INFINITY;

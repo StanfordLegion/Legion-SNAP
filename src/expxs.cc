@@ -54,7 +54,7 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Expand Cross Section");
+  log_snap.info("Running Expand Cross Section");
 
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,double> fa_sig = 
@@ -126,7 +126,7 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Expand Scattering Cross Section");
+  log_snap.info("Running Expand Scattering Cross Section");
 
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
@@ -201,7 +201,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Calculate Geometry Param");
+  log_snap.info("Running Calculate Geometry Param");
 
   const int group = *((int*)task->args);
   RegionAccessor<AccessorType::Generic,double> fa_xs = 

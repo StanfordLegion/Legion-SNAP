@@ -62,7 +62,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Calc Inner Source");
+  log_snap.info("Running Calc Inner Source");
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -128,7 +128,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Fast Calc Inner Source");
+  log_snap.info("Running Fast Calc Inner Source");
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
@@ -333,7 +333,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Test Inner Convergence");
+  log_snap.info("Running Test Inner Convergence");
 
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
@@ -381,7 +381,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running Fast Test Inner Convergence");
+  log_snap.info("Running Fast Test Inner Convergence");
 
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
@@ -447,7 +447,7 @@ extern bool run_inner_convergence(Rect<3> subgrid_bounds,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-  log_snap.print("Running GPU Test Inner Convergence");
+  log_snap.info("Running GPU Test Inner Convergence");
 #ifdef USE_GPU_KERNELS
   std::vector<double*> flux0_ptrs(task->regions[0].privilege_fields.size());
   std::vector<double*> flux0pi_ptrs(flux0_ptrs.size());

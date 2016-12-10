@@ -42,5 +42,15 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
+class InitGPUSweep : public SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID> {
+public:
+  InitGPUSweep(const Snap &snap, const Rect<3> &launch_bounds); 
+public:
+  static void preregister_gpu_variants(void);
+public:
+  static void gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
 #endif // __INIT_H__
 

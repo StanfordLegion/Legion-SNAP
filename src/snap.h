@@ -49,6 +49,7 @@ public:
     SNAP_TOP_LEVEL_TASK_ID,
     INIT_MATERIAL_TASK_ID,
     INIT_SOURCE_TASK_ID,
+    INIT_GPU_SWEEP_TASK_ID,
     CALC_OUTER_SOURCE_TASK_ID,
     TEST_OUTER_CONVERGENCE_TASK_ID,
     CALC_INNER_SOURCE_TASK_ID,
@@ -68,6 +69,7 @@ public:
     "Top Level Task",                   \
     "Initialize Material",              \
     "Initialize Source",                \
+    "Initialize GPU Sweep",             \
     "Calc Outer Source",                \
     "Test Outer Convergence",           \
     "Calc Inner Source",                \
@@ -96,6 +98,7 @@ public:
   enum SnapTunable {
     OUTER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST,
     INNER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+1,
+    SWEEP_ENERGY_CHUNKS_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+2,
   };
   enum SnapReductionID {
     NO_REDUCTION_ID = 0,
@@ -216,7 +219,8 @@ protected:
                       const SnapArray &fluxm, const SnapArray &qtot, 
                       const SnapArray &vdelt, const SnapArray &dinv, 
                       const SnapArray &t_xs, SnapArray *time_flux_in[8], 
-                      SnapArray *time_flux_out[8], SnapArray *qim[8]) const;
+                      SnapArray *time_flux_out[8], SnapArray *qim[8],
+                      int energy_group_chunks) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -488,12 +492,31 @@ public:
     launcher.region_requirements.back().privilege_fields.insert(field);
   }
   template<typename T>
+  inline void add_projection_requirement(PrivilegeMode priv, T &launcher,
+   const std::vector<Snap::SnapFieldID> &fields, ProjectionID proj_id = 0) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lp, proj_id, priv,
+                                                      EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(
+                                        fields.begin(), fields.end());
+  }
+  template<typename T>
   inline void add_projection_requirement(Snap::SnapReductionID reduction,
       T &launcher, Snap::SnapFieldID field, ProjectionID proj_id = 0) const
   {
     launcher.add_region_requirement(RegionRequirement(lp, proj_id, reduction,
                                                       EXCLUSIVE, lr));
     launcher.region_requirements.back().privilege_fields.insert(field);
+  }
+  template<typename T>
+  inline void add_projection_requirement(Snap::SnapReductionID reduction,
+      T &launcher, const std::vector<Snap::SnapFieldID> &fields, 
+      ProjectionID proj_id = 0) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lp, proj_id, reduction,
+                                                      EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(
+                                        fields.begin(), fields.end());
   }
   template<typename T>
   inline void add_region_requirement(PrivilegeMode priv,
@@ -503,11 +526,19 @@ public:
     launcher.region_requirements.back().privilege_fields = regular_fields;
   }
   template<typename T>
-  inline void add_region_requirement(PrivilegeMode priv, T&launcher,
+  inline void add_region_requirement(PrivilegeMode priv, T &launcher,
                                      Snap::SnapFieldID field) const
   {
     launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
     launcher.region_requirements.back().privilege_fields.insert(field);
+  }
+  template<typename T>
+  inline void add_region_requirement(PrivilegeMode priv, T &launcher,
+                  const std::vector<Snap::SnapFieldID> &fields) const
+  {
+    launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
+    launcher.region_requirements.back().privilege_fields.insert(
+                                                  fields.begin(), fields.end());
   }
 protected:
   const Context ctx;
