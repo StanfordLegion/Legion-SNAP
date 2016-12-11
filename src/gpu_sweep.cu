@@ -17,6 +17,7 @@
 
 #include "snap_types.h"
 #include "accessor.h"
+#include "snap_cuda_help.h"
 
 using namespace LegionRuntime::Accessor;
 
@@ -80,12 +81,12 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
 // This is from expxs but it uses the same constants
 template<int GROUPS>
 __global__
-void gpu_geometry_param(const double *xs_ptrs[GROUPS],
-                              double *dinv_ptrs[GROUPS],
-                        const ByteOffset xs_offsets[3],
-                        const ByteOffset dinv_offsets[3],
-                        double vdelt[GROUPS], const double hi,
-                        const double hj, const double hk,
+void gpu_geometry_param(const PointerBuffer<GROUPS,double> xs_ptrs,
+                              PointerBuffer<GROUPS,double> dinv_ptrs,
+                        const ByteOffsetArray<3> xs_offsets,
+                        const ByteOffsetArray<3> dinv_offsets,
+                        const ConstBuffer<GROUPS,double> vdelt,
+                        const double hi, const double hj, const double hk,
                         const Point<3> origin, const int angles_per_thread)
 {
   const int x = origin.x[0] + blockIdx.x;
@@ -165,146 +166,194 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
   {
     case 1:
       {
-        gpu_geometry_param_launcher<1>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<1><<<grid,block>>>(
+                                      PointerBuffer<1,double>(xs_ptrs),
+                                      PointerBuffer<1,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<1,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 2:
       {
-        gpu_geometry_param_launcher<2>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<2><<<grid,block>>>(
+                                      PointerBuffer<2,double>(xs_ptrs),
+                                      PointerBuffer<2,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<2,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 3:
       {
-        gpu_geometry_param_launcher<3>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<3><<<grid,block>>>(
+                                      PointerBuffer<3,double>(xs_ptrs),
+                                      PointerBuffer<3,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<3,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 4:
       {
-        gpu_geometry_param_launcher<4>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<4><<<grid,block>>>(
+                                      PointerBuffer<4,double>(xs_ptrs),
+                                      PointerBuffer<4,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<4,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 5:
       {
-        gpu_geometry_param_launcher<5>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<5><<<grid,block>>>(
+                                      PointerBuffer<5,double>(xs_ptrs),
+                                      PointerBuffer<5,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<5,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 6:
       {
-        gpu_geometry_param_launcher<6>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<6><<<grid,block>>>(
+                                      PointerBuffer<6,double>(xs_ptrs),
+                                      PointerBuffer<6,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<6,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 7:
       {
-        gpu_geometry_param_launcher<7>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<7><<<grid,block>>>(
+                                      PointerBuffer<7,double>(xs_ptrs),
+                                      PointerBuffer<7,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<7,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 8:
       {
-        gpu_geometry_param_launcher<8>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<8><<<grid,block>>>(
+                                      PointerBuffer<8,double>(xs_ptrs),
+                                      PointerBuffer<8,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<8,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 9:
       {
-        gpu_geometry_param_launcher<9>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<9><<<grid,block>>>(
+                                      PointerBuffer<9,double>(xs_ptrs),
+                                      PointerBuffer<9,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<9,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 10:
       {
-        gpu_geometry_param_launcher<10>(xs_ptrs, dinv_ptrs,
-                                        xs_offsets, dinv_offsets,
-                                        vdelts, hi, hj, hk, 
-                                        subgrid_bounds.lo, 
-                                        grid, block, angles_per_thread);
+        gpu_geometry_param<10><<<grid,block>>>(
+                                      PointerBuffer<10,double>(xs_ptrs),
+                                      PointerBuffer<10,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<10,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 11:
       {
-        gpu_geometry_param_launcher<11>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<11><<<grid,block>>>(
+                                      PointerBuffer<11,double>(xs_ptrs),
+                                      PointerBuffer<11,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<11,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 12:
       {
-        gpu_geometry_param_launcher<12>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<12><<<grid,block>>>(
+                                      PointerBuffer<12,double>(xs_ptrs),
+                                      PointerBuffer<12,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<12,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 13:
       {
-        gpu_geometry_param_launcher<13>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<13><<<grid,block>>>(
+                                      PointerBuffer<13,double>(xs_ptrs),
+                                      PointerBuffer<13,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<13,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 14:
       {
-        gpu_geometry_param_launcher<14>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<14><<<grid,block>>>(
+                                      PointerBuffer<14,double>(xs_ptrs),
+                                      PointerBuffer<14,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<14,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 15:
       {
-        gpu_geometry_param_launcher<15>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<15><<<grid,block>>>(
+                                      PointerBuffer<15,double>(xs_ptrs),
+                                      PointerBuffer<15,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<15,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     case 16:
       {
-        gpu_geometry_param_launcher<16>(xs_ptrs, dinv_ptrs,
-                                       xs_offsets, dinv_offsets,
-                                       vdelts, hi, hj, hk, 
-                                       subgrid_bounds.lo, 
-                                       grid, block, angles_per_thread);
+        gpu_geometry_param<16><<<grid,block>>>(
+                                      PointerBuffer<16,double>(xs_ptrs),
+                                      PointerBuffer<16,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<16,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
         break;
       }
     default:
@@ -313,7 +362,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
 }
 
 __device__ __forceinline__
-ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
+ByteOffset operator*(const ByteOffsetArray<3> &offsets, const Point<3> &point)
 {
   return (offsets[0] * point.x[0] + offsets[1] * point.x[1] + offsets[2] * point.x[2]);
 }
@@ -331,7 +380,7 @@ void atomicAdd(double *ptr, double value)
 }
 
 __device__ __forceinline__
-double angle_read(const double *ptr, const ByteOffset offset[3],
+double angle_read(const double *ptr, const ByteOffsetArray<3> &offset,
                   const Point<3> &point, int ang)
 {
   ptr += (offset * point);
@@ -342,7 +391,7 @@ double angle_read(const double *ptr, const ByteOffset offset[3],
 }
 
 __device__ __forceinline__
-void angle_write(double *ptr, const ByteOffset offset[3],
+void angle_write(double *ptr, const ByteOffsetArray<3> &offset,
                  const Point<3> &point, int ang, double val)
 {
   ptr += (offset * point);
@@ -367,20 +416,20 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                          const double     *ghostx_in_ptr,
                                          const double     *ghosty_in_ptr,
                                          const double     *ghostz_in_ptr,
-                                         const ByteOffset qtot_offsets[3],
-                                         const ByteOffset flux_offsets[3],
-                                         const ByteOffset fluxm_offsets[3],
-                                         const ByteOffset dinv_offsets[3],
-                                         const ByteOffset time_flux_in_offsets[3],
-                                         const ByteOffset time_flux_out_offsets[3],
-                                         const ByteOffset t_xs_offsets[3],
-                                         const ByteOffset ghostx_out_offsets[3],
-                                         const ByteOffset ghosty_out_offsets[3],
-                                         const ByteOffset ghostz_out_offsets[3],
-                                         const ByteOffset qim_offsets[3],
-                                         const ByteOffset ghostx_in_offsets[3],
-                                         const ByteOffset ghosty_in_offsets[3],
-                                         const ByteOffset ghostz_in_offsets[3],
+                                         const ByteOffsetArray<3> qtot_offsets,
+                                         const ByteOffsetArray<3> flux_offsets,
+                                         const ByteOffsetArray<3> fluxm_offsets,
+                                         const ByteOffsetArray<3> dinv_offsets,
+                                         const ByteOffsetArray<3> time_flux_in_offsets,
+                                         const ByteOffsetArray<3> time_flux_out_offsets,
+                                         const ByteOffsetArray<3> t_xs_offsets,
+                                         const ByteOffsetArray<3> ghostx_out_offsets,
+                                         const ByteOffsetArray<3> ghosty_out_offsets,
+                                         const ByteOffsetArray<3> ghostz_out_offsets,
+                                         const ByteOffsetArray<3> qim_offsets,
+                                         const ByteOffsetArray<3> ghostx_in_offsets,
+                                         const ByteOffsetArray<3> ghosty_in_offsets,
+                                         const ByteOffsetArray<3> ghostz_in_offsets,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -826,19 +875,19 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                          const double     *ghostx_in_ptr,
                                          const double     *ghosty_in_ptr,
                                          const double     *ghostz_in_ptr,
-                                         const ByteOffset qtot_offsets[3],
-                                         const ByteOffset flux_offsets[3],
-                                         const ByteOffset fluxm_offsets[3],
-                                         const ByteOffset dinv_offsets[3],
-                                         const ByteOffset time_flux_in_offsets[3],
-                                         const ByteOffset time_flux_out_offsets[3],
-                                         const ByteOffset ghostx_out_offsets[3],
-                                         const ByteOffset ghosty_out_offsets[3],
-                                         const ByteOffset ghostz_out_offsets[3],
-                                         const ByteOffset qim_offsets[3],
-                                         const ByteOffset ghostx_in_offsets[3],
-                                         const ByteOffset ghosty_in_offsets[3],
-                                         const ByteOffset ghostz_in_offsets[3],
+                                         const ByteOffsetArray<3> qtot_offsets,
+                                         const ByteOffsetArray<3> flux_offsets,
+                                         const ByteOffsetArray<3> fluxm_offsets,
+                                         const ByteOffsetArray<3> dinv_offsets,
+                                         const ByteOffsetArray<3> time_flux_in_offsets,
+                                         const ByteOffsetArray<3> time_flux_out_offsets,
+                                         const ByteOffsetArray<3> ghostx_out_offsets,
+                                         const ByteOffsetArray<3> ghosty_out_offsets,
+                                         const ByteOffsetArray<3> ghostz_out_offsets,
+                                         const ByteOffsetArray<3> qim_offsets,
+                                         const ByteOffsetArray<3> ghostx_in_offsets,
+                                         const ByteOffsetArray<3> ghosty_in_offsets,
+                                         const ByteOffsetArray<3> ghostz_in_offsets,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1186,18 +1235,18 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                          const double     *ghostx_in_ptr,
                                          const double     *ghosty_in_ptr,
                                          const double     *ghostz_in_ptr,
-                                         const ByteOffset qtot_offsets[3],
-                                         const ByteOffset flux_offsets[3],
-                                         const ByteOffset fluxm_offsets[3],
-                                         const ByteOffset dinv_offsets[3],
-                                         const ByteOffset t_xs_offsets[3],
-                                         const ByteOffset ghostx_out_offsets[3],
-                                         const ByteOffset ghosty_out_offsets[3],
-                                         const ByteOffset ghostz_out_offsets[3],
-                                         const ByteOffset qim_offsets[3],
-                                         const ByteOffset ghostx_in_offsets[3],
-                                         const ByteOffset ghosty_in_offsets[3],
-                                         const ByteOffset ghostz_in_offsets[3],
+                                         const ByteOffsetArray<3> qtot_offsets,
+                                         const ByteOffsetArray<3> flux_offsets,
+                                         const ByteOffsetArray<3> fluxm_offsets,
+                                         const ByteOffsetArray<3> dinv_offsets,
+                                         const ByteOffsetArray<3> t_xs_offsets,
+                                         const ByteOffsetArray<3> ghostx_out_offsets,
+                                         const ByteOffsetArray<3> ghosty_out_offsets,
+                                         const ByteOffsetArray<3> ghostz_out_offsets,
+                                         const ByteOffsetArray<3> qim_offsets,
+                                         const ByteOffsetArray<3> ghostx_in_offsets,
+                                         const ByteOffsetArray<3> ghosty_in_offsets,
+                                         const ByteOffsetArray<3> ghostz_in_offsets,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1613,18 +1662,18 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                          const double     *ghostx_in_ptr,
                                          const double     *ghosty_in_ptr,
                                          const double     *ghostz_in_ptr,
-                                         const ByteOffset qtot_offsets[3],
-                                         const ByteOffset flux_offsets[3],
-                                         const ByteOffset fluxm_offsets[3],
-                                         const ByteOffset dinv_offsets[3],
-                                         const ByteOffset t_xs_offsets[3],
-                                         const ByteOffset ghostx_out_offsets[3],
-                                         const ByteOffset ghosty_out_offsets[3],
-                                         const ByteOffset ghostz_out_offsets[3],
-                                         const ByteOffset qim_offsets[3],
-                                         const ByteOffset ghostx_in_offsets[3],
-                                         const ByteOffset ghosty_in_offsets[3],
-                                         const ByteOffset ghostz_in_offsets[3],
+                                         const ByteOffsetArray<3> qtot_offsets,
+                                         const ByteOffsetArray<3> flux_offsets,
+                                         const ByteOffsetArray<3> fluxm_offsets,
+                                         const ByteOffsetArray<3> dinv_offsets,
+                                         const ByteOffsetArray<3> t_xs_offsets,
+                                         const ByteOffsetArray<3> ghostx_out_offsets,
+                                         const ByteOffsetArray<3> ghosty_out_offsets,
+                                         const ByteOffsetArray<3> ghostz_out_offsets,
+                                         const ByteOffsetArray<3> qim_offsets,
+                                         const ByteOffsetArray<3> ghostx_in_offsets,
+                                         const ByteOffsetArray<3> ghosty_in_offsets,
+                                         const ByteOffsetArray<3> ghostz_in_offsets,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -2006,13 +2055,22 @@ void run_gpu_sweep(const Point<3> origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
                 time_flux_out_ptr, t_xs_ptr, ghostx_out_ptr, ghosty_out_ptr,
                 ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
-                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
-                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
-                t_xs_offsets, ghostx_out_offsets, ghosty_out_offsets,
-                ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
-                ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
+                ghostz_in_ptr, ByteOffsetArray<3>(qtot_offsets), 
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets),
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(time_flux_in_offsets), 
+                ByteOffsetArray<3>(time_flux_out_offsets),
+                ByteOffsetArray<3>(t_xs_offsets), 
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets), 
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets),
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), x_range, y_range,
                 z_range, corner, stride_x_positive, stride_y_positive,
-                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt);
+                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt); 
             break;
           }
         case 2:
@@ -2021,13 +2079,22 @@ void run_gpu_sweep(const Point<3> origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
                 time_flux_out_ptr, t_xs_ptr, ghostx_out_ptr, ghosty_out_ptr,
                 ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
-                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
-                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
-                t_xs_offsets, ghostx_out_offsets, ghosty_out_offsets,
-                ghostz_out_offsets, qim_offsets, ghostx_in_offsets,
-                ghosty_in_offsets, ghostz_in_offsets, x_range, y_range,
+                ghostz_in_ptr, ByteOffsetArray<3>(qtot_offsets), 
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets),
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(time_flux_in_offsets), 
+                ByteOffsetArray<3>(time_flux_out_offsets),
+                ByteOffsetArray<3>(t_xs_offsets), 
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets), 
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets),
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), x_range, y_range,
                 z_range, corner, stride_x_positive, stride_y_positive,
-                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt);
+                stride_z_positive, mms_source, num_moments, hi, hj, hk, vdelt); 
             break;
           }
         default:
@@ -2043,11 +2110,20 @@ void run_gpu_sweep(const Point<3> origin,
             gpu_time_independent_sweep_with_fixup<1><<<grid,block>>>(origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
                 ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
-                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
-                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, 
+                ByteOffsetArray<3>(qtot_offsets),
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets), 
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(t_xs_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets),
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, hi, hj, hk);
             break;
@@ -2057,11 +2133,20 @@ void run_gpu_sweep(const Point<3> origin,
             gpu_time_independent_sweep_with_fixup<2><<<grid,block>>>(origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
                 ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
-                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
-                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, 
+                ByteOffsetArray<3>(qtot_offsets),
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets), 
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(t_xs_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets),
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, hi, hj, hk);
             break;
@@ -2083,11 +2168,20 @@ void run_gpu_sweep(const Point<3> origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
                 time_flux_out_ptr, ghostx_out_ptr, ghosty_out_ptr,
                 ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
-                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
-                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets, 
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostz_in_ptr, ByteOffsetArray<3>(qtot_offsets), 
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets),
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(time_flux_in_offsets), 
+                ByteOffsetArray<3>(time_flux_out_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets), 
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
                 mms_source, num_moments, hi, hj, hk, vdelt);
             break;
@@ -2098,11 +2192,20 @@ void run_gpu_sweep(const Point<3> origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, time_flux_in_ptr,
                 time_flux_out_ptr, ghostx_out_ptr, ghosty_out_ptr,
                 ghostz_out_ptr, qim_ptr, ghostx_in_ptr, ghosty_in_ptr,
-                ghostz_in_ptr, qtot_offsets, flux_offsets, fluxm_offsets,
-                dinv_offsets, time_flux_in_offsets, time_flux_out_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets, 
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostz_in_ptr, ByteOffsetArray<3>(qtot_offsets), 
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets),
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(time_flux_in_offsets), 
+                ByteOffsetArray<3>(time_flux_out_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets), 
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
                 mms_source, num_moments, hi, hj, hk, vdelt);
             break;
@@ -2120,11 +2223,20 @@ void run_gpu_sweep(const Point<3> origin,
             gpu_time_independent_sweep_without_fixup<1><<<grid,block>>>(origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
                 ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
-                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
-                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, 
+                ByteOffsetArray<3>(qtot_offsets),
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets), 
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(t_xs_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets),
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, hi, hj, hk);
             break;
@@ -2134,11 +2246,20 @@ void run_gpu_sweep(const Point<3> origin,
             gpu_time_independent_sweep_without_fixup<2><<<grid,block>>>(origin,
                 qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, t_xs_ptr, 
                 ghostx_out_ptr, ghosty_out_ptr, ghostz_out_ptr, qim_ptr,
-                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, qtot_offsets,
-                flux_offsets, fluxm_offsets, dinv_offsets, t_xs_offsets,
-                ghostx_out_offsets, ghosty_out_offsets, ghostz_out_offsets,
-                qim_offsets, ghostx_in_offsets, ghosty_in_offsets, 
-                ghostz_in_offsets, x_range, y_range, z_range, corner, 
+                ghostx_in_ptr, ghosty_in_ptr, ghostz_in_ptr, 
+                ByteOffsetArray<3>(qtot_offsets),
+                ByteOffsetArray<3>(flux_offsets), 
+                ByteOffsetArray<3>(fluxm_offsets), 
+                ByteOffsetArray<3>(dinv_offsets), 
+                ByteOffsetArray<3>(t_xs_offsets),
+                ByteOffsetArray<3>(ghostx_out_offsets), 
+                ByteOffsetArray<3>(ghosty_out_offsets), 
+                ByteOffsetArray<3>(ghostz_out_offsets),
+                ByteOffsetArray<3>(qim_offsets), 
+                ByteOffsetArray<3>(ghostx_in_offsets), 
+                ByteOffsetArray<3>(ghosty_in_offsets), 
+                ByteOffsetArray<3>(ghostz_in_offsets), 
+                x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, hi, hj, hk);
             break;

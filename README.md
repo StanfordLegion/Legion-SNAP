@@ -19,9 +19,10 @@ Some important points regarding this implementation:
   in this implementation are tuned well beyond what a normal user
   would likely ever be capable of doing to ensure that we can 
   accurately gauge the runtime overhead. These kernels are highly
-  optimized to block for caches, and use vector intrinstics and 
+  optimized to block for caches, use vector intrinstics, and use
   inline assembly code. This simply ensures we make an accurate
-  assessment of the Legion runtime's overhead.
+  assessment of the Legion runtime's overhead and should not be
+  used in determining the verbosity of the Legion interface.
 * There is one optimization that Legion supports for execution
   with GPUs that is not available in other programming models.
   Legion's ability to find significant parallelism from sweeps
