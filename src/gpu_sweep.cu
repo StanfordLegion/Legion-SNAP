@@ -22,8 +22,10 @@
 using namespace LegionRuntime::Accessor;
 
 // Some bounds for use of GPU kernels, can be modified easily
-// Be careful about memory usage
-#define MAX_ANGLES  1024
+// Be careful about memory usage, modifying MAX_X_CHUNK and
+// MAX_Y_CHUNK will influence how much local memory must be
+// allocated for each kernel
+#define MAX_ANGLES  2048
 #define MAX_X_CHUNK 16
 #define MAX_Y_CHUNK 16
 
