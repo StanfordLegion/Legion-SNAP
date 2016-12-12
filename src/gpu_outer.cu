@@ -502,8 +502,8 @@ void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
   // Butterfly reduction across all threads in all warps
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  unsigned warpid;
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  const unsigned warpid = 
+    ((blockIdx.z * blockDim.y + blockIdx.y) * blockDim.y + threadIdx.x) >> 5;
   for (int i = 16; i >= 1; i/=2)
     local_converged += __shfl_xor(local_converged, i, 32);
   // Initialize the trampoline

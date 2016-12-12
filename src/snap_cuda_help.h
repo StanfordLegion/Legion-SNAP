@@ -38,7 +38,7 @@ public:
       buffer[idx] = ptrs[idx];
   }
 public:
-  __host__ __device__
+  __host__ __device__ 
   inline T* operator[](unsigned idx) const { return buffer[idx]; }
 public:
   T *buffer[GROUPS];
@@ -60,7 +60,7 @@ public:
       buffer[idx] = buf[idx];
   }
 public:
-  __host__ __device__
+  __host__ __device__ 
   inline T& operator[](unsigned idx) { return buffer[idx]; }
   __host__ __device__
   inline const T& operator[](unsigned idx) const { return buffer[idx]; }
@@ -78,7 +78,7 @@ public:
       offsets[idx] = offs[idx];
   }
 public:
-  __host__ __device__
+  __host__ __device__ 
   inline const LegionRuntime::Accessor::ByteOffset& operator[](unsigned idx) const 
     { return offsets[idx]; }
 public:

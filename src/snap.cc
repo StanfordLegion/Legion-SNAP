@@ -523,7 +523,7 @@ void Snap::transport_solve(void)
         inner_src.dispatch(ctx, runtime);
         // Save the fluxes
         save_fluxes(inner_pred, flux0, flux0pi);
-        flux0.initialize(inner_pred);
+        flux0.initialize(inner_pred, false/*include ghost*/);
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
                        even_time_step ? time_flux_even : time_flux_odd,
@@ -1544,7 +1544,7 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 }
 
 //------------------------------------------------------------------------------
-void SnapArray::initialize(Predicate pred) const
+void SnapArray::initialize(Predicate pred, bool include_ghost) const
 //------------------------------------------------------------------------------
 {
   assert(!regular_fields.empty());
@@ -1557,15 +1557,28 @@ void SnapArray::initialize(Predicate pred) const
   launcher.fields = regular_fields;
   runtime->fill_fields(ctx, launcher);
   free(buffer);
+  if (include_ghost) {
+    size_t ghost_field_size = runtime->get_field_size(lr.get_field_space(),
+                                                  *(ghost_fields.begin()));
+    buffer = malloc(ghost_field_size);
+    memset(buffer, 0, ghost_field_size);
+    FillLauncher ghost_launcher(lr, lr, 
+                                TaskArgument(buffer, ghost_field_size), pred);
+    ghost_launcher.fields = ghost_fields;
+    runtime->fill_fields(ctx, ghost_launcher);
+    free(buffer);
+  }
 }
 
 //------------------------------------------------------------------------------
 template<typename T>
-void SnapArray::initialize(T value, Predicate pred) const
+void SnapArray::initialize(T value, Predicate pred, bool include_ghost) const
 //------------------------------------------------------------------------------
 {
   FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)), pred);
   launcher.fields = regular_fields;
+  if (include_ghost)
+    launcher.fields.insert(ghost_fields.begin(), ghost_fields.end());
   runtime->fill_fields(ctx, launcher);
 }
 

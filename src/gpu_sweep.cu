@@ -27,16 +27,6 @@ using namespace LegionRuntime::Accessor;
 #define MAX_X_CHUNK 16
 #define MAX_Y_CHUNK 16
 
-// If you change MAX_CTA you should also adjust the mapper
-// to properly chunk the sweeps for the number of buffers
-#define MAX_CTA      32 // Only GP100 has more than 32 concurrent kernels
-
-// We'll dynamically allocate the CTA chunks
-__device__ unsigned available_chunks[MAX_CTA];
-// Create the planes and pencils for doing the sweeps
-__device__ double yflux_pencils[MAX_CTA][MAX_X_CHUNK][MAX_ANGLES];
-__device__ double zflux_planes[MAX_CTA][MAX_Y_CHUNK][MAX_Y_CHUNK][MAX_ANGLES];
-
 // Don't use the __constant__ qualifier here!
 // Each thread in a warp will be indexing on
 // a per angle basis and we don't want replays
@@ -65,11 +55,6 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
     printf("ERROR: adjust MAX_Y_CHUNK in gpu_sweep.cu to %d", ny_per_chunk);
   assert(ny_per_chunk <= MAX_Y_CHUNK);
   
-  // Set all the available chunks to 1 indicating that they are all available
-  unsigned available[MAX_CTA];
-  for (int i = 0; i < MAX_CTA; i++)
-    available[i] = 1;
-  cudaMemcpyToSymbol(available_chunks, available, MAX_CTA * sizeof(unsigned));
   cudaMemcpyToSymbol(device_ec, ec_h, 
                      num_angles * num_moments * num_octants * sizeof(double));
   cudaMemcpyToSymbol(device_mu, mu_h, num_angles * sizeof(double));
@@ -100,42 +85,16 @@ void gpu_geometry_param(const PointerBuffer<GROUPS,double> xs_ptrs,
     for (int g = 0; g < GROUPS; g++) {
       const double *xs_ptr = xs_ptrs[g] + x * xs_offsets[0] + 
                                           y * xs_offsets[1] + z * xs_offsets[2];
-      double val;
-      asm volatile("ld.global.cs.f64 %0, [%1];" : "=d"(val) : "l"(xs_ptr+ang) : "memory");
-      val += sum + vdelt[g]; 
+      double xs;
+      // Cache this at all levels since it is shared across all threads in the CTA
+      asm volatile("ld.global.ca.f64 %0, [%1];" : "=d"(xs) : "l"(xs_ptr) : "memory");
+      double result = 1.0 / (xs + vdelt[g] + sum);
       double *dinv_ptr = dinv_ptrs[g] + x * dinv_offsets[0] + 
                                         y * dinv_offsets[1] + z * dinv_offsets[2];
-      asm volatile("st.global.cs.f64 [%0], %1;" : : "l"(dinv_ptr+ang), "d"(val) : "memory");
+      asm volatile("st.global.cs.f64 [%0], %1;" : : 
+                    "l"(dinv_ptr+ang), "d"(result) : "memory");
     }
   }
-}
-
-template<int GROUPS>
-__host__
-void gpu_geometry_param_launcher(const std::vector<double*> &xs_ptrs,
-                                 const std::vector<double*> &dinv_ptrs,
-                                 const ByteOffset xs_offsets[3],
-                                 const ByteOffset dinv_offsets[3],
-                                 const std::vector<double> &vdelts,
-                                 const double hi, const double hj, const double hk,
-                                 const Point<3> &origin,
-                                 const dim3 &grid, const dim3 &block,
-                                 const int angles_per_thread)
-{
-  const double *xs_buffer[GROUPS];
-  for (int g = 0; g < GROUPS; g++)
-    xs_buffer[g] = xs_ptrs[g];
-  double *dinv_buffer[GROUPS];
-  for (int g = 0; g < GROUPS; g++)
-    dinv_buffer[g] = dinv_ptrs[g];
-  double vdelt_buffer[GROUPS];
-  for (int g = 0; g < GROUPS; g++)
-    vdelt_buffer[g] = vdelts[g];
-
-  gpu_geometry_param<GROUPS><<<grid,block>>>(xs_buffer, dinv_buffer,
-                                             xs_offsets, dinv_offsets,
-                                             vdelt_buffer, hi, hj, hk, 
-                                             origin, angles_per_thread);
 }
 
 __host__
@@ -463,30 +422,13 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
 
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  unsigned warpid;
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid = threadIdx.x >> 5;
 
-  // Get a chunk for this CTA
-  if ((warpid == 0) && (laneid == 0)) {
-    // Start at our SM ID to avoid contention
-    int smid;
-    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
-    int chunk = -1;
-    while (chunk < 0) {
-      #pragma unroll
-      for (int i = 0; i < MAX_CTA; i++) {
-        int offset = (smid + i) % MAX_CTA;
-        if (atomicDec(available_chunks+offset, 0) == 1) {
-          chunk = offset;
-          break;
-        }
-      }
-    }
-    int_trampoline[0] = chunk;
-  }
-  __syncthreads();
-  const int cta_chunk = int_trampoline[0];
-  __syncthreads();
+  // These will be intentionally spilled to local memory
+  // because the CUDA compiler can't statically understand
+  // all their accesses, which is where we actualy want them
+  double yflux_pencil[MAX_X_CHUNK][THR_ANGLES];
+  double zflux_plane[MAX_Y_CHUNK][MAX_X_CHUNK][THR_ANGLES];
 
   const double tolr = 1.0e-12;
 
@@ -579,7 +521,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         } else {
           // reading from y+1
@@ -596,7 +538,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         }
         #pragma unroll
@@ -617,7 +559,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         } else {
           // reading from z+1
@@ -634,7 +576,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         }
         #pragma unroll
@@ -653,7 +595,6 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
           double dinv = angle_read(dinv_ptr, dinv_offsets, local_point, ang);
           pc[ang] *= dinv;
         }
-
         // DO THE FIXUP
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
@@ -776,7 +717,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
           // Write to the pencil
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
+            yflux_pencil[x][ang] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -787,7 +728,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
         } else {
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
+            zflux_plane[y][x][ang] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -855,8 +796,6 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
       }
     }
   }
-  // Release our CTA chunk back to the pool
-  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -898,7 +837,6 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                          const double hi, const double hj,
                                          const double hk, const double vdelt)
 {
-  __shared__ int int_trampoline;
   __shared__ double double_trampoline[32];
 
   double psi[THR_ANGLES];
@@ -913,30 +851,13 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
 
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  unsigned warpid;
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid = threadIdx.x >> 5;
 
-  // Get a chunk for this CTA
-  if ((warpid == 0) && (laneid == 0)) {
-    // Start at our SM ID to avoid contention
-    int smid;
-    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
-    int chunk = -1;
-    while (chunk < 0) {
-      #pragma unroll
-      for (int i = 0; i < MAX_CTA; i++) {
-        int offset = (smid + i) % MAX_CTA;
-        if (atomicDec(available_chunks+offset, 0) == 1) {
-          chunk = offset;
-          break;
-        }
-      }
-    }
-    int_trampoline = chunk;
-  }
-  __syncthreads();
-  const int cta_chunk = int_trampoline;
-  __syncthreads();
+  // These will be intentionally spilled to local memory
+  // because the CUDA compiler can't statically understand
+  // all their accesses, which is where we actualy want them
+  double yflux_pencil[MAX_X_CHUNK][THR_ANGLES];
+  double zflux_plane[MAX_Y_CHUNK][MAX_X_CHUNK][THR_ANGLES];
 
   for (int z = 0; z < z_range; z++) {
     for (int y = 0; y < y_range; y++) {
@@ -1027,7 +948,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         } else {
           // reading from y+1
@@ -1044,7 +965,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         }
         #pragma unroll
@@ -1065,7 +986,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         } else {
           // reading from z+1
@@ -1082,7 +1003,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         }
         #pragma unroll
@@ -1137,7 +1058,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
           // Write to the pencil
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
+            yflux_pencil[x][ang] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -1148,7 +1069,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
         } else {
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
+            zflux_plane[y][x][ang] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -1216,8 +1137,6 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
       }
     }
   }
-  // Release our CTA chunk back to the pool
-  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -1277,30 +1196,13 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
 
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  unsigned warpid;
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid = threadIdx.x >> 5;
 
-  // Get a chunk for this CTA
-  if ((warpid == 0) && (laneid == 0)) {
-    // Start at our SM ID to avoid contention
-    int smid;
-    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
-    int chunk = -1;
-    while (chunk < 0) {
-      #pragma unroll
-      for (int i = 0; i < MAX_CTA; i++) {
-        int offset = (smid + i) % MAX_CTA;
-        if (atomicDec(available_chunks+offset, 0) == 1) {
-          chunk = offset;
-          break;
-        }
-      }
-    }
-    int_trampoline[0] = chunk;
-  }
-  __syncthreads();
-  const int cta_chunk = int_trampoline[0];
-  __syncthreads();
+  // These will be intentionally spilled to local memory
+  // because the CUDA compiler can't statically understand
+  // all their accesses, which is where we actualy want them
+  double yflux_pencil[MAX_X_CHUNK][THR_ANGLES];
+  double zflux_plane[MAX_Y_CHUNK][MAX_X_CHUNK][THR_ANGLES];
 
   const double tolr = 1.0e-12;
 
@@ -1393,7 +1295,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         } else {
           // reading from y+1
@@ -1410,7 +1312,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         }
         #pragma unroll
@@ -1431,7 +1333,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         } else {
           // reading from z+1
@@ -1448,7 +1350,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         }
         #pragma unroll
@@ -1564,7 +1466,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
           // Write to the pencil
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
+            yflux_pencil[x][ang] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -1575,7 +1477,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
         } else {
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
+            zflux_plane[y][x][ang] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -1643,8 +1545,6 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
       }
     }
   }
-  // Release our CTA chunk back to the pool
-  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 template<int THR_ANGLES>
@@ -1684,7 +1584,6 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                          const double hi, const double hj,
                                          const double hk) 
 {
-  __shared__ int int_trampoline;
   __shared__ double double_trampoline[32];
 
   double psi[THR_ANGLES];
@@ -1698,30 +1597,13 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
 
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  unsigned warpid;
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid = threadIdx.x >> 5;
 
-  // Get a chunk for this CTA
-  if ((warpid == 0) && (laneid == 0)) {
-    // Start at our SM ID to avoid contention
-    int smid;
-    asm volatile("mov.u32 %0, %smid;" : "=r"(smid) : );
-    int chunk = -1;
-    while (chunk < 0) {
-      #pragma unroll
-      for (int i = 0; i < MAX_CTA; i++) {
-        int offset = (smid + i) % MAX_CTA;
-        if (atomicDec(available_chunks+offset, 0) == 1) {
-          chunk = offset;
-          break;
-        }
-      }
-    }
-    int_trampoline = chunk;
-  }
-  __syncthreads();
-  const int cta_chunk = int_trampoline;
-  __syncthreads();
+  // These will be intentionally spilled to local memory
+  // because the CUDA compiler can't statically understand
+  // all their accesses, which is where we actualy want them
+  double yflux_pencil[MAX_X_CHUNK][THR_ANGLES];
+  double zflux_plane[MAX_Y_CHUNK][MAX_X_CHUNK][THR_ANGLES];
 
   for (int z = 0; z < z_range; z++) {
     for (int y = 0; y < y_range; y++) {
@@ -1812,7 +1694,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         } else {
           // reading from y+1
@@ -1829,7 +1711,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x];
+              psij[ang] = yflux_pencil[x][ang];
           }
         }
         #pragma unroll
@@ -1850,7 +1732,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         } else {
           // reading from z+1
@@ -1867,7 +1749,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             // Local array
             #pragma unroll
             for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x];
+              psik[ang] = zflux_plane[y][x][ang];
           }
         }
         #pragma unroll
@@ -1909,7 +1791,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
           // Write to the pencil
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            yflux_pencils[cta_chunk][x][ang*blockDim.x + threadIdx.x] = psij[ang];
+            yflux_pencil[x][ang] = psij[ang];
         }
         // Z ghost
         if (z == (z_range - 1)) {
@@ -1920,7 +1802,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
         } else {
           #pragma unroll
           for (int ang = 0; ang < THR_ANGLES; ang++)
-            zflux_planes[cta_chunk][y][x][ang*blockDim.x + threadIdx.x] = psik[ang];
+            zflux_plane[y][x][ang] = psik[ang];
         }
         // Finally we apply reductions to the flux moments
         double total = 0.0;  
@@ -1988,8 +1870,6 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
       }
     }
   }
-  // Release our CTA chunk back to the pool
-  atomicInc(available_chunks+cta_chunk, 1);
 }
 
 __host__
