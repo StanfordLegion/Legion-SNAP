@@ -479,107 +479,59 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] = psi[ang];
         // X ghost cells
-        if (stride_x_positive) {
-          // reading from x-1 
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] -= 1;
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll 
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
-                                     ghost_point, ang);
-          } 
-          // Else nothing: psii already contains next flux
-        } else {
-          // reading from x+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] += 1;
-          // Local coordinates here
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
-                                     ghost_point, ang);
-          }
-          // Else nothing: psii already contains next flux
-        }
+        if (x == 0) {
+          // Ghost cell array
+          Point<3> ghost_point = local_point; 
+          if (stride_x_positive)
+            ghost_point.x[0] -= 1; // reading from x-1
+          else
+            ghost_point.x[0] += 1; // reading from x+1
+          #pragma unroll 
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
+                                   ghost_point, ang);
+        } // Else nothing: psii already contains next flux
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psii[ang] * device_mu[ang*blockDim.x + threadIdx.x] * hi;
         // Y ghost cells
-        if (stride_y_positive) {
-          // reading from y-1
+        if (y == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[1] -= 1;
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          if (stride_y_positive)
+            ghost_point.x[1] -= 1; // reading from y-1
+          else
+            ghost_point.x[1] += 1; // reading from y+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from y+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] += 1;
-          // Local coordinates here
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = yflux_pencil[x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psij[ang] * device_eta[ang * blockDim.x + threadIdx.x] * hj;
         // Z ghost cells
-        if (stride_z_positive) {
-          // reading from z-1
+        if (z == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[2] -= 1;
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          if (stride_z_positive)
+            ghost_point.x[2] -= 1; // reading from z-1
+          else
+            ghost_point.x[2] += 1; // reading from z+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from z+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] += 1;
-          // Local coordinates here
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = zflux_plane[y][x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
@@ -906,107 +858,59 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] = psi[ang];
         // X ghost cells
-        if (stride_x_positive) {
-          // reading from x-1 
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] -= 1;
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll 
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          } 
-          // Else nothing: psii already contains next flux
-        } else {
-          // reading from x+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] += 1;
-          // Local coordinates here
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          }
-          // Else nothing: psii already contains next flux
-        }
+        if (x == 0) {
+          // Ghost cell array
+          Point<3> ghost_point = local_point; 
+          if (stride_x_positive)
+            ghost_point.x[0] -= 1; // reading from x-1
+          else
+            ghost_point.x[0] += 1; // reading from x+1
+          #pragma unroll 
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
+                                   ghost_point, ang);
+        } // Else nothing: psii already contains next flux
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psii[ang] * device_mu[ang*blockDim.x + threadIdx.x] * hi;
         // Y ghost cells
-        if (stride_y_positive) {
-          // reading from y-1
+        if (y == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[1] -= 1;
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          if (stride_y_positive)
+            ghost_point.x[1] -= 1; // reading from y-1
+          else
+            ghost_point.x[1] += 1; // reading from y+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from y+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] += 1;
-          // Local coordinates here
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = yflux_pencil[x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psij[ang] * device_eta[ang * blockDim.x + threadIdx.x] * hj;
         // Z ghost cells
-        if (stride_z_positive) {
-          // reading from z-1
+        if (z == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[2] -= 1;
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          if (stride_z_positive)
+            ghost_point.x[2] -= 1; // reading from z-1
+          else
+            ghost_point.x[2] += 1; // reading from z+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from z+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] += 1;
-          // Local coordinates here
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = zflux_plane[y][x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
@@ -1253,107 +1157,59 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] = psi[ang];
         // X ghost cells
-        if (stride_x_positive) {
-          // reading from x-1 
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] -= 1;
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll 
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          } 
-          // Else nothing: psii already contains next flux
-        } else {
-          // reading from x+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] += 1;
-          // Local coordinates here
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          }
-          // Else nothing: psii already contains next flux
-        }
+        if (x == 0) {
+          // Ghost cell array
+          Point<3> ghost_point = local_point; 
+          if (stride_x_positive)
+            ghost_point.x[0] -= 1; // reading from x-1
+          else
+            ghost_point.x[0] += 1; // reading from x+1
+          #pragma unroll 
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
+                                   ghost_point, ang);
+        } // Else nothing: psii already contains next flux       
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psii[ang] * device_mu[ang*blockDim.x + threadIdx.x] * hi;
         // Y ghost cells
-        if (stride_y_positive) {
-          // reading from y-1
+        if (y == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[1] -= 1;
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          if (stride_y_positive)
+            ghost_point.x[1] -= 1; // reading from y-1
+          else
+            ghost_point.x[1] += 1; // reading from y+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from y+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] += 1;
-          // Local coordinates here
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = yflux_pencil[x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psij[ang] * device_eta[ang * blockDim.x + threadIdx.x] * hj;
         // Z ghost cells
-        if (stride_z_positive) {
-          // reading from z-1
+        if (z == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[2] -= 1;
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          if (stride_z_positive)
+            ghost_point.x[2] -= 1; // reading from z-1
+          else
+            ghost_point.x[2] += 1; // reading from z+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from z+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] += 1;
-          // Local coordinates here
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = zflux_plane[y][x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
@@ -1652,107 +1508,59 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] = psi[ang];
         // X ghost cells
-        if (stride_x_positive) {
-          // reading from x-1 
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] -= 1;
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll 
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          } 
-          // Else nothing: psii already contains next flux
-        } else {
-          // reading from x+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[0] += 1;
-          // Local coordinates here
-          if (x == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets,
-                                     ghost_point, ang);
-          }
-          // Else nothing: psii already contains next flux
-        }
+        if (x == 0) {
+          // Ghost cell array
+          Point<3> ghost_point = local_point; 
+          if (stride_x_positive)
+            ghost_point.x[0] -= 1; // reading from x-1
+          else
+            ghost_point.x[0] += 1; // reading from x+1
+          #pragma unroll 
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psii[ang] = angle_read(ghostx_in_ptr, ghostx_in_offsets, 
+                                   ghost_point, ang);
+        } // Else nothing: psii already contains next flux
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psii[ang] * device_mu[ang*blockDim.x + threadIdx.x] * hi;
         // Y ghost cells
-        if (stride_y_positive) {
-          // reading from y-1
+        if (y == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[1] -= 1;
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          if (stride_y_positive)
+            ghost_point.x[1] -= 1; // reading from y-1
+          else
+            ghost_point.x[1] += 1; // reading from y+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from y+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[1] += 1;
-          // Local coordinates here
-          if (y == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = angle_read(ghosty_in_ptr, ghosty_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psij[ang] = yflux_pencil[x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psij[ang] = yflux_pencil[x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
           pc[ang] += psij[ang] * device_eta[ang * blockDim.x + threadIdx.x] * hj;
         // Z ghost cells
-        if (stride_z_positive) {
-          // reading from z-1
+        if (z == 0) {
+          // Ghost cell array
           Point<3> ghost_point = local_point;
-          ghost_point.x[2] -= 1;
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
-                                     ghost_point, ang);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          if (stride_z_positive)
+            ghost_point.x[2] -= 1; // reading from z-1
+          else
+            ghost_point.x[2] += 1; // reading from z+1
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = angle_read(ghostz_in_ptr, ghostz_in_offsets,
+                                   ghost_point, ang);
         } else {
-          // reading from z+1
-          Point<3> ghost_point = local_point;
-          ghost_point.x[2] += 1;
-          // Local coordinates here
-          if (z == 0) {
-            // Ghost cell array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = *((ghostz_in_ptr + ghostz_in_offsets * ghost_point) + 
-                            ang*blockDim.x + threadIdx.x);
-          } else {
-            // Local array
-            #pragma unroll
-            for (int ang = 0; ang < THR_ANGLES; ang++)
-              psik[ang] = zflux_plane[y][x][ang];
-          }
+          // Local array
+          #pragma unroll
+          for (int ang = 0; ang < THR_ANGLES; ang++)
+            psik[ang] = zflux_plane[y][x][ang];
         }
         #pragma unroll
         for (int ang = 0; ang < THR_ANGLES; ang++)
