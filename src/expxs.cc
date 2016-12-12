@@ -50,7 +50,7 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 /*static*/ void ExpandCrossSection::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -264,7 +264,7 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 /*static*/ void ExpandScatteringCrossSection::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -484,7 +484,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 /*static*/ void CalculateGeometryParam::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

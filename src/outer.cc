@@ -48,7 +48,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcOuterSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -214,7 +214,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 
   // We'll block the innermost dimension to get some cache locality
   // This assumes a worst case 128 energy groups and a 32 KB L1 cache
-#define STRIP_SIZE 16
+#define STRIP_SIZE 4 
   assert((((subgrid_bounds.hi[0] - subgrid_bounds.lo[0])+1) % STRIP_SIZE) == 0);
   double *flux_strip = (double*)malloc(num_groups*STRIP_SIZE*sizeof(double));
 
@@ -468,7 +468,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 /*static*/ void TestOuterConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<bool, fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

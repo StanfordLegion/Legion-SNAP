@@ -160,7 +160,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 /*static*/ void MiniKBATask::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<sse_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -955,7 +955,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
               psik = zflux_plane + (y * x_range + x) * num_vec_angles;
             }
           }
-          for (int ang = 0; ang < Snap::num_angles; ang++)
+          for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psik[ang],
                     _mm_set_pd(Snap::xi[2*ang+1], Snap::xi[2*ang])),
                     _mm_set1_pd(Snap::hk)));
@@ -972,7 +972,6 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           __m128d *dinv = get_sse_angle_ptr(dinv_ptr, dinv_offsets, local_point);
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
-
           if (Snap::flux_fixup) {
             // DO THE FIXUP
             unsigned old_negative_fluxes = 0;
@@ -1527,7 +1526,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
               psik = zflux_plane + (y * x_range + x) * num_vec_angles;
             }
           }
-          for (int ang = 0; ang < Snap::num_angles; ang++)
+          for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psik[ang],
                     _mm256_set_pd(Snap::xi[4*ang+3], Snap::xi[4*ang+2],
                                   Snap::xi[4*ang+1], Snap::xi[4*ang])),

@@ -46,7 +46,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcInnerSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 /*static*/ void TestInnerConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, cpu_implementation>(true/*leaf*/);
+  register_cpu_variant<bool, fast_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
