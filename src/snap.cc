@@ -20,6 +20,7 @@
 #include "sweep.h"
 #include "expxs.h"
 #include "mms.h"
+#include "convergence.h"
 
 #include <cstdio>
 
@@ -340,13 +341,11 @@ void Snap::transport_solve(void)
   SnapArray ref_fluxm(simulation_is, spatial_ip, flux_moment_fs, 
                       ctx, runtime, "ref_fluxm");
   const bool do_mms = (source_layout == MMS_SOURCE);
-  if (do_mms) {
-    for (int i = 0; i < 8; i++) {
-      char name_buffer[64];
-      snprintf(name_buffer, 63, "qim %d", i);
-      qim[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
-                             ctx, runtime, name_buffer);
-    }
+  for (int i = 0; i < 8; i++) {
+    char name_buffer[64];
+    snprintf(name_buffer, 63, "qim %d", i);
+    qim[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
+                           ctx, runtime, name_buffer);
   }
 
   // Initialize our data
@@ -441,6 +440,9 @@ void Snap::transport_solve(void)
   const Future true_future = Future::from_value<bool>(runtime, true);
   // Iterate over time steps
   bool even_time_step = false;
+  // Use this for printing convergence and timing information
+  // in a deferred execution environment with predication
+  ConvergenceMonad convergence(ctx, runtime);
   for (int cy = 0; cy < num_steps; ++cy)
   {
     even_time_step = !even_time_step;
@@ -501,6 +503,7 @@ void Snap::transport_solve(void)
     }
     outer_converged_tests.clear();
     Predicate outer_pred = Predicate::TRUE_PRED;
+    Future timing_future_precondition;
     // The outer solve loop    
     for (int otno = 0; otno < max_outer_iters; ++otno)
     {
@@ -534,6 +537,7 @@ void Snap::transport_solve(void)
                                         flux0, flux0pi, true_future);
         inner_converged = inner_conv.dispatch<AndReduction>(ctx, runtime);
         inner_converged_tests.push_back(inner_converged);
+        convergence.bind_inner(inner_pred, inner_converged);
         // Update the next predicate
         Predicate converged = runtime->create_predicate(ctx, inner_converged);
         inner_pred = runtime->predicate_not(ctx, converged);
@@ -555,6 +559,7 @@ void Snap::transport_solve(void)
       Future outer_converged = 
         outer_conv.dispatch<AndReduction>(ctx, runtime);
       outer_converged_tests.push_back(outer_converged);
+      convergence.bind_outer(outer_pred, outer_converged);
       // Update the next predicate
       Predicate converged = runtime->create_predicate(ctx, outer_converged);
       outer_pred = runtime->predicate_not(ctx, converged);
@@ -572,10 +577,10 @@ void Snap::transport_solve(void)
     MMSCompare compare_mms(*this, flux0, ref_flux); 
     Future f = compare_mms.dispatch<MMSReduction>(ctx, runtime);
     MomentTriple result = f.get_result<MomentTriple>(true/*silence warnings*/);
-    printf("MMS Max Diff: %.8g\n", result[0]);
-    printf("MMS Min Diff: %.8g\n", result[1]);
+    log_snap.print("MMS Max Diff: %.8g", result[0]);
+    log_snap.print("MMS Min Diff: %.8g", result[1]);
     const size_t total_cells = nx * nx_chunks * ny * ny_chunks * nz * nz_chunks;
-    printf("MMS Avg Diff: %.8g\n", result[2]/double(total_cells));
+    log_snap.print("MMS Avg Diff: %.8g", result[2]/double(total_cells));
   }
   for (int i = 0; i < 8; i++) {
     delete time_flux_even[i];
@@ -1405,6 +1410,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   MMSInitTimeDependent::preregister_cpu_variants();
   MMSScale::preregister_cpu_variants();
   MMSCompare::preregister_cpu_variants();
+  ConvergenceMonad::preregister_cpu_variants();
   // Register projection functors
   Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
                         new SnapSweepProjectionFunctor());
@@ -1650,8 +1656,8 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
   // Not valid, need to go get the result
   LogicalRegion result = runtime->get_logical_subregion_by_color(upper_bound,
                                 Snap::wavefront_map[corner][wavefront][p[0]]);
-  cache[corner][index][wavefront][p[0]] = result;
-  cache_valid[corner][index][wavefront][p[0]] = true;
+  //cache[corner][index][wavefront][p[0]] = result;
+  //cache_valid[corner][index][wavefront][p[0]] = true;
   return result;
 }
 

@@ -63,6 +63,8 @@ public:
     MMS_INIT_TIME_DEPENDENT_TASK_ID,
     MMS_SCALE_TASK_ID,
     MMS_COMPARE_TASK_ID,
+    BIND_INNER_CONVERGENCE_TASK_ID,
+    BIND_OUTER_CONVERGENCE_TASK_ID,
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES                 \
@@ -82,7 +84,9 @@ public:
     "MMS Init Source",                  \
     "MMS Init Time Dependent",          \
     "MMS Scale",                        \
-    "MMS Compare"
+    "MMS Compare",                      \
+    "Bind Inner Convergence",           \
+    "Bind Outer Convergence",
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,

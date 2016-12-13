@@ -153,6 +153,13 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 #endif
 }
 
+static int gcd(int a, int b)
+{
+  if (a < b) return gcd(a, b-a);
+  if (a > b) return gcd(a-b, b);
+  return a;
+}
+
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::fast_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -198,13 +205,13 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     } else {
       ByteOffset temp[3];
       qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(temp);
-      assert(temp == qi0_offsets);
+      assert(offsets_match<3>(temp, qi0_offsets));
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
-      assert(temp == flux0_offsets);
+      assert(offsets_match<3>(temp, flux0_offsets));
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
-      assert(temp == slgg_offsets);
+      assert(offsets_match<2>(temp, slgg_offsets));
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
-      assert(temp == qo0_offsets);
+      assert(offsets_match<3>(temp, qo0_offsets));
     }
   }
   RegionAccessor<AccessorType::Generic,int> fa_mat = 
@@ -214,20 +221,20 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 
   // We'll block the innermost dimension to get some cache locality
   // This assumes a worst case 128 energy groups and a 32 KB L1 cache
-#define STRIP_SIZE 4 
-  assert((((subgrid_bounds.hi[0] - subgrid_bounds.lo[0])+1) % STRIP_SIZE) == 0);
-  double *flux_strip = (double*)malloc(num_groups*STRIP_SIZE*sizeof(double));
+  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
+  const int strip_size = gcd(x_range, 32);
+  double *flux_strip = (double*)malloc(num_groups*strip_size*sizeof(double));
 
   for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
     for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
-      for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x+=STRIP_SIZE) {
+      for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x+=strip_size) {
         // Read in the flux strip first
         const ByteOffset flux_offset = 
           x * flux0_offsets[0] + y * flux0_offsets[1] + z * flux0_offsets[2];
         for (int g = 0; g < num_groups; g++) {
           double *flux_ptr = flux0_ptrs[g] + flux_offset;
-          for (int i = 0; i < STRIP_SIZE; i++) 
-            flux_strip[g * STRIP_SIZE + i] = *(flux_ptr + i * flux0_offsets[0]);
+          for (int i = 0; i < strip_size; i++) 
+            flux_strip[g * strip_size + i] = *(flux_ptr + i * flux0_offsets[0]);
         }
         const ByteOffset qi0_offset = 
           x * qi0_offsets[0] + y * qi0_offsets[1] + z * qi0_offsets[2];
@@ -237,7 +244,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
           x * qo0_offsets[0] + y * qo0_offsets[1] + z * qo0_offsets[2];
         // We've loaded all the strips, now do the math
         for (int g1 = 0; g1 < num_groups; g1++) {
-          for (int i = 0; i < STRIP_SIZE; i++) {
+          for (int i = 0; i < strip_size; i++) {
             double qo0 = *(qi0_ptrs[g1] + qi0_offset + i * qi0_offsets[0]);
             // Have to look up the the two materials separately 
             const int mat = *(mat_ptr + mat_offset + i * mat_offsets[0]);
@@ -246,7 +253,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
                 continue;
               MomentQuad cs = *(slgg_ptrs[g1] + 
                 mat * slgg_offsets[0] + g2 * slgg_offsets[1]);
-              qo0 += cs[0] * flux_strip[g2 * STRIP_SIZE + i];
+              qo0 += cs[0] * flux_strip[g2 * strip_size + i];
             }
             *(qo0_ptrs[g1] + qo0_offset + i * qo0_offsets[0]) = qo0;
           }
@@ -277,24 +284,24 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       } else {
         ByteOffset temp[3];
         fluxm_ptrs[g] = fa_fluxm.raw_rect_ptr<3>(temp);
-        assert(temp == fluxm_offsets);
+        assert(offsets_match<3>(temp, fluxm_offsets));
         qom_ptrs[g] = fa_qom.raw_rect_ptr<3>(temp);
-        assert(temp == qom_offsets);
+        assert(offsets_match<3>(temp, qom_offsets));
       }
     }
 
     MomentTriple *fluxm_strip = 
-      (MomentTriple*)malloc(num_groups*STRIP_SIZE*sizeof(MomentTriple));
+      (MomentTriple*)malloc(num_groups*strip_size*sizeof(MomentTriple));
     for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
       for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
-        for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x+=STRIP_SIZE) {
+        for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x+=strip_size) {
           const ByteOffset fluxm_offset = 
             x * fluxm_offsets[0] + y * fluxm_offsets[1] + z * fluxm_offsets[2];
           // Read in the fluxm strip first
           for (int g = 0; g < num_groups; g++) {
             MomentTriple *fluxm_ptr = fluxm_ptrs[g] + fluxm_offset;
-            for (int i = 0; i < STRIP_SIZE; i++)
-              fluxm_strip[g * STRIP_SIZE + i] = *(fluxm_ptr + i * fluxm_offsets[0]);
+            for (int i = 0; i < strip_size; i++)
+              fluxm_strip[g * strip_size+ i] = *(fluxm_ptr + i * fluxm_offsets[0]);
           }
           const ByteOffset mat_offset = 
             x * mat_offsets[0] + y * mat_offsets[1] + z * mat_offsets[2];
@@ -302,7 +309,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
             x * qom_offsets[0] + y * qom_offsets[1] + z * qom_offsets[2];
           // We've loaded all the strips, now do the math
           for (int g1 = 0; g1 < num_groups; g1++) {
-            for (int i = 0; i < STRIP_SIZE; i++) {
+            for (int i = 0; i < strip_size; i++) {
               const int mat = *(mat_ptr + mat_offset + i * mat_offsets[0]);
               MomentTriple qom;
               for (int g2 = 0; g2 < num_groups; g2++) {
@@ -317,7 +324,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
                     csm[moment+j] = scat[l];
                   moment += Snap::lma[l];
                 }
-                MomentTriple fluxm = fluxm_strip[g2 * STRIP_SIZE + i]; 
+                MomentTriple fluxm = fluxm_strip[g2 * strip_size + i]; 
                 for (int l = 0; l < (Snap::num_moments-1); l++)
                   qom[l] += csm[l] * fluxm[l];
               }
@@ -329,7 +336,6 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     }
     free(fluxm_strip);
   }
-#undef STRIP_SIZE
 #endif
 }
 
@@ -393,13 +399,13 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
     } else {
       ByteOffset temp[3];
       qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(temp);
-      assert(temp == qi0_offsets);
+      assert(offsets_match<3>(temp, qi0_offsets));
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
-      assert(temp == flux0_offsets);
+      assert(offsets_match<3>(temp, flux0_offsets));
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
-      assert(temp == slgg_offsets);
+      assert(offsets_match<3>(temp, slgg_offsets));
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
-      assert(temp == qo0_offsets);
+      assert(offsets_match<3>(temp, qo0_offsets));
     }
   }
   RegionAccessor<AccessorType::Generic,int> fa_mat = 
@@ -432,9 +438,9 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
       } else {
         ByteOffset temp[3];
         fluxm_ptrs[g] = fa_fluxm.raw_rect_ptr<3>(temp);
-        assert(temp == fluxm_offsets);
+        assert(offsets_match<3>(temp, fluxm_offsets));
         qom_ptrs[g] = fa_qom.raw_rect_ptr<3>(temp);
-        assert(temp == qom_offsets);
+        assert(offsets_match<3>(temp, qom_offsets));
       }
     }
     run_fluxm_outer_source(subgrid_bounds, fluxm_ptrs, slgg_ptrs, qom_ptrs,

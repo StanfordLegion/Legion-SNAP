@@ -37,7 +37,8 @@ GEN_SRC		?= main.cc  \
 		   inner.cc \
 		   expxs.cc \
 		   sweep.cc \
-		   mms.cc	# .cc files
+		   mms.cc   \
+		   convergence.cc # .cc files
 GEN_GPU_SRC	?= gpu_outer.cu \
 		   gpu_inner.cu	\
 		   gpu_sweep.cu \
@@ -45,7 +46,7 @@ GEN_GPU_SRC	?= gpu_outer.cu \
 
 # You can modify these variables, some will be appended to by the runtime makefile
 INC_FLAGS	?=
-CC_FLAGS	?= 
+CC_FLAGS	?= -DMAX_FIELDS=1024
 NVCC_FLAGS	?=
 GASNET_FLAGS	?=
 LD_FLAGS	?=

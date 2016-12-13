@@ -283,8 +283,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
       regions[9].get_field_accessor(args->even ?
           SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
           SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    RegionAccessor<AccessorType::Generic> fa_qim;
+    if (Snap::source_layout == Snap::MMS_SOURCE)
+      fa_qim = regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     // Input ghost regions
     RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
       regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(args->even ?
@@ -715,14 +716,18 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
       regions[9].get_field_accessor(args->even ?
           SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
           SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    
     ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
                ghostz_out_offsets[3], qim_offsets[3];
     void *const ghostx_out_ptr = fa_ghostx_out.raw_rect_ptr<3>(ghostx_out_offsets);
     void *const ghosty_out_ptr = fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
     void *const ghostz_out_ptr = fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    void *const qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
+    void *qim_ptr = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
+    }
 
     // Input ghost regions
     RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
@@ -1200,14 +1205,17 @@ inline __m256d* malloc_avx_aligned(size_t size)
       regions[9].get_field_accessor(args->even ?
           SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
           SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
                ghostz_out_offsets[3], qim_offsets[3];
     void *const ghostx_out_ptr = fa_ghostx_out.raw_rect_ptr<3>(ghostx_out_offsets);
     void *const ghosty_out_ptr = fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
     void *const ghostz_out_ptr = fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    void *const qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
+    void *qim_ptr = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
+    }
 
     // Input ghost regions
     RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
@@ -1750,8 +1758,6 @@ extern void run_gpu_sweep(const Point<3> origin,
       regions[9].get_field_accessor(args->even ?
           SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
           SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
                ghostz_out_offsets[3], qim_offsets[3];
     double *const ghostx_out_ptr = 
@@ -1760,8 +1766,12 @@ extern void run_gpu_sweep(const Point<3> origin,
       (double*)fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
     double *const ghostz_out_ptr = 
       (double*)fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    double *const qim_ptr = 
-      (double*)fa_qim.raw_rect_ptr<3>(qim_offsets);
+    double *qim_ptr = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = (double*)fa_qim.raw_rect_ptr<3>(qim_offsets);
+    }
 
     // Input ghost regions
     RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
