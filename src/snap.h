@@ -324,6 +324,10 @@ public:
                                       const Task& task,
                                       const SelectTunableInput& input,
                                             SelectTunableOutput& output);
+    virtual void map_task(const MapperContext ctx,
+                          const Task &task,
+                          const MapTaskInput &input,
+                                MapTaskOutput &output);
   };
 };
 
