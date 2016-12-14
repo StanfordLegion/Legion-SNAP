@@ -68,25 +68,25 @@ public:
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES                 \
-    "Top Level Task",                   \
-    "Initialize Material",              \
-    "Initialize Source",                \
-    "Initialize GPU Sweep",             \
-    "Calc Outer Source",                \
-    "Test Outer Convergence",           \
-    "Calc Inner Source",                \
-    "Test Inner Convergence",           \
-    "Mini KBA",                         \
-    "Expand Cross Section",             \
-    "Expand Scattering Cross Section",  \
-    "Calcuate Geometry Param",          \
-    "MMS Init Flux",                    \
-    "MMS Init Source",                  \
-    "MMS Init Time Dependent",          \
-    "MMS Scale",                        \
-    "MMS Compare",                      \
-    "Bind Inner Convergence",           \
-    "Bind Outer Convergence",
+    "Top_Level_Task",                   \
+    "Initialize_Material",              \
+    "Initialize_Source",                \
+    "Initialize_GPU Sweep",             \
+    "Calc_Outer_Source",                \
+    "Test_Outer_Convergence",           \
+    "Calc_Inner_Source",                \
+    "Test_Inner_Convergence",           \
+    "Mini_KBA",                         \
+    "Expand_Cross_Section",             \
+    "Expand_Scattering_Cross_Section",  \
+    "Calcuate_Geometry Param",          \
+    "MMS_Init_Flux",                    \
+    "MMS_Init_Source",                  \
+    "MMS_Init_Time Dependent",          \
+    "MMS_Scale",                        \
+    "MMS_Compare",                      \
+    "Bind_Inner_Convergence",           \
+    "Bind_Outer_Convergence",
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,
@@ -108,7 +108,7 @@ public:
     NO_REDUCTION_ID = 0,
     AND_REDUCTION_ID = 1,
     SUM_REDUCTION_ID = 2,
-    QUAD_REDUCTION_ID = 3,
+    TRIPLE_REDUCTION_ID = 3,
     MMS_REDUCTION_ID = 4,
   };
   enum SnapFieldID {
@@ -629,13 +629,13 @@ public:
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
 };
 
-class QuadReduction {
+class TripleReduction {
 public:
-  static const Snap::SnapReductionID REDOP = Snap::QUAD_REDUCTION_ID;
+  static const Snap::SnapReductionID REDOP = Snap::TRIPLE_REDUCTION_ID;
 public:
-  typedef MomentQuad LHS;
-  typedef MomentQuad RHS;
-  static const MomentQuad identity;
+  typedef MomentTriple LHS;
+  typedef MomentTriple RHS;
+  static const MomentTriple identity;
 public:
   template<bool EXCLUSIVE> static void apply(LHS &lhs, RHS rhs);
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);

@@ -1424,7 +1424,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
   Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP);
-  Runtime::register_reduction_op<QuadReduction>(QuadReduction::REDOP);
+  Runtime::register_reduction_op<TripleReduction>(TripleReduction::REDOP);
   Runtime::register_reduction_op<MMSReduction>(MMSReduction::REDOP);
 }
 
@@ -1439,44 +1439,6 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   {
     runtime->replace_default_mapper(new SnapMapper(mapper_rt, machine, 
                                                    *it, "SNAP Mapper"), *it);
-  }
-}
-
-//------------------------------------------------------------------------------
-Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine, 
-                             Processor local, const char *mapper_name)
-  : DefaultMapper(rt, machine, local, mapper_name)
-//------------------------------------------------------------------------------
-{
-}
-
-//------------------------------------------------------------------------------
-void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
-                                            const Task& task,
-                                            const SelectTunableInput& input,
-                                                  SelectTunableOutput& output)
-//------------------------------------------------------------------------------
-{
-  switch (input.tunable_id)
-  {
-    case OUTER_RUNAHEAD_TUNABLE:
-      {
-        runtime->pack_tunable<unsigned>(4, output);
-        break;
-      }
-    case INNER_RUNAHEAD_TUNABLE:
-      {
-        runtime->pack_tunable<unsigned>(8, output);
-        break;
-      }
-    case SWEEP_ENERGY_CHUNKS_TUNABLE:
-      {
-        runtime->pack_tunable<int>(1, output);
-        break;
-      }
-    default:
-      // Fall back to the default mapper
-      DefaultMapper::select_tunable_value(ctx, task, input, output);
   }
 }
 
@@ -1822,23 +1784,23 @@ void SumReduction::fold<false>(RHS &rhs1, RHS rhs2)
   } while (!__sync_bool_compare_and_swap(target, oldval.as_int, newval.as_int));
 }
 
-const MomentQuad QuadReduction::identity = MomentQuad();
+const MomentTriple TripleReduction::identity = MomentTriple();
 
 //------------------------------------------------------------------------------
 template<>
-void QuadReduction::apply<true>(LHS &lhs, RHS rhs)
+void TripleReduction::apply<true>(LHS &lhs, RHS rhs)
 //------------------------------------------------------------------------------
 {
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 3; i++)
     lhs[i] += rhs[i];
 }
 
 //------------------------------------------------------------------------------
 template<>
-void QuadReduction::apply<false>(LHS &lhs, RHS rhs)
+void TripleReduction::apply<false>(LHS &lhs, RHS rhs)
 //------------------------------------------------------------------------------
 {
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 3; i++)
   {
     long *target = (long *)&lhs[i];
     union { long as_int; double as_float; } oldval, newval;
@@ -1851,19 +1813,19 @@ void QuadReduction::apply<false>(LHS &lhs, RHS rhs)
 
 //------------------------------------------------------------------------------
 template<>
-void QuadReduction::fold<true>(RHS &rhs1, RHS rhs2)
+void TripleReduction::fold<true>(RHS &rhs1, RHS rhs2)
 //------------------------------------------------------------------------------
 {
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 3; i++)
     rhs1[i] += rhs2[i];
 }
 
 //------------------------------------------------------------------------------
 template<>
-void QuadReduction::fold<false>(RHS &rhs1, RHS rhs2)
+void TripleReduction::fold<false>(RHS &rhs1, RHS rhs2)
 //------------------------------------------------------------------------------
 {
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 3; i++)
   {
     long *target = (long *)&rhs1[i];
     union { long as_int; double as_float; } oldval, newval;

@@ -50,8 +50,12 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_field, Snap::SWEEP_PROJECTION);
-    fluxm.add_projection_requirement(Snap::QUAD_REDUCTION_ID, *this,
-                                     group_field, Snap::SWEEP_PROJECTION);
+    if (Snap::source_layout == Snap::MMS_SOURCE)
+      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+                                       group_field, Snap::SWEEP_PROJECTION);
+    else
+      fluxm.add_projection_requirement(NO_ACCESS, *this, 
+                                       group_field, Snap::SWEEP_PROJECTION);
     // Add the dinv array for this field
     dinv.add_projection_requirement(READ_ONLY, *this,
                                     group_field, Snap::SWEEP_PROJECTION);
@@ -99,8 +103,12 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_fields, Snap::SWEEP_PROJECTION);
-    fluxm.add_projection_requirement(Snap::QUAD_REDUCTION_ID, *this,
-                                     group_fields, Snap::SWEEP_PROJECTION);
+    if (Snap::source_layout == Snap::MMS_SOURCE)
+      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+                                       group_fields, Snap::SWEEP_PROJECTION);
+    else
+      fluxm.add_projection_requirement(NO_ACCESS, *this,
+                                       group_fields, Snap::SWEEP_PROJECTION);
     // Add the dinv array for this field
     dinv.add_projection_requirement(READ_ONLY, *this,
                                     group_fields, Snap::SWEEP_PROJECTION);
@@ -160,7 +168,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 /*static*/ void MiniKBATask::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<sse_implementation>(true/*leaf*/);
+  register_cpu_variant<avx_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -236,16 +244,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   double *yflux_pencil = (double*)malloc(x_range * angle_buffer_size);
   double *zflux_plane  = (double*)malloc(y_range * x_range * angle_buffer_size);
 
-  // These are independent of the energy group 
-  RegionAccessor<AccessorType::Generic,double> fa_flux = 
-    regions[1].get_accessor().typeify<double>();
-  RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
-    regions[2].get_accessor().typeify<MomentQuad>();
-
-  // Reduction accessors don't support structured points yet
-  ByteOffset flux_offsets[3], fluxm_offsets[3];
-  double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
-  MomentQuad *const fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+  
 
   // We could abstract these things into functions, but C++ compilers
   // get angsty about pointers and marking everything with restrict
@@ -255,6 +254,19 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
     RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
       regions[0].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[1].get_field_accessor(
+          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+    // Reduction accessors don't support structured points yet
+    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+    MomentTriple *fluxm = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[2].get_field_accessor(
+            SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
+      fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+    }
     
     const double vdelt = regions[regions.size()-1].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
@@ -560,7 +572,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
             local_flux += local_point[i] * flux_offsets[i];
           SumReduction::fold<false>(*local_flux, total);
           if (Snap::num_moments > 1) {
-            MomentQuad quad;
+            MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
               unsigned offset = l * Snap::num_angles + 
                 args->corner * Snap::num_angles * Snap::num_moments;
@@ -568,12 +580,12 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
               for (int ang = 0; ang < Snap::num_angles; ang++) {
                 total += Snap::ec[offset+ang] * psi[ang]; 
               }
-              quad[l] = total;
+              triple[l-1] = total;
             }
-            MomentQuad *local_fluxm = fluxm;
+            MomentTriple *local_fluxm = fluxm;
             for (int i = 0; i < 3; i++)
               local_fluxm += local_point[i] * fluxm_offsets[i];
-            QuadReduction::fold<false>(*local_fluxm, quad);
+            TripleReduction::fold<false>(*local_fluxm, triple);
           }
         }
       }
@@ -665,21 +677,25 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
   __m128d *yflux_pencil = (__m128d*)malloc(x_range * angle_buffer_size);
   __m128d *zflux_plane  = (__m128d*)malloc(y_range * x_range * angle_buffer_size);
 
-  // These are not field specific
-  RegionAccessor<AccessorType::Generic,double> fa_flux = 
-    regions[1].get_accessor().typeify<double>();
-  RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
-    regions[2].get_accessor().typeify<MomentQuad>();
-  ByteOffset flux_offsets[3], fluxm_offsets[3];
-  double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
-  MomentQuad *const fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
-
   for (int group = args->group_start; group <= args->group_stop; group++) {
     RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
       regions[0].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
     ByteOffset qtot_offsets[3];
     const MomentQuad *const qtot_ptr = fa_qtot.raw_rect_ptr<3>(qtot_offsets);
+
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[1].get_field_accessor(
+          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+    MomentTriple *fluxm = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[2].get_field_accessor(
+            SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();   
+      fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+    }
 
     const double vdelt = regions[regions.size()-1].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
@@ -1055,7 +1071,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           double total = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
           SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
           if (Snap::num_moments > 1) {
-            MomentQuad quad;
+            MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
               unsigned offset = l * Snap::num_angles + 
                 args->corner * Snap::num_angles * Snap::num_moments;
@@ -1063,9 +1079,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
               for (int ang = 0; ang < num_vec_angles; ang++)
                 vec_total = _mm_add_pd(vec_total, _mm_mul_pd(psi[ang],
                       _mm_set_pd(Snap::ec[offset+2*ang+1], Snap::ec[offset+2*ang])));
-              quad[l] = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
+              triple[l-1] = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
             }
-            QuadReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), quad);
+            TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
           }
         }
       }
@@ -1152,16 +1168,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
   const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
   // See note in the CPU implementation about why we do things this way
   __m256d *yflux_pencil = malloc_avx_aligned(x_range * angle_buffer_size);
-  __m256d *zflux_plane  = malloc_avx_aligned(y_range * x_range * angle_buffer_size);
-
-  // These are independent of the energy group
-  RegionAccessor<AccessorType::Generic,double> fa_flux = 
-    regions[1].get_accessor().typeify<double>();
-  RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
-    regions[2].get_accessor().typeify<MomentQuad>();
-  ByteOffset flux_offsets[3], fluxm_offsets[3];
-  double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
-  MomentQuad *const fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+  __m256d *zflux_plane  = malloc_avx_aligned(y_range * x_range * angle_buffer_size); 
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
     RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
@@ -1169,6 +1176,19 @@ inline __m256d* malloc_avx_aligned(size_t size)
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
     ByteOffset qtot_offsets[3];
     const MomentQuad *const qtot_ptr = fa_qtot.raw_rect_ptr<3>(qtot_offsets);
+
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[1].get_field_accessor(
+          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+    MomentTriple *fluxm = NULL;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[2].get_field_accessor(
+            SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
+      fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+    }
 
     const double vdelt = regions[regions.size()-1].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
@@ -1593,7 +1613,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                 _mm256_hadd_pd(vec_total, vec_total), 0));
           SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
           if (Snap::num_moments > 1) {
-            MomentQuad quad;
+            MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
               unsigned offset = l * Snap::num_angles + 
                 args->corner * Snap::num_angles * Snap::num_moments;
@@ -1603,10 +1623,10 @@ inline __m256d* malloc_avx_aligned(size_t size)
                       _mm256_set_pd(Snap::ec[offset+4*ang+3], Snap::ec[offset+4*ang+2],
                                     Snap::ec[offset+4*ang+1], Snap::ec[offset+4*ang])));
               vec_total = _mm256_hadd_pd(vec_total, vec_total);
-              quad[l] = _mm_cvtsd_f64( _mm256_extractf128_pd(
-                    _mm256_hadd_pd(vec_total, vec_total), 0));
+              triple[l-1] = _mm_cvtsd_f64( _mm256_extractf128_pd(
+                              _mm256_hadd_pd(vec_total, vec_total), 0));
             }
-            QuadReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), quad);
+            TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
           }
         }
       }
@@ -1633,7 +1653,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
 extern void run_gpu_sweep(const Point<3> origin, 
                const MomentQuad *qtot_ptr,
                      double     *flux_ptr,
-                     MomentQuad *fluxm_ptr,
+                     MomentTriple *fluxm_ptr,
                const double     *dinv_ptr,
                const double     *time_flux_in_ptr,
                      double     *time_flux_out_ptr,
@@ -1704,15 +1724,6 @@ extern void run_gpu_sweep(const Point<3> origin,
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
   const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
 
-  // These are independent of the energy group
-  RegionAccessor<AccessorType::Generic,double> fa_flux = 
-    regions[1].get_accessor().typeify<double>();
-  RegionAccessor<AccessorType::Generic,MomentQuad> fa_fluxm = 
-    regions[2].get_accessor().typeify<MomentQuad>();
-  ByteOffset flux_offsets[3], fluxm_offsets[3];
-  double *const flux_ptr = fa_flux.raw_rect_ptr<3>(flux_offsets);
-  MomentQuad *const fluxm_ptr = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
-
   const bool mms_source = (Snap::source_layout == Snap::MMS_SOURCE);
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
@@ -1721,6 +1732,19 @@ extern void run_gpu_sweep(const Point<3> origin,
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
     ByteOffset qtot_offsets[3];
     const MomentQuad *const qtot_ptr = fa_qtot.raw_rect_ptr<3>(qtot_offsets);
+
+    RegionAccessor<AccessorType::Generic,double> fa_flux = 
+      regions[1].get_field_accessor(
+          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    double *const flux_ptr = fa_flux.raw_rect_ptr<3>(flux_offsets);
+    MomentTriple *fluxm_ptr = NULL;
+    if (mms_source) {
+      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
+        regions[2].get_field_accessor(
+            SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
+      fluxm_ptr = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+    }
 
     const double vdelt = regions[regions.size()-1].get_field_accessor(
         SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(

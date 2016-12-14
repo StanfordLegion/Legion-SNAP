@@ -38,6 +38,7 @@ GEN_SRC		?= main.cc  \
 		   expxs.cc \
 		   sweep.cc \
 		   mms.cc   \
+		   mapper.cc\
 		   convergence.cc # .cc files
 GEN_GPU_SRC	?= gpu_outer.cu \
 		   gpu_inner.cu	\
