@@ -29,7 +29,6 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
-#define MINI_KBA_NON_GHOST_REQUIREMENTS   11
 
 #ifndef PI
 #define PI (3.14159265358979)
@@ -117,90 +116,21 @@ public:
     FID_GROUP_0 = FID_SINGLE,
     // ...
     FID_GROUP_MAX = FID_GROUP_0 + SNAP_MAX_ENERGY_GROUPS,
-    FID_CORNER_0_GHOST_FLUX_X_0_EVEN = FID_GROUP_MAX,
-    FID_CORNER_0_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_0_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_1_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_1_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_1_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_2_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_2_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_2_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_3_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_3_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_3_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_4_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_4_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_4_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_5_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_5_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_5_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_6_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_6_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_6_GHOST_FLUX_Z_0_EVEN,
-    FID_CORNER_7_GHOST_FLUX_X_0_EVEN,
-    FID_CORNER_7_GHOST_FLUX_Y_0_EVEN,
-    FID_CORNER_7_GHOST_FLUX_Z_0_EVEN,
-
-    FID_CORNER_0_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_0_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_0_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_1_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_1_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_1_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_2_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_2_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_2_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_3_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_3_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_3_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_4_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_4_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_4_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_5_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_5_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_5_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_6_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_6_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_6_GHOST_FLUX_Z_0_ODD,
-    FID_CORNER_7_GHOST_FLUX_X_0_ODD,
-    FID_CORNER_7_GHOST_FLUX_Y_0_ODD,
-    FID_CORNER_7_GHOST_FLUX_Z_0_ODD,
-
-    FID_MAX_CORNER_GHOST_FLUX_FIELDS = 
-      FID_CORNER_0_GHOST_FLUX_X_0_EVEN + 48 * SNAP_MAX_ENERGY_GROUPS,
+    FID_FLUX_START = FID_GROUP_MAX,
+    FID_FLUX_MAX = FID_FLUX_START + 8/*corners*/*SNAP_MAX_ENERGY_GROUPS,
   };
 #define SNAP_ENERGY_GROUP_FIELD(group)    \
   ((Snap::SnapFieldID)(Snap::FID_GROUP_0 + (group)))
-#define SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, dim)                          \
-  ((Snap::SnapFieldID)(Snap::FID_CORNER_0_GHOST_FLUX_X_0_EVEN +                 \
-    ((group) * 48) + ((corner) * 3) + (dim)))
-#define SNAP_GHOST_FLUX_FIELD_ODD(group, corner, dim)                           \
-  ((Snap::SnapFieldID)(Snap::FID_CORNER_0_GHOST_FLUX_X_0_ODD +                  \
-    ((group) * 48) + ((corner) * 3) + (dim)))
+#define SNAP_FLUX_GROUP_FIELD(group, corner)          \
+  ((Snap::SnapFieldID)(Snap::FID_FLUX_START + (group * 8) + corner))
   enum SnapPartitionID {
     DISJOINT_PARTITION = 0,
-    GHOST_X_PARTITION = 1,
-    GHOST_Y_PARTITION = 2,
-    GHOST_Z_PARTITION = 3,
   };
   enum SnapProjectionID {
     SWEEP_PROJECTION = 1,
-    MINUS_X_PROJECTION = 2,
-    PLUS_X_PROJECTION = 3,
-    MINUX_Y_PROJECTION = 4,
-    PLUS_Y_PROJECTION = 5,
-    MINUS_Z_PROJECTION = 6,
-    PLUS_Z_PROJECTION = 7,
-  };
-#define SNAP_SWEEP_PROJECTION(corner)                                     \
-  ((Snap::SnapProjectionID)(Snap::WAVEFRONT_0_CORNER_0_SWEEP_PROJECTION + \
-    ((wavefront) * 14) + (corner)))
-#define SNAP_GHOST_PROJECTION(dim, offset)                                \
-  ((Snap::SnapProjectionID)(Snap::PLUS_X_PROJECTION + ((dim) * 2) + (offset)))
-  enum SnapGhostColor {
-    LO_GHOST = 0,
-    HI_GHOST = 1,
+    XY_PROJECTION = 2,
+    YZ_PROJECTION = 3,
+    XZ_PROJECTION = 4,
   };
 public:
   Snap(Context c, Runtime *rt)
@@ -224,7 +154,8 @@ protected:
                       const SnapArray &vdelt, const SnapArray &dinv, 
                       const SnapArray &t_xs, SnapArray *time_flux_in[8], 
                       SnapArray *time_flux_out[8], SnapArray *qim[8],
-                      int energy_group_chunks) const;
+                      const SnapArray &flux_xy, const SnapArray &flux_yz,
+                      const SnapArray &flux_xz, int energy_group_chunks) const;
 private:
   const Context ctx;
   Runtime *const runtime;
@@ -238,9 +169,15 @@ private:
   IndexSpace material_is;
   IndexSpace slgg_is;
   IndexSpace point_is;
+  IndexSpace xy_flux_is;
+  IndexPartition xy_flux_ip;
+  IndexSpace yz_flux_is;
+  IndexPartition yz_flux_ip;
+  IndexSpace xz_flux_is;
+  IndexPartition xz_flux_ip;
 private:
   FieldSpace group_fs;
-  FieldSpace group_and_ghost_fs;
+  FieldSpace flux_fs;
   FieldSpace moment_fs;
   FieldSpace flux_moment_fs;
   FieldSpace mat_fs;
@@ -473,15 +410,13 @@ private:
 public:
   inline LogicalRegion get_region(void) const { return lr; }
   inline LogicalPartition get_partition(void) const { return lp; }
-  inline const std::set<FieldID>& get_regular_fields(void) const 
-    { return regular_fields; }
+  inline const std::set<FieldID>& get_all_fields(void) const 
+    { return all_fields; }
   LogicalRegion get_subregion(const DomainPoint &color) const;
 public:
-  void initialize(Predicate pred = Predicate::TRUE_PRED, 
-                  bool include_ghost = true) const;
+  void initialize(Predicate pred = Predicate::TRUE_PRED) const; 
   template<typename T>
-  void initialize(T value, Predicate pred = Predicate::TRUE_PRED,
-                  bool include_ghost = true) const;
+  void initialize(T value, Predicate pred = Predicate::TRUE_PRED) const;
   PhysicalRegion map(void) const;
   void unmap(const PhysicalRegion &region) const;
 public:
@@ -491,7 +426,7 @@ public:
   {
     launcher.add_region_requirement(RegionRequirement(lp, 0/*proj id*/,
                                                       priv, EXCLUSIVE, lr));
-    launcher.region_requirements.back().privilege_fields = regular_fields;
+    launcher.region_requirements.back().privilege_fields = all_fields;
   }
   template<typename T>
   inline void add_projection_requirement(PrivilegeMode priv, T &launcher,
@@ -533,7 +468,7 @@ public:
                                      T &launcher) const
   {
     launcher.add_region_requirement(RegionRequirement(lr, priv, EXCLUSIVE, lr));
-    launcher.region_requirements.back().privilege_fields = regular_fields;
+    launcher.region_requirements.back().privilege_fields = all_fields;
   }
   template<typename T>
   inline void add_region_requirement(PrivilegeMode priv, T &launcher,
@@ -556,8 +491,7 @@ protected:
 protected:
   LogicalRegion lr;
   LogicalPartition lp;
-  std::set<FieldID> regular_fields;
-  std::set<FieldID> ghost_fields;
+  std::set<FieldID> all_fields;
   mutable std::map<DomainPoint,LogicalRegion> subregions;
 };
 
@@ -574,17 +508,11 @@ public:
                                 LogicalPartition upper_bound,
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
-protected:
-  // Indexed by corner, wavefront, region requirement, point
-  std::vector<std::vector<LogicalRegion> > 
-    cache[8][MINI_KBA_NON_GHOST_REQUIREMENTS];    
-  std::vector<std::vector<bool> > 
-    cache_valid[8][MINI_KBA_NON_GHOST_REQUIREMENTS];
 };
 
-class SnapGhostProjectionFunctor : public ProjectionFunctor {
+class FluxProjectionFunctor : public ProjectionFunctor {
 public:
-  SnapGhostProjectionFunctor(int dim, int offset);
+  FluxProjectionFunctor(Snap::SnapProjectionID kind);
 public:
   virtual LogicalRegion project(Context ctx, Task *task,
                                 unsigned index, 
@@ -595,18 +523,8 @@ public:
                                 LogicalPartition upper_bound,
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
-private:
-  static Point<3> get_stride(int dim, int offset);
-protected:
-  const int dim;
-  const int offset;
-  const Snap::SnapGhostColor color;
-  const Point<3> stride;
-  // Indexed by corner, wavefront, point
-  // No need for region requirement because we know the
-  // tree will always be the same
-  std::vector<std::vector<LogicalRegion> > cache[8];   
-  std::vector<std::vector<bool> > cache_valid[8];
+public:
+  const Snap::SnapProjectionID projection_kind;
 };
 
 class AndReduction {

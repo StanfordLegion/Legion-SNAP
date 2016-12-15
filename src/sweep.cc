@@ -24,24 +24,25 @@ extern LegionRuntime::Logger::Category log_snap;
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
-MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
+MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
                          const SnapArray &flux, const SnapArray &fluxm,
                          const SnapArray &qtot, const SnapArray &vdelt, 
                          const SnapArray &dinv, const SnapArray &t_xs,
                          const SnapArray &time_flux_in, 
                          const SnapArray &time_flux_out,
-                         const SnapArray &qim, int group_start,
-                         int group_stop, int corner, 
+                         const SnapArray &qim, const SnapArray &flux_xy,
+                         const SnapArray &flux_yz, const SnapArray &flux_xz,
+                         int group_start, int group_stop, int corner, 
                          const int ghost_offsets[3])
   : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID>(
       snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()), pred), 
-    mini_kba_args(MiniKBAArgs(corner, group_start, group_stop, even))
+    mini_kba_args(MiniKBAArgs(corner, group_start, group_stop))
 //------------------------------------------------------------------------------
 {
   global_arg = TaskArgument(&mini_kba_args, sizeof(mini_kba_args));
   if (group_start == group_stop) {
     // Special case for a single field
-    Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
+    const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
     // If you add projection requirements here, remember to update
     // the value of NON_GHOST_REQUIREMENTS in sweep.h
     qtot.add_projection_requirement(READ_ONLY, *this, 
@@ -50,12 +51,18 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_field, Snap::SWEEP_PROJECTION);
-    if (Snap::source_layout == Snap::MMS_SOURCE)
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      qim.add_projection_requirement(READ_ONLY, *this,
+                                     group_field, Snap::SWEEP_PROJECTION);
       fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
                                        group_field, Snap::SWEEP_PROJECTION);
-    else
+    }
+    else {
+      qim.add_projection_requirement(NO_ACCESS, *this,
+                                     group_field, Snap::SWEEP_PROJECTION);
       fluxm.add_projection_requirement(NO_ACCESS, *this, 
                                        group_field, Snap::SWEEP_PROJECTION);
+    }
     // Add the dinv array for this field
     dinv.add_projection_requirement(READ_ONLY, *this,
                                     group_field, Snap::SWEEP_PROJECTION);
@@ -65,30 +72,14 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                                              group_field, Snap::SWEEP_PROJECTION);
     t_xs.add_projection_requirement(READ_ONLY, *this,
                                     group_field, Snap::SWEEP_PROJECTION);
-    // Then add our writing ghost regions
-    for (int i = 0; i < Snap::num_dims; i++)
-    {
-      Snap::SnapFieldID ghost_write = even ? 
-        SNAP_GHOST_FLUX_FIELD_EVEN(group_start, corner, i) :
-        SNAP_GHOST_FLUX_FIELD_ODD(group_start, corner, i);
-      flux.add_projection_requirement(WRITE_DISCARD, *this, 
-                                      ghost_write, Snap::SWEEP_PROJECTION);
-    }
-    qim.add_projection_requirement(
-        (Snap::source_layout == Snap::MMS_SOURCE) ? READ_ONLY : NO_ACCESS, *this,
-                                    group_field, Snap::SWEEP_PROJECTION);
-    assert(region_requirements.size() == MINI_KBA_NON_GHOST_REQUIREMENTS);
-    // Add our reading ghost regions
-    for (int i = 0; i < Snap::num_dims; i++)
-    {
-      // Reverse polarity for these ghost fields
-      Snap::SnapFieldID ghost_read = even ?
-        SNAP_GHOST_FLUX_FIELD_ODD(group_start, corner, i) :
-        SNAP_GHOST_FLUX_FIELD_EVEN(group_start, corner, i);
-      // We know our projection ID now
-      Snap::SnapProjectionID proj_id = SNAP_GHOST_PROJECTION(i, ghost_offsets[i]);
-      flux.add_projection_requirement(READ_ONLY, *this, ghost_read, proj_id);
-    }
+    // Now do our ghost requirements
+    const Snap::SnapFieldID flux_field = SNAP_FLUX_GROUP_FIELD(group_start, corner);
+    flux_xy.add_projection_requirement(READ_WRITE, *this,
+                                       flux_field, Snap::XY_PROJECTION);
+    flux_yz.add_projection_requirement(READ_WRITE, *this,
+                                       flux_field, Snap::YZ_PROJECTION);
+    flux_xz.add_projection_requirement(READ_WRITE, *this,
+                                       flux_field, Snap::XZ_PROJECTION);
     // This one last since it's not a projection requirement
     vdelt.add_region_requirement(READ_ONLY, *this, group_field);
   } else {
@@ -103,12 +94,18 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_fields, Snap::SWEEP_PROJECTION);
-    if (Snap::source_layout == Snap::MMS_SOURCE)
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      qim.add_projection_requirement(READ_ONLY, *this,
+                                     group_fields, Snap::SWEEP_PROJECTION);
       fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
                                        group_fields, Snap::SWEEP_PROJECTION);
-    else
+    }
+    else {
+      qim.add_projection_requirement(NO_ACCESS, *this,
+                                     group_fields, Snap::SWEEP_PROJECTION);
       fluxm.add_projection_requirement(NO_ACCESS, *this,
                                        group_fields, Snap::SWEEP_PROJECTION);
+    }
     // Add the dinv array for this field
     dinv.add_projection_requirement(READ_ONLY, *this,
                                     group_fields, Snap::SWEEP_PROJECTION);
@@ -118,34 +115,16 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred, bool even,
                                              group_fields, Snap::SWEEP_PROJECTION);
     t_xs.add_projection_requirement(READ_ONLY, *this,
                                     group_fields, Snap::SWEEP_PROJECTION);
-    // Then add our writing ghost regions
-    for (int i = 0; i < Snap::num_dims; i++)
-    {
-      std::vector<Snap::SnapFieldID> ghost_writes((group_stop - group_start) + 1);
-      for (int group = group_start; group <= group_stop; group++)
-        ghost_writes[group-group_start] = even ? 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, i) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, corner, i);
-      flux.add_projection_requirement(WRITE_DISCARD, *this, 
-                                      ghost_writes, Snap::SWEEP_PROJECTION);
-    }
-    qim.add_projection_requirement(
-        (Snap::source_layout == Snap::MMS_SOURCE) ? READ_ONLY : NO_ACCESS, *this,
-                                    group_fields, Snap::SWEEP_PROJECTION);
-    assert(region_requirements.size() == MINI_KBA_NON_GHOST_REQUIREMENTS);
-    // Add our reading ghost regions
-    for (int i = 0; i < Snap::num_dims; i++)
-    {
-      // Reverse polarity for these ghost fields
-      std::vector<Snap::SnapFieldID> ghost_reads((group_stop - group_start) + 1);
-      for (int group = group_start; group <= group_stop; group++)
-        ghost_reads[group-group_start] = even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, corner, i) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, corner, i);
-      // We know our projection ID now
-      Snap::SnapProjectionID proj_id = SNAP_GHOST_PROJECTION(i, ghost_offsets[i]);
-      flux.add_projection_requirement(READ_ONLY, *this, ghost_reads, proj_id);
-    }
+    // Then do our ghost region requirements
+    std::vector<Snap::SnapFieldID> flux_fields((group_stop - group_start) + 1);
+    for (int group = group_start; group <= group_stop; group++)
+      flux_fields[group-group_start] = SNAP_FLUX_GROUP_FIELD(group, corner);
+    flux_xy.add_projection_requirement(READ_WRITE, *this,
+                                       flux_fields, Snap::XY_PROJECTION);
+    flux_yz.add_projection_requirement(READ_WRITE, *this,
+                                       flux_fields, Snap::YZ_PROJECTION);
+    flux_xz.add_projection_requirement(READ_WRITE, *this,
+                                       flux_fields, Snap::XZ_PROJECTION);
     // This one last since it's not a projection requirement
     vdelt.add_region_requirement(READ_ONLY, *this, group_fields);
   }
@@ -168,7 +147,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 /*static*/ void MiniKBATask::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<avx_implementation>(true/*leaf*/);
+  register_cpu_variant<sse_implementation>(true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -176,6 +155,30 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
   register_gpu_variant<gpu_implementation>(true/*leaf*/);
+}
+
+static inline Point<2> ghostx_point(const Point<3> &local_point)
+{
+  Point<2> ghost;
+  ghost.x[0] = local_point.x[1]; // y
+  ghost.x[1] = local_point.x[2]; // z
+  return ghost;
+}
+
+static inline Point<2> ghosty_point(const Point<3> &local_point)
+{
+  Point<2> ghost;
+  ghost.x[0] = local_point.x[0]; // x
+  ghost.x[1] = local_point.x[2]; // z
+  return ghost;
+}
+
+static inline Point<2> ghostz_point(const Point<3> &local_point)
+{
+  Point<2> ghost;
+  ghost.x[0] = local_point.x[0]; // x
+  ghost.x[1] = local_point.x[1]; // y
+  return ghost;
 }
 
 //------------------------------------------------------------------------------
@@ -244,8 +247,6 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   double *yflux_pencil = (double*)malloc(x_range * angle_buffer_size);
   double *zflux_plane  = (double*)malloc(y_range * x_range * angle_buffer_size);
 
-  
-
   // We could abstract these things into functions, but C++ compilers
   // get angsty about pointers and marking everything with restrict
   // is super annoying so just do all the inlining for the compiler
@@ -257,60 +258,43 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
     RegionAccessor<AccessorType::Generic,double> fa_flux = 
       regions[1].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+
     // Reduction accessors don't support structured points yet
     ByteOffset flux_offsets[3], fluxm_offsets[3];
     double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
     MomentTriple *fluxm = NULL;
+    RegionAccessor<AccessorType::Generic> fa_qim;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
+      fa_qim = regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
       RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[2].get_field_accessor(
+        regions[3].get_field_accessor(
             SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
       fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
     }
     
-    const double vdelt = regions[regions.size()-1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
     // No types here since the size of these fields are dependent
     // on the number of angles
     RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+      regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
 
-    // Output ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_out = 
-      regions[7].get_field_accessor(args->even ? 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_out = 
-      regions[8].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
-      regions[9].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    RegionAccessor<AccessorType::Generic> fa_qim;
-    if (Snap::source_layout == Snap::MMS_SOURCE)
-      fa_qim = regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    // Input ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2) : 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2));
+    // Ghost regions
+    RegionAccessor<AccessorType::Generic> fa_ghostz = 
+      regions[8].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghostx = 
+      regions[9].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghosty = 
+      regions[10].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+
+    const double vdelt = regions[11].get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
+        DomainPoint::from_point<1>(Point<1>::ZEROES()));
+    
     // Now we do the sweeps over the points
     for (int z = 0; z < z_range; z++) {
       for (int y = 0; y < y_range; y++) {
@@ -361,26 +345,18 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           // X ghost cells
           if (x == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_x_positive)
-              ghost_point.x[0] -= 1; // reading from x-1
-            else
-              ghost_point.x[0] += 1; // reading from x+1
-            fa_ghostx_in.read_untyped(DomainPoint::from_point<3>(ghost_point),   
-                                      psii, angle_buffer_size);
+            Point<2> ghost_point = ghostx_point(local_point);
+            fa_ghostx.read_untyped(DomainPoint::from_point<2>(ghost_point),   
+                                   psii, angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < Snap::num_angles; ang++)
             pc[ang] += psii[ang] * Snap::mu[ang] * Snap::hi;
           // Y ghost cells
           if (y == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_y_positive)
-              ghost_point.x[1] -= 1; // reading from y-1
-            else
-              ghost_point.x[1] += 1; // reading from y+1  
-            fa_ghosty_in.read_untyped(DomainPoint::from_point<3>(ghost_point), 
-                                      psij, angle_buffer_size);
+            Point<2> ghost_point = ghosty_point(local_point);
+            fa_ghosty.read_untyped(DomainPoint::from_point<2>(ghost_point), 
+                                   psij, angle_buffer_size);
           } else {
             // Local array
             const int offset = x * Snap::num_angles;
@@ -391,13 +367,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           // Z ghost cells
           if (z == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_z_positive)
-              ghost_point.x[2] -= 1; // reading from z-1
-            else
-              ghost_point.x[2] += 1; // reading from z+1
-            fa_ghostz_in.read_untyped(DomainPoint::from_point<3>(ghost_point), 
-                                      psik, angle_buffer_size);
+            Point<2> ghost_point = ghostz_point(local_point);
+            fa_ghostz.read_untyped(DomainPoint::from_point<2>(ghost_point), 
+                                   psik, angle_buffer_size);
           } else {
             // Local array
             const int offset = (y * x_range + x) * Snap::num_angles;
@@ -536,15 +508,17 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           // Write out the ghost regions 
           // X ghost
           if (x == (Snap::nx_per_chunk-1)) {
+            Point<2> ghost_point = ghostx_point(local_point);
             // We write out on our own region
-            fa_ghostx_out.write_untyped(DomainPoint::from_point<3>(local_point),
-                                        psii, angle_buffer_size);
+            fa_ghostx.write_untyped(DomainPoint::from_point<2>(ghost_point),
+                                    psii, angle_buffer_size);
           } // Else nothing: psii just gets caried over to next iteration
           // Y ghost
           if (y == (Snap::ny_per_chunk-1)) {
+            Point<2> ghost_point = ghosty_point(local_point);
             // Write out on our own region
-            fa_ghosty_out.write_untyped(DomainPoint::from_point<3>(local_point),
-                                        psij, angle_buffer_size);
+            fa_ghosty.write_untyped(DomainPoint::from_point<2>(ghost_point),
+                                    psij, angle_buffer_size);
           } else {
             // Write to the pencil 
             const int offset = x * Snap::num_angles;
@@ -552,9 +526,10 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
           }
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
+            Point<2> ghost_point = ghostz_point(local_point);
             // Write out on our own region
-            fa_ghostz_out.write_untyped(DomainPoint::from_point<3>(local_point),
-                                        psik, angle_buffer_size);
+            fa_ghostz.write_untyped(DomainPoint::from_point<2>(ghost_point),
+                                    psik, angle_buffer_size);
           } else {
             // Write to the plane
             const int offset = (y * x_range + x) * Snap::num_angles;
@@ -613,13 +588,19 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 #endif
 }
 
+inline ByteOffset operator*(const ByteOffset offsets[2], const Point<2> &point)
+{
+  return (offsets[0] * point.x[0] + offsets[1] * point.x[1]);
+}
+
 inline ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
 {
   return (offsets[0] * point.x[0] + offsets[1] * point.x[1] + offsets[2] * point.x[2]);
 }
 
-inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
-                                  const Point<3> &point)
+template<int DIM>
+inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
+                                  const Point<DIM> &point)
 {
   return (__m128d*)(ptr + (offsets * point));
 }
@@ -687,29 +668,31 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
     RegionAccessor<AccessorType::Generic,double> fa_flux = 
       regions[1].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    ByteOffset flux_offsets[3], qim_offsets[3], fluxm_offsets[3];
     double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+
+    void *qim_ptr = NULL;
     MomentTriple *fluxm = NULL;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
       RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[2].get_field_accessor(
+        regions[3].get_field_accessor(
             SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();   
       fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
     }
-
-    const double vdelt = regions[regions.size()-1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
+ 
     // No types here since the size of these fields are dependent
     // on the number of angles
     RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+      regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
     ByteOffset dinv_offsets[3], time_flux_in_offsets[3], 
                time_flux_out_offsets[3], t_xs_offsets[3];
     void *const dinv_ptr = fa_dinv.raw_rect_ptr<3>(dinv_offsets);
@@ -719,49 +702,22 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
       fa_time_flux_out.raw_rect_ptr<3>(time_flux_out_offsets);
     const double *const t_xs_ptr = fa_t_xs.raw_rect_ptr<3>(t_xs_offsets);
 
-    // Output ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_out = 
-      regions[7].get_field_accessor(args->even ? 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_out = 
-      regions[8].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
-      regions[9].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
+    // Ghost regions
+    RegionAccessor<AccessorType::Generic> fa_ghostz = 
+      regions[8].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghostx = 
+      regions[9].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghosty = 
+      regions[10].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
     
-    ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
-               ghostz_out_offsets[3], qim_offsets[3];
-    void *const ghostx_out_ptr = fa_ghostx_out.raw_rect_ptr<3>(ghostx_out_offsets);
-    void *const ghosty_out_ptr = fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
-    void *const ghostz_out_ptr = fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    void *qim_ptr = NULL;
-    if (Snap::source_layout == Snap::MMS_SOURCE) {
-      RegionAccessor<AccessorType::Generic> fa_qim = 
-        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
-    }
+    ByteOffset ghostx_offsets[2], ghosty_offsets[2], ghostz_offsets[2];
+    void *const ghostx_ptr = fa_ghostx.raw_rect_ptr<2>(ghostx_offsets);
+    void *const ghosty_ptr = fa_ghosty.raw_rect_ptr<2>(ghosty_offsets);
+    void *const ghostz_ptr = fa_ghostz.raw_rect_ptr<2>(ghostz_offsets); 
 
-    // Input ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2) : 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2));
-    ByteOffset ghostx_in_offsets[3], ghosty_in_offsets[3], ghostz_in_offsets[3];
-    void *const ghostx_in_ptr = fa_ghostx_in.raw_rect_ptr<3>(ghostx_in_offsets);
-    void *const ghosty_in_ptr = fa_ghosty_in.raw_rect_ptr<3>(ghosty_in_offsets);
-    void *const ghostz_in_ptr = fa_ghostz_in.raw_rect_ptr<3>(ghostz_in_offsets);
+    const double vdelt = regions[11].get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
+        DomainPoint::from_point<1>(Point<1>::ZEROES()));
 
     for (int z = 0; z < z_range; z++) {
       for (int y = 0; y < y_range; y++) {
@@ -814,13 +770,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // X ghost cells
           if (x == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_x_positive)
-              ghost_point.x[0] -= 1; // reading from x-1
-            else
-              ghost_point.x[0] += 1; // reading from x+1
-            memcpy(psii, get_sse_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghostx_point(local_point);
+            memcpy(psii, get_sse_angle_ptr<2>(ghostx_ptr, ghostx_offsets,
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psii[ang], 
@@ -830,13 +782,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           __m128d *__restrict__ psij = yflux_pencil + x * num_vec_angles;
           if (y == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_y_positive)
-              ghost_point.x[1] -= 1; // reading from y-1
-            else
-              ghost_point.x[1] += 1; // reading from y+1
-            memcpy(psij, get_sse_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, 
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghosty_point(local_point);
+            memcpy(psij, get_sse_angle_ptr<2>(ghosty_ptr, ghosty_offsets, 
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psij already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psij[ang],
@@ -846,21 +794,17 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           __m128d *__restrict__ psik = zflux_plane + (y * x_range + x) * num_vec_angles;
           if (z == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_z_positive)
-              ghost_point.x[2] -= 1; // reading from z-1
-            else
-              ghost_point.x[2] += 1; // reading from z+1
-            memcpy(psik, get_sse_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, 
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghostz_point(local_point);
+            memcpy(psik, get_sse_angle_ptr<2>(ghostz_ptr, ghostz_offsets, 
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psik already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psik[ang],
                     _mm_set_pd(Snap::xi[2*ang+1], Snap::xi[2*ang])),
                     _mm_set1_pd(Snap::hk)));
           // See if we're doing anything time dependent
-          __m128d *__restrict__ time_flux_in = get_sse_angle_ptr(time_flux_in_ptr,
-                                           time_flux_in_offsets, local_point);
+          __m128d *__restrict__ time_flux_in = get_sse_angle_ptr<3>(time_flux_in_ptr,
+                                                  time_flux_in_offsets, local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -869,7 +813,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           }
           // Multiple by the precomputed denominator inverse
           __m128d *__restrict__ dinv = 
-            get_sse_angle_ptr(dinv_ptr, dinv_offsets, local_point);
+            get_sse_angle_ptr<3>(dinv_ptr, dinv_offsets, local_point);
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
           if (Snap::flux_fixup) {
@@ -1012,7 +956,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
             {
               // Write out the outgoing temporal flux 
               __m128d *__restrict__ time_flux_out = 
-                get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
+                get_sse_angle_ptr<3>(time_flux_out_ptr, 
+                                     time_flux_out_offsets, local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1029,7 +974,8 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
             {
               // Write out the outgoing temporal flux 
               __m128d *__restrict__ time_flux_out = 
-                get_sse_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
+                get_sse_angle_ptr<3>(time_flux_out_ptr, 
+                                     time_flux_out_offsets, local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), time_flux_in[ang]));
@@ -1038,8 +984,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Write out the ghost regions
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
-            __m128d *__restrict__ target = get_sse_angle_ptr(ghostx_out_ptr, 
-                                       ghostx_out_offsets, local_point);
+            Point<2> ghost_point = ghostx_point(local_point);
+            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghostx_ptr, 
+                                              ghostx_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1047,16 +994,18 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
           // Y ghost
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m128d *__restrict__ target = get_sse_angle_ptr(ghosty_out_ptr, 
-                                       ghosty_out_offsets, local_point);
+            Point<2> ghost_point = ghosty_point(local_point);
+            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghosty_ptr, 
+                                                ghosty_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psij[ang]);
           } 
           // Else nothing: psij is already in place in the pencil
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
-            __m128d *__restrict__ target = get_sse_angle_ptr(ghostz_out_ptr, 
-                                       ghostz_out_offsets, local_point);
+            Point<2> ghost_point = ghostz_point(local_point);
+            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghostz_ptr, 
+                                              ghostz_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1104,8 +1053,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[3],
 #endif
 }
 
-inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[3],
-                                  const Point<3> &point)
+template<int DIM>
+inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
+                                  const Point<DIM> &point)
 {
   return (__m256d*)(ptr + (offsets * point));
 }
@@ -1180,29 +1130,31 @@ inline __m256d* malloc_avx_aligned(size_t size)
     RegionAccessor<AccessorType::Generic,double> fa_flux = 
       regions[1].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    ByteOffset flux_offsets[3], fluxm_offsets[3], qim_offsets[3];
     double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+
+    void *qim_ptr = NULL;
     MomentTriple *fluxm = NULL;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
       RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[2].get_field_accessor(
+        regions[3].get_field_accessor(
             SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
       fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
     }
-
-    const double vdelt = regions[regions.size()-1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
+ 
     // No types here since the size of these fields are dependent
     // on the number of angles
     RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+      regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
     ByteOffset dinv_offsets[3], time_flux_in_offsets[3], 
                time_flux_out_offsets[3], t_xs_offsets[3];
     void *const dinv_ptr = fa_dinv.raw_rect_ptr<3>(dinv_offsets);
@@ -1212,48 +1164,21 @@ inline __m256d* malloc_avx_aligned(size_t size)
       fa_time_flux_out.raw_rect_ptr<3>(time_flux_out_offsets);
     const double *const t_xs_ptr = fa_t_xs.raw_rect_ptr<3>(t_xs_offsets);
 
-    // Output ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_out = 
-      regions[7].get_field_accessor(args->even ? 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_out = 
-      regions[8].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
-      regions[9].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
-               ghostz_out_offsets[3], qim_offsets[3];
-    void *const ghostx_out_ptr = fa_ghostx_out.raw_rect_ptr<3>(ghostx_out_offsets);
-    void *const ghosty_out_ptr = fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
-    void *const ghostz_out_ptr = fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    void *qim_ptr = NULL;
-    if (Snap::source_layout == Snap::MMS_SOURCE) {
-      RegionAccessor<AccessorType::Generic> fa_qim = 
-        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-      qim_ptr = fa_qim.raw_rect_ptr<3>(qim_offsets);
-    }
+    // Ghost regions
+    RegionAccessor<AccessorType::Generic> fa_ghostz = 
+      regions[8].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghostx = 
+      regions[9].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghosty = 
+      regions[10].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    ByteOffset ghostx_offsets[2], ghosty_offsets[2], ghostz_offsets[2]; ;
+    void *const ghostx_ptr = fa_ghostx.raw_rect_ptr<2>(ghostx_offsets);
+    void *const ghosty_ptr = fa_ghosty.raw_rect_ptr<2>(ghosty_offsets);
+    void *const ghostz_ptr = fa_ghostz.raw_rect_ptr<2>(ghostz_offsets);
 
-    // Input ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2) : 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2));
-    ByteOffset ghostx_in_offsets[3], ghosty_in_offsets[3], ghostz_in_offsets[3];
-    void *const ghostx_in_ptr = fa_ghostx_in.raw_rect_ptr<3>(ghostx_in_offsets);
-    void *const ghosty_in_ptr = fa_ghosty_in.raw_rect_ptr<3>(ghosty_in_offsets);
-    void *const ghostz_in_ptr = fa_ghostz_in.raw_rect_ptr<3>(ghostz_in_offsets);
+    const double vdelt = regions[11].get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
+        DomainPoint::from_point<1>(Point<1>::ZEROES()));
 
     for (int z = 0; z < z_range; z++) {
       for (int y = 0; y < y_range; y++) {
@@ -1307,13 +1232,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // X ghost cells
           if (x == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_x_positive)
-              ghost_point.x[0] -= 1; // reading from x-1
-            else
-              ghost_point.x[0] += 1; // reading from x+1
-            memcpy(psii, get_avx_angle_ptr(ghostx_in_ptr, ghostx_in_offsets,
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghostx_point(local_point);
+            memcpy(psii, get_avx_angle_ptr<2>(ghostx_ptr, ghostx_offsets,
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psii[ang], 
@@ -1324,13 +1245,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
           __m256d *__restrict__ psij = yflux_pencil + x * num_vec_angles;
           if (y == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_y_positive)
-              ghost_point.x[1] -= 1; // reading from y-1
-            else
-              ghost_point.x[1] += 1; // reading from y+1
-            memcpy(psij, get_avx_angle_ptr(ghosty_in_ptr, ghosty_in_offsets, 
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghosty_point(local_point);
+            memcpy(psij, get_avx_angle_ptr<2>(ghosty_ptr, ghosty_offsets, 
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psij already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psij[ang],
@@ -1341,13 +1258,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
           __m256d *__restrict__ psik = zflux_plane + (y * x_range + x) * num_vec_angles;
           if (z == 0) {
             // Ghost cell array
-            Point<3> ghost_point = local_point;
-            if (stride_z_positive)
-              ghost_point.x[2] -= 1; // reading from z-1
-            else
-              ghost_point.x[2] += 1; // reading from z+1
-            memcpy(psik, get_avx_angle_ptr(ghostz_in_ptr, ghostz_in_offsets, 
-                                           ghost_point), angle_buffer_size);
+            Point<2> ghost_point = ghostz_point(local_point);
+            memcpy(psik, get_avx_angle_ptr<2>(ghostz_ptr, ghostz_offsets, 
+                                              ghost_point), angle_buffer_size);
           } // Else nothing: psik already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psik[ang],
@@ -1356,7 +1269,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(Snap::hk)));
 
           // See if we're doing anything time dependent
-          __m256d *__restrict__ time_flux_in = get_avx_angle_ptr(time_flux_in_ptr,
+          __m256d *__restrict__ time_flux_in = get_avx_angle_ptr<3>(time_flux_in_ptr,
                                            time_flux_in_offsets, local_point);
           if (vdelt != 0.0) 
           {
@@ -1366,7 +1279,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           }
           // Multiple by the precomputed denominator inverse
           __m256d *__restrict__ dinv = 
-            get_avx_angle_ptr(dinv_ptr, dinv_offsets, local_point);
+            get_avx_angle_ptr<3>(dinv_ptr, dinv_offsets, local_point);
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_mul_pd(pc[ang], dinv[ang]);
 
@@ -1546,7 +1459,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
             {
               // Write out the outgoing temporal flux 
               __m256d *__restrict__ time_flux_out = 
-                get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
+                get_avx_angle_ptr<3>(time_flux_out_ptr, 
+                                     time_flux_out_offsets, local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1566,7 +1480,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
             {
               // Write out the outgoing temporal flux 
               __m256d *__restrict__ time_flux_out = 
-                get_avx_angle_ptr(time_flux_out_ptr, time_flux_out_offsets, local_point);
+                get_avx_angle_ptr<3>(time_flux_out_ptr, 
+                                     time_flux_out_offsets, local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_sub_pd( _mm256_mul_pd( _mm256_set1_pd(2.0), 
@@ -1577,8 +1492,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Write out the ghost regions
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
-            __m256d *__restrict__ target = get_avx_angle_ptr(ghostx_out_ptr, 
-                                       ghostx_out_offsets, local_point);
+            Point<2> ghost_point = ghostx_point(local_point);
+            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghostx_ptr, 
+                                              ghostx_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1586,16 +1502,18 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Y ghost
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
-            __m256d *__restrict__ target = get_avx_angle_ptr(ghosty_out_ptr, 
-                                       ghosty_out_offsets, local_point);
+            Point<2> ghost_point = ghosty_point(local_point);
+            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghosty_ptr, 
+                                              ghosty_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psij[ang]);
           } 
           // Else nothing: psij is already in place in the pencil
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
-            __m256d *__restrict__ target = get_avx_angle_ptr(ghostz_out_ptr, 
-                                       ghostz_out_offsets, local_point);
+            Point<2> ghost_point = ghosty_point(local_point);
+            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghostz_ptr, 
+                                              ghostz_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psik[ang]);
           } 
