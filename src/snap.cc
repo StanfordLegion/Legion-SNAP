@@ -37,18 +37,11 @@ const char* Snap::task_names[LAST_TASK_ID] = { SNAP_TASK_NAMES };
 void Snap::setup(void)
 //------------------------------------------------------------------------------
 {
-  // This is the index space for all our regions
-  // To handle vaccum boundary conditions we allocate an extra chunks of cells
-  // on each side of the space just to make everything easier for the
-  // computation later. Ironically this makes it look more like the fortran
-  // implementation because it makes a lot of indexing look 1-based. This
-  // has virtually no overhead cause making overly large logical regions
-  // doesn't result in any memory allocation.
-  const int lower[3] = { -nx_per_chunk, -ny_per_chunk, -nz_per_chunk };
-  const int upper[3] = { (nx_chunks+1)*nx_per_chunk - 1,
-                         (ny_chunks+1)*ny_per_chunk - 1,
-                         (nz_chunks+1)*nz_per_chunk - 1 };
-  simulation_bounds = Rect<3>(Point<3>(lower), Point<3>(upper));
+  // This is the index space for the spatial simulation 
+  const int upper[3] = { nx_chunks*nx_per_chunk - 1,
+                         ny_chunks*ny_per_chunk - 1,
+                         nz_chunks*nz_per_chunk - 1 };
+  simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
   simulation_is = 
     runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
   runtime->attach_name(simulation_is, "Simulation Space");
