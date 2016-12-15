@@ -1576,13 +1576,10 @@ extern void run_gpu_sweep(const Point<3> origin,
                const double     *time_flux_in_ptr,
                      double     *time_flux_out_ptr,
                const double     *t_xs_ptr,
-                     double     *ghostx_out_ptr,
-                     double     *ghosty_out_ptr,
-                     double     *ghostz_out_ptr,
+                     double     *ghostx_ptr,
+                     double     *ghosty_ptr,
+                     double     *ghostz_ptr,
                const double     *qim_ptr,
-               const double     *ghostx_in_ptr,
-               const double     *ghosty_in_ptr,
-               const double     *ghostz_in_ptr,
                const ByteOffset qtot_offsets[3],
                const ByteOffset flux_offsets[3],
                const ByteOffset fluxm_offsets[3],
@@ -1590,13 +1587,10 @@ extern void run_gpu_sweep(const Point<3> origin,
                const ByteOffset time_flux_in_offsets[3],
                const ByteOffset time_flux_out_offsets[3],
                const ByteOffset t_xs_offsets[3],
-               const ByteOffset ghostx_out_offsets[3],
-               const ByteOffset ghosty_out_offsets[3],
-               const ByteOffset ghostz_out_offsets[3],
+               const ByteOffset ghostx_out_offsets[2],
+               const ByteOffset ghosty_out_offsets[2],
+               const ByteOffset ghostz_out_offsets[2],
                const ByteOffset qim_offsets[3],
-               const ByteOffset ghostx_in_offsets[3],
-               const ByteOffset ghosty_in_offsets[3],
-               const ByteOffset ghostz_in_offsets[3],
                const int x_range, const int y_range, 
                const int z_range, const int corner,
                const bool stride_x_positive,
@@ -1654,29 +1648,30 @@ extern void run_gpu_sweep(const Point<3> origin,
     RegionAccessor<AccessorType::Generic,double> fa_flux = 
       regions[1].get_field_accessor(
           SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    ByteOffset flux_offsets[3], fluxm_offsets[3];
+    ByteOffset flux_offsets[3], fluxm_offsets[3], qim_offsets[3];
     double *const flux_ptr = fa_flux.raw_rect_ptr<3>(flux_offsets);
     MomentTriple *fluxm_ptr = NULL;
+    double *qim_ptr = NULL;
     if (mms_source) {
+      RegionAccessor<AccessorType::Generic> fa_qim = 
+        regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+      qim_ptr = (double*)fa_qim.raw_rect_ptr<3>(qim_offsets);
       RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[2].get_field_accessor(
+        regions[3].get_field_accessor(
             SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
       fluxm_ptr = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
     }
-
-    const double vdelt = regions[regions.size()-1].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
+    
     // No types here since the size of these fields are dependent
     // on the number of angles
     RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[3].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
       regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
+    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
+      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
     RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+      regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
     ByteOffset dinv_offsets[3], time_flux_in_offsets[3], 
                time_flux_out_offsets[3], t_xs_offsets[3];
     double *const dinv_ptr = 
@@ -1687,63 +1682,31 @@ extern void run_gpu_sweep(const Point<3> origin,
       (double*)fa_time_flux_out.raw_rect_ptr<3>(time_flux_out_offsets);
     const double *const t_xs_ptr = fa_t_xs.raw_rect_ptr<3>(t_xs_offsets);
 
-    // Output ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_out = 
-      regions[7].get_field_accessor(args->even ? 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_out = 
-      regions[8].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_out = 
-      regions[9].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2) :
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2));
-    ByteOffset ghostx_out_offsets[3], ghosty_out_offsets[3], 
-               ghostz_out_offsets[3], qim_offsets[3];
-    double *const ghostx_out_ptr = 
-      (double*)fa_ghostx_out.raw_rect_ptr<3>(ghostx_out_offsets);
-    double *const ghosty_out_ptr = 
-      (double*)fa_ghosty_out.raw_rect_ptr<3>(ghosty_out_offsets);
-    double *const ghostz_out_ptr = 
-      (double*)fa_ghostz_out.raw_rect_ptr<3>(ghostz_out_offsets);
-    double *qim_ptr = NULL;
-    if (Snap::source_layout == Snap::MMS_SOURCE) {
-      RegionAccessor<AccessorType::Generic> fa_qim = 
-        regions[10].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-      qim_ptr = (double*)fa_qim.raw_rect_ptr<3>(qim_offsets);
-    }
+    // Ghost regions
+    RegionAccessor<AccessorType::Generic> fa_ghostz = 
+      regions[8].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghostx = 
+      regions[9].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    RegionAccessor<AccessorType::Generic> fa_ghosty = 
+      regions[10].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    ByteOffset ghostx_offsets[2], ghosty_offsets[2], ghostz_offsets[2];
+    double *const ghostx_ptr = 
+      (double*)fa_ghostx.raw_rect_ptr<2>(ghostx_offsets);
+    double *const ghosty_ptr = 
+      (double*)fa_ghosty.raw_rect_ptr<2>(ghosty_offsets);
+    double *const ghostz_ptr = 
+      (double*)fa_ghostz.raw_rect_ptr<2>(ghostz_offsets); 
 
-    // Input ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostx_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 0) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 0));
-    RegionAccessor<AccessorType::Generic> fa_ghosty_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+1].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 1) :
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 1));
-    RegionAccessor<AccessorType::Generic> fa_ghostz_in = 
-      regions[MINI_KBA_NON_GHOST_REQUIREMENTS+2].get_field_accessor(args->even ?
-          SNAP_GHOST_FLUX_FIELD_ODD(group, args->corner, 2) : 
-          SNAP_GHOST_FLUX_FIELD_EVEN(group, args->corner, 2));
-    ByteOffset ghostx_in_offsets[3], ghosty_in_offsets[3], ghostz_in_offsets[3];
-    double *const ghostx_in_ptr = 
-      (double*)fa_ghostx_in.raw_rect_ptr<3>(ghostx_in_offsets);
-    double *const ghosty_in_ptr = 
-      (double*)fa_ghosty_in.raw_rect_ptr<3>(ghosty_in_offsets);
-    double *const ghostz_in_ptr = 
-      (double*)fa_ghostz_in.raw_rect_ptr<3>(ghostz_in_offsets);
+    const double vdelt = regions[11].get_field_accessor(
+        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
+        DomainPoint::from_point<1>(Point<1>::ZEROES()));
 
     run_gpu_sweep(origin, qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, 
-        time_flux_in_ptr, time_flux_out_ptr, t_xs_ptr, ghostx_out_ptr,
-        ghosty_out_ptr, ghostz_out_ptr, qim_ptr, ghostx_in_ptr, 
-        ghosty_in_ptr, ghostz_in_ptr, qtot_offsets, flux_offsets,
+        time_flux_in_ptr, time_flux_out_ptr, t_xs_ptr, ghostx_ptr,
+        ghosty_ptr, ghostz_ptr, qim_ptr, qtot_offsets, flux_offsets,
         fluxm_offsets, dinv_offsets, time_flux_in_offsets, 
-        time_flux_out_offsets, t_xs_offsets, ghostx_out_offsets,
-        ghosty_out_offsets, ghostz_out_offsets, qim_offsets,
-        ghostx_in_offsets, ghosty_in_offsets, ghostz_in_offsets,
+        time_flux_out_offsets, t_xs_offsets, ghostx_offsets,
+        ghosty_offsets, ghostz_offsets, qim_offsets,
         x_range, y_range, z_range, args->corner, stride_x_positive,
         stride_y_positive, stride_z_positive, mms_source, 
         Snap::num_moments, Snap::hi, Snap::hj, Snap::hk, vdelt,

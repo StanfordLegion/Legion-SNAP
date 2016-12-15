@@ -403,7 +403,7 @@ static int gcd(int a, int b)
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, flux0_offsets));
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
-      assert(offsets_match<3>(temp, slgg_offsets));
+      assert(offsets_match<2>(temp, slgg_offsets));
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, qo0_offsets));
     }
