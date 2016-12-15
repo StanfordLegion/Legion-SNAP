@@ -740,7 +740,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (Snap::num_moments > 1) {
             const int corner_offset = 
               args->corner * Snap::num_angles * Snap::num_moments;
-            for (unsigned l = 1; l < Snap::num_moments; l++) {
+            for (int l = 1; l < Snap::num_moments; l++) {
               const int moment_offset = corner_offset + l * Snap::num_angles;
               for (int ang = 0; ang < num_vec_angles; ang++) {
                 psi[ang] = _mm_add_pd(psi[ang], _mm_mul_pd(
@@ -1201,7 +1201,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (Snap::num_moments > 1) {
             const int corner_offset = 
               args->corner * Snap::num_angles * Snap::num_moments;
-            for (unsigned l = 1; l < Snap::num_moments; l++) {
+            for (int l = 1; l < Snap::num_moments; l++) {
               const int moment_offset = corner_offset + l * Snap::num_angles;
               for (int ang = 0; ang < num_vec_angles; ang++) {
                 psi[ang] = _mm256_add_pd(psi[ang], _mm256_mul_pd(
@@ -1302,8 +1302,14 @@ inline __m256d* malloc_avx_aligned(size_t size)
                 // If not greater than or equal, set back to zero
                 hv_x[ang] = _mm256_and_pd(ge, hv_x[ang]);
                 // Count how many negative fluxes we had
-                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge), 
+#ifdef __AVX2__
+                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge),
                     _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1));
+#else
+                __m256i negatives = _mm256_castpd_si256(
+                    _mm256_andnot_pd(ge, _mm256_castsi256_pd(
+                        _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1))));
+#endif
                 negative_fluxes += _mm256_extract_epi32(negatives, 0);
                 negative_fluxes += _mm256_extract_epi32(negatives, 2);
                 negative_fluxes += _mm256_extract_epi32(negatives, 4);
@@ -1317,8 +1323,14 @@ inline __m256d* malloc_avx_aligned(size_t size)
                 // If not greater than or equal set back to zero
                 hv_y[ang] = _mm256_and_pd(ge, hv_y[ang]);
                 // Count how many negative fluxes we had
-                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge), 
+#ifdef __AVX2__
+                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge),
                     _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1));
+#else
+                __m256i negatives = _mm256_castpd_si256(
+                    _mm256_andnot_pd(ge, _mm256_castsi256_pd(
+                        _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1))));
+#endif
                 negative_fluxes += _mm256_extract_epi32(negatives, 0);
                 negative_fluxes += _mm256_extract_epi32(negatives, 2);
                 negative_fluxes += _mm256_extract_epi32(negatives, 4);
@@ -1332,8 +1344,14 @@ inline __m256d* malloc_avx_aligned(size_t size)
                 // If not greater than or equal set back to zero
                 hv_z[ang] = _mm256_and_pd(ge, hv_z[ang]);
                 // Count how many negative fluxes we had
-                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge), 
+#ifdef __AVX2__
+                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge),
                     _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1));
+#else
+                __m256i negatives = _mm256_castpd_si256(
+                    _mm256_andnot_pd(ge, _mm256_castsi256_pd(
+                        _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1))));
+#endif
                 negative_fluxes += _mm256_extract_epi32(negatives, 0);
                 negative_fluxes += _mm256_extract_epi32(negatives, 2);
                 negative_fluxes += _mm256_extract_epi32(negatives, 4);
@@ -1348,8 +1366,14 @@ inline __m256d* malloc_avx_aligned(size_t size)
                   // If not greater than or equal, set back to zero
                   hv_t[ang] = _mm256_and_pd(ge, hv_t[ang]);
                   // Count how many negative fluxes we had
-                  __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge), 
-                      _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1));
+#ifdef __AVX2__
+                __m256i negatives = _mm256_andnot_si256(_mm256_castpd_si256(ge),
+                    _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1));
+#else
+                __m256i negatives = _mm256_castpd_si256(
+                    _mm256_andnot_pd(ge, _mm256_castsi256_pd(
+                        _mm256_set_epi32(0, 1, 0, 1, 0, 1, 0, 1))));
+#endif
                   negative_fluxes += _mm256_extract_epi32(negatives, 0);
                   negative_fluxes += _mm256_extract_epi32(negatives, 2);
                   negative_fluxes += _mm256_extract_epi32(negatives, 4);
