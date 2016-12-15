@@ -43,8 +43,6 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
   if (group_start == group_stop) {
     // Special case for a single field
     const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
-    // If you add projection requirements here, remember to update
-    // the value of NON_GHOST_REQUIREMENTS in sweep.h
     qtot.add_projection_requirement(READ_ONLY, *this, 
                                     group_field, Snap::SWEEP_PROJECTION);
     // We need reduction privileges on the flux field since all sweeps
@@ -86,8 +84,6 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
     std::vector<Snap::SnapFieldID> group_fields((group_stop - group_start) + 1);
     for (int group = group_start; group <= group_stop; group++)
       group_fields[group-group_start] = SNAP_ENERGY_GROUP_FIELD(group);
-    // If you add projection requirements here, remember to update
-    // the value of NON_GHOST_REQUIREMENTS in sweep.h
     qtot.add_projection_requirement(READ_ONLY, *this, 
                                     group_fields, Snap::SWEEP_PROJECTION);
     // We need reduction privileges on the flux field since all sweeps
