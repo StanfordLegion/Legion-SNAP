@@ -204,7 +204,7 @@ void gpu_inner_convergence(const double *flux0_ptr, const double *flux0pi_ptr,
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   const unsigned warpid = 
-    ((blockIdx.z * blockDim.y + blockIdx.y) * blockDim.y + threadIdx.x) >> 5;
+    ((threadIdx.z * blockDim.y + threadIdx.y) * blockDim.x + threadIdx.x) >> 5;
   for (int i = 16; i >= 1; i/=2)
     local_converged += __shfl_xor(local_converged, i, 32);
   // Initialize the trampoline
@@ -247,7 +247,7 @@ bool run_inner_convergence(Rect<3> subgrid_bounds,
   const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
 
   dim3 block(gcd(x_range,32),gcd(y_range,4),gcd(z_range,4));
-  dim3 grid(x_range/block.z, y_range/block.y, z_range/block.z);
+  dim3 grid(x_range/block.x, y_range/block.y, z_range/block.z);
 
   assert(flux0_ptrs.size() == flux0pi_ptrs.size());
   for (unsigned idx = 0; idx < flux0_ptrs.size(); idx++) {

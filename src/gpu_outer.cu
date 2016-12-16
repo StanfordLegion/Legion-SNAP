@@ -65,7 +65,11 @@ void gpu_flux0_outer_source(const PointerBuffer<GROUPS,double> qi0_ptrs,
   // Write the value into shared
   flux_buffer[group][strip_offset] = flux0;
   // Can compute our slgg_ptr with the matrix result
+#ifdef LEGION_ISSUE_214_FIX
   const MomentQuad *slgg_ptr = slgg_ptrs[group] + mat * slgg_offsets[0];
+#else
+  const MomentQuad *slgg_ptr = slgg_ptrs[group] + (mat-1) * slgg_offsets[0];
+#endif
   // Synchronize when all the writes into shared memory are done
   __syncthreads();
   // Do the math
@@ -503,7 +507,7 @@ void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
   unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
   const unsigned warpid = 
-    ((blockIdx.z * blockDim.y + blockIdx.y) * blockDim.y + threadIdx.x) >> 5;
+    ((threadIdx.z * blockDim.y + threadIdx.y) * blockDim.x + threadIdx.x) >> 5;
   for (int i = 16; i >= 1; i/=2)
     local_converged += __shfl_xor(local_converged, i, 32);
   // Initialize the trampoline

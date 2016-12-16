@@ -182,6 +182,12 @@ static int gcd(int a, int b)
   std::vector<MomentQuad*> slgg_ptrs(num_groups);
   std::vector<double*> qo0_ptrs(num_groups);
 
+#ifndef LEGION_ISSUE_214_FIX
+  Rect<2> slgg_bounds, actual_bounds;
+  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
+  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
+#endif
   ByteOffset qi0_offsets[3], flux0_offsets[3], slgg_offsets[2], qo0_offsets[3];
   // Get all our accessors and offsets
   int g = 0;
@@ -200,7 +206,12 @@ static int gcd(int a, int b)
     if (g == 0) {
       qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(qi0_offsets);
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
+#else
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
+      assert(slgg_bounds == actual_bounds);
+#endif
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(qo0_offsets);
     } else {
       ByteOffset temp[3];
@@ -208,8 +219,14 @@ static int gcd(int a, int b)
       assert(offsets_match<3>(temp, qi0_offsets));
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, flux0_offsets));
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
       assert(offsets_match<2>(temp, slgg_offsets));
+#else
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp);
+      assert(actual_bounds == slgg_bounds);
+      assert(offsets_match<2>(temp, slgg_offsets));
+#endif
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, qo0_offsets));
     }
@@ -251,8 +268,13 @@ static int gcd(int a, int b)
             for (int g2 = 0; g2 < num_groups; g2++) {
               if (g1 == g2)
                 continue;
+#ifdef LEGION_ISSUE_214_FIX
               MomentQuad cs = *(slgg_ptrs[g1] + 
                 mat * slgg_offsets[0] + g2 * slgg_offsets[1]);
+#else
+              MomentQuad cs = *(slgg_ptrs[g1] + 
+                (mat-1) * slgg_offsets[0] + g2 * slgg_offsets[1]);
+#endif
               qo0 += cs[0] * flux_strip[g2 * strip_size + i];
             }
             *(qo0_ptrs[g1] + qo0_offset + i * qo0_offsets[0]) = qo0;
@@ -317,8 +339,13 @@ static int gcd(int a, int b)
                   continue;
                 int moment = 0;
                 MomentTriple csm;
+#ifdef LEGION_ISSUE_214_FIX
                 MomentQuad scat = *(slgg_ptrs[g1] + 
                       mat * slgg_offsets[0] + g2 * slgg_offsets[1]);
+#else
+                MomentQuad scat = *(slgg_ptrs[g1] + 
+                      (mat-1) * slgg_offsets[0] + g2 * slgg_offsets[1]);
+#endif
                 for (int l = 1; l < Snap::num_moments; l++) {
                   for (int j = 0; j < Snap::lma[l]; j++)
                     csm[moment+j] = scat[l];
@@ -376,6 +403,12 @@ static int gcd(int a, int b)
   std::vector<MomentQuad*> slgg_ptrs(num_groups);
   std::vector<double*> qo0_ptrs(num_groups);
 
+#ifndef LEGION_ISSUE_214_FIX
+  Rect<2> slgg_bounds, actual_bounds;
+  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
+  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
+#endif
   ByteOffset qi0_offsets[3], flux0_offsets[3], slgg_offsets[2], qo0_offsets[3];
   // Get all our accessors and offsets
   int g = 0;
@@ -394,7 +427,12 @@ static int gcd(int a, int b)
     if (g == 0) {
       qi0_ptrs[g] = fa_qi0.raw_rect_ptr<3>(qi0_offsets);
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(flux0_offsets);
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
+#else
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
+      assert(slgg_bounds == actual_bounds);
+#endif
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(qo0_offsets);
     } else {
       ByteOffset temp[3];
@@ -402,8 +440,14 @@ static int gcd(int a, int b)
       assert(offsets_match<3>(temp, qi0_offsets));
       flux0_ptrs[g] = fa_flux0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, flux0_offsets));
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(temp);
       assert(offsets_match<2>(temp, slgg_offsets));
+#else
+      slgg_ptrs[g] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp);
+      assert(slgg_bounds == actual_bounds);
+      assert(offsets_match<2>(temp, slgg_offsets));
+#endif
       qo0_ptrs[g] = fa_qo0.raw_rect_ptr<3>(temp);
       assert(offsets_match<3>(temp, qo0_offsets));
     }

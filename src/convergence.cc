@@ -202,6 +202,8 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   }
   // Reset the timer
   data.outer_start = time;
+  // And the inner loop number
+  data.inner_loop_number = 0;
 
   return data;
 }

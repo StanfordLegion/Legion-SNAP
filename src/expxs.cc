@@ -327,17 +327,35 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
+#ifndef LEGION_ISSUE_214_FIX
+  Rect<2> slgg_bounds, actual_bounds;
+  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
+  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
+#endif
   ByteOffset slgg_offsets[2];
   std::vector<MomentQuad*> slgg_ptrs(num_groups);
   for (int group = group_start; group <= group_stop; group++) {
     RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
       regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
     if (group == group_start) {
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
+#else
+      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
+      assert(slgg_bounds == actual_bounds);
+#endif
     } else {
       ByteOffset temp_offsets[2];
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[group - group_start] = fa_slgg.raw_rect_ptr<2>(temp_offsets);
       assert(offsets_match<2>(temp_offsets, slgg_offsets));
+#else
+      slgg_ptrs[group - group_start] = 
+        fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp_offsets);
+      assert(slgg_bounds == actual_bounds);
+      assert(offsets_match<2>(temp_offsets, slgg_offsets));
+#endif
     }
   }
 
@@ -370,8 +388,13 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
         const int mat = *(mat_ptr + x * mat_offsets[0] + y * mat_offsets[1] + 
                           z * mat_offsets[2]);
         for (int idx = 0; idx < num_groups; idx++) {
+#ifdef LEGION_ISSUE_214_FIX
           MomentQuad val = *(slgg_ptrs[idx] + mat * slgg_offsets[0] + 
                               (group_start + idx) * slgg_offsets[1]);
+#else
+          MomentQuad val = *(slgg_ptrs[idx] + (mat-1) * slgg_offsets[0] + 
+                              (group_start + idx) * slgg_offsets[1]);
+#endif
           *(xs_ptrs[idx] + x * xs_offsets[0] + y * xs_offsets[1] + 
               z * xs_offsets[2]) = val;
         }
@@ -406,17 +429,35 @@ extern void run_expand_scattering_cross_section(
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
+#ifndef LEGION_ISSUE_214_FIX
+  Rect<2> slgg_bounds, actual_bounds;
+  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
+  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
+#endif
   ByteOffset slgg_offsets[2];
   std::vector<MomentQuad*> slgg_ptrs(num_groups);
   for (int group = group_start; group <= group_stop; group++) {
     RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
       regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
     if (group == group_start) {
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
+#else
+      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
+      assert(slgg_bounds == actual_bounds);
+#endif
     } else {
       ByteOffset temp_offsets[2];
+#ifdef LEGION_ISSUE_214_FIX
       slgg_ptrs[group - group_start] = fa_slgg.raw_rect_ptr<2>(temp_offsets);
       assert(offsets_match<2>(temp_offsets, slgg_offsets));
+#else
+      slgg_ptrs[group - group_start] = 
+        fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp_offsets);
+      assert(slgg_bounds == actual_bounds);
+      assert(offsets_match<2>(temp_offsets, slgg_offsets));
+#endif
     }
   }
 

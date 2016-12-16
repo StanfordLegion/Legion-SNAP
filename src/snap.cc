@@ -549,7 +549,8 @@ void Snap::transport_solve(void)
     log_snap.print("MMS Max Diff: %.8g", result[0]);
     log_snap.print("MMS Min Diff: %.8g", result[1]);
     const size_t total_cells = nx * nx_chunks * ny * ny_chunks * nz * nz_chunks;
-    log_snap.print("MMS Avg Diff: %.8g", result[2]/double(total_cells));
+    log_snap.print("MMS Avg Diff: %.8g", 
+        result[2]/double(total_cells * Snap::num_groups));
   }
   for (int i = 0; i < 8; i++) {
     delete time_flux_even[i];
