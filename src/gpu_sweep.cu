@@ -317,6 +317,78 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       angles_per_thread);
         break;
       }
+    case 24:
+      {
+        gpu_geometry_param<24><<<grid,block>>>(
+                                      PointerBuffer<24,double>(xs_ptrs),
+                                      PointerBuffer<24,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<24,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
+    case 32:
+      {
+        gpu_geometry_param<32><<<grid,block>>>(
+                                      PointerBuffer<32,double>(xs_ptrs),
+                                      PointerBuffer<32,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<32,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
+    case 40:
+      {
+        gpu_geometry_param<40><<<grid,block>>>(
+                                      PointerBuffer<40,double>(xs_ptrs),
+                                      PointerBuffer<40,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<40,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
+    case 48:
+      {
+        gpu_geometry_param<48><<<grid,block>>>(
+                                      PointerBuffer<48,double>(xs_ptrs),
+                                      PointerBuffer<48,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<48,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
+    case 56:
+      {
+        gpu_geometry_param<56><<<grid,block>>>(
+                                      PointerBuffer<56,double>(xs_ptrs),
+                                      PointerBuffer<56,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<56,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
+    case 64:
+      {
+        gpu_geometry_param<64><<<grid,block>>>(
+                                      PointerBuffer<64,double>(xs_ptrs),
+                                      PointerBuffer<64,double>(dinv_ptrs),
+                                      ByteOffsetArray<3>(xs_offsets),
+                                      ByteOffsetArray<3>(dinv_offsets),
+                                      ConstBuffer<64,double>(vdelts),
+                                      hi, hj, hk, subgrid_bounds.lo,
+                                      angles_per_thread);
+        break;
+      }
     default:
       assert(false); // need more cases
   }
