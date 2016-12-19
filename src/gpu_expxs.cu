@@ -244,6 +244,72 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        subgrid_bounds.lo);
         break;
       }
+    case 24:
+      {
+        gpu_expand_cross_section<24><<<grid, block>>>(
+                                       PointerBuffer<24,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<24,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
+    case 32:
+      {
+        gpu_expand_cross_section<32><<<grid, block>>>(
+                                       PointerBuffer<32,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<32,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
+    case 40:
+      {
+        gpu_expand_cross_section<40><<<grid, block>>>(
+                                       PointerBuffer<40,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<40,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
+    case 48:
+      {
+        gpu_expand_cross_section<48><<<grid, block>>>(
+                                       PointerBuffer<48,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<48,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
+    case 56:
+      {
+        gpu_expand_cross_section<56><<<grid, block>>>(
+                                       PointerBuffer<56,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<56,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
+    case 64:
+      {
+        gpu_expand_cross_section<64><<<grid, block>>>(
+                                       PointerBuffer<64,double>(sig_ptrs), mat_ptr,
+                                       PointerBuffer<64,double>(xs_ptrs), 
+                                       ByteOffsetArray<1>(sig_offsets),
+                                       ByteOffsetArray<3>(mat_offsets),
+                                       ByteOffsetArray<3>(xs_offsets),
+                                       subgrid_bounds.lo);
+        break;
+      }
     default:
       assert(false); // add more cases
   }
