@@ -546,6 +546,72 @@ void run_expand_scattering_cross_section(
                             subgrid_bounds.lo, group_start);
         break;
       }
+    case 24:
+      {
+        gpu_expand_scattering_cross_section<24><<<grid,block>>>(
+                            PointerBuffer<24,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<24,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
+    case 32:
+      {
+        gpu_expand_scattering_cross_section<32><<<grid,block>>>(
+                            PointerBuffer<32,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<32,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
+    case 40:
+      {
+        gpu_expand_scattering_cross_section<40><<<grid,block>>>(
+                            PointerBuffer<40,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<40,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
+    case 48:
+      {
+        gpu_expand_scattering_cross_section<48><<<grid,block>>>(
+                            PointerBuffer<48,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<48,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
+    case 56:
+      {
+        gpu_expand_scattering_cross_section<56><<<grid,block>>>(
+                            PointerBuffer<56,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<56,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
+    case 64:
+      {
+        gpu_expand_scattering_cross_section<64><<<grid,block>>>(
+                            PointerBuffer<64,MomentQuad>(slgg_ptrs), mat_ptr,
+                            PointerBuffer<64,MomentQuad>(xs_ptrs), 
+                            ByteOffsetArray<2>(slgg_offsets),
+                            ByteOffsetArray<3>(mat_offsets),
+                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo, group_start);
+        break;
+      }
     default:
       assert(false); // add more cases
   }
