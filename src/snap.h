@@ -261,10 +261,30 @@ public:
                                       const Task& task,
                                       const SelectTunableInput& input,
                                             SelectTunableOutput& output);
+    virtual void map_copy(const MapperContext ctx,
+                          const Copy &copy,
+                          const MapCopyInput &input,
+                                MapCopyOutput &output);
+    virtual void slice_task(const MapperContext ctx,
+                            const Task &task,
+                            const SliceTaskInput &input,
+                                  SliceTaskOutput &output);
     virtual void map_task(const MapperContext ctx,
                           const Task &task,
                           const MapTaskInput &input,
                                 MapTaskOutput &output);
+  protected:
+    void update_variants(const MapperContext ctx);
+    void map_snap_array(const MapperContext ctx, 
+                        LogicalRegion region, Memory target,
+                        std::vector<PhysicalInstance> &instances);
+  protected:
+    bool has_variants;
+    std::map<SnapTaskID,VariantID> cpu_variants;
+    std::map<SnapTaskID,VariantID> gpu_variants;
+  protected:
+    Memory local_sysmem, local_zerocopy, local_framebuffer;
+    std::map<std::pair<LogicalRegion,Memory>,PhysicalInstance> local_instances;
   };
 };
 
