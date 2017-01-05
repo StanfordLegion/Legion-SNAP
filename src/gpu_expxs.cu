@@ -1,5 +1,7 @@
 /* Copyright 2017 NVIDIA Corporation
  *
+ * The U.S. Department of Energy funded the development of this software 
+ * under subcontract B609478 with Lawrence Livermore National Security, LLC
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
