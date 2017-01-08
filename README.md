@@ -18,22 +18,29 @@ Several notes on the code for this implementation of SNAP.
   This version launches a single CTA per sweep and energy group and
   relies on task parallelism to launch multiple kernels onto the GPU
   to keep all the SMs on the GPU busy. This is unorthodox, but allows
-  for a more effecient implementation that can store per-angle fluxes
+  for a more efficient implementation that can store per-angle fluxes
   in the register file as the CTA sweeps through cells.
 
 * The Legion style of this implementation is designed to illustrate
-  how code should be generated from a higher-level compiler, with
-  good application-specific abstractions and multiple different task
-  variants for each logical task. This allows the application to
-  specialize itself for different target architectures. The downside
-  is that the code can appear to be verbose. This is not a function
-  of Legion, but of what needs to be done to make a code portable
-  across many different architectures. In general you will notice
-  that there are very few places where Legion shows up in this code.
-  There are fewer than 100 Legion runtime calls which represents 
-  less than 2% of all the code in the application. All of the task
-  variants are highly tuned so it is possible to accurately gauge
-  the runtime overhead that is incurred.
+  how code should be generated from a higher-level compiler or written
+  by a domain specific library, with good application-specific 
+  abstractions and multiple different task variants for each logical 
+  task. This allows the application to specialize itself for different 
+  target architectures. The downside is that the code can appear to be 
+  verbose. This is not an artifact of Legion, but instead of what needs 
+  to be done to make a code portable across many different architectures. 
+  In general you will notice that there are very few places where Legion 
+  shows up in this code. There are fewer than 100 Legion runtime calls 
+  which represents less than 2% of all the code in the application. All 
+  of the task variants are highly tuned so it is possible to accurately 
+  gauge the runtime overhead that is incurred.
+
+* The Legion version of SNAP also demonstrates the use of custom projection
+  functions when performing index space launches for the different sweeps.
+  The custom projection functions for SNAP end up projecting from three
+  dimensional points for the sweeps down to two dimensional points for
+  handling the per-angle fluxes being passed from previous cells as each
+  sweep progresses.
 
 * This version of SNAP is the first real Legion application that
   relies heavily upon using predication to handle the dynamic
