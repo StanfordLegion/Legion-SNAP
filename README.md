@@ -23,7 +23,7 @@ Several notes on the code for this implementation of SNAP.
 
 * The Legion style of this implementation is designed to illustrate
   how code should be generated from a higher-level compiler or written
-  by a domain specific library, with good application-specific 
+  for  a domain specific library, with good application-specific 
   abstractions and multiple different task variants for each logical 
   task. This allows the application to specialize itself for different 
   target architectures. The downside is that the code can appear to be 
@@ -50,8 +50,8 @@ Several notes on the code for this implementation of SNAP.
   tasks to construct a monad for performing accurate timing of
   tasks in a deferred execution environment (similar to how
   monads in Haskell are needed to handle the laziness of the
-  execution model). Users should see this as a template for
-  handling other kinds of predicated computations that needed 
+  execution model). Users can leverage this as a template for
+  handling other kinds of predicated computations that need 
   to be done in a deferred execution model. 
 
 * Included in this version of SNAP is a custom mapper that 
