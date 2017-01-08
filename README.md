@@ -36,14 +36,16 @@ Several notes on the code for this implementation of SNAP.
   the runtime overhead that is incurred.
 
 * This version of SNAP is the first real Legion application that
-  pushes heavily upon using predication to handle the dynamic
+  relies heavily upon using predication to handle the dynamic
   convergence tests needed in SNAP. This implementation shows 
   how to chain together predicates to perform the convergence
   tests. It also demonstrates how to use Legion futures and 
   tasks to construct a monad for performing accurate timing of
   tasks in a deferred execution environment (similar to how
   monads in Haskell are needed to handle the laziness of the
-  execution model).
+  execution model). Users should see this as a template for
+  handling other kinds of predicated computations that needed 
+  to be done in a deferred execution model. 
 
 * Included in this version of SNAP is a custom mapper that 
   demonstrates how a mapper can be specialized to a particular
