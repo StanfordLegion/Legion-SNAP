@@ -48,13 +48,13 @@ Several notes on the code for this implementation of SNAP.
   to be done in a deferred execution model. 
 
 * Included in this version of SNAP is a custom mapper that 
-  demonstrates how a mapper can be specialized to a particular
+  demonstrates how a mapper can be specialized for a particular
   application by overriding specific calls from the default
   mapper implementation. An interesting observation is that
   the implementation of the mapper calls for a custom mapper
   are considerably simpler than the default mapper 
   implementations. The reason for this is that with an 
   application specific mapper the implementation can be 
-  tailored directly to the application and we know exactly
+  tailored directly to the application and know exactly
   what layouts and locations to use for physical instances.
 
