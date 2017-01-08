@@ -14,9 +14,9 @@ Several notes on the code for this implementation of SNAP.
   The Legion version issues index space launches for each stage of a
   sweep for each energy group and direction. This allows Legion to 
   extract task parallelism from the different sweeps. This proves
-  especially useful for way Legion performs the GPU computation. 
-  This version launches a single CTA per sweep and energy group and
-  relies on task parallelism to launch multiple kernels onto the GPU
+  especially useful for the way Legion performs the GPU computation. 
+  The GPU implementation launches a single CTA per sweep and energy group 
+  and relies on task parallelism to launch multiple kernels onto the GPU
   to keep all the SMs on the GPU busy. This is unorthodox, but allows
   for a more efficient implementation that can store per-angle fluxes
   in the register file as the CTA sweeps through cells.
