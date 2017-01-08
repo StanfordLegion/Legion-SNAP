@@ -1,38 +1,58 @@
 # Legion-SNAP
 
-Implementation of the SNAP Mini-App in Legion
+This is an implementation of the [SNAP](https://github.com/losalamos/SNAP)
+mini-application in Legion. This work was done by NVIDIA as part of the
+Fast Forward 2 project and was funded by the U.S. Department of Energy
+under subcontract B609478 with Lawrence Livermore National Security, LLC.
+The code is released under the Apache License, Version 2.0. A copy of the
+license can be found in this repository.
 
-Some important points regarding this implementation:
+Several notes on the code for this implementation of SNAP. 
 
-* Note the minimalism of Legion. There are only 75 runtime 
-  calls to handle all the important control logic of SNAP, 
-  inlcluding partitioning the data, creating all the fields,
-  and predicating the various tasks across iterations. The
-  main looping constructs of snap take only 130 lines in 
-  snap.cc. Much of the verbosity of this implementation of SNAP 
-  is in the actual kernels themselves (more on this below), 
-  and that is not a problem that Legion is designed to solve. 
-  In the future we plan to replace all the different task variants 
-  with task generators that can JIT specialize task implementations 
-  on the fly.
-* The only way to really test the overhead of a runtime is with 
-  optimized tasks. It's very easy to hide runtime overhead if 
-  the tasks are unoptimized. Therefore all the kernels 
-  in this implementation are tuned well beyond what a normal user
-  would likely ever be capable of doing to ensure that we can 
-  accurately gauge the runtime overhead. These kernels are highly
-  optimized to block for caches, use vector intrinstics, and use
-  inline assembly code. This simply ensures we make an accurate
-  assessment of the Legion runtime's overhead and should not be
-  used in determining the verbosity of the Legion interface.
-* There is one optimization that Legion supports for execution
-  with GPUs that is not available in other programming models.
-  Legion's ability to find significant parallelism from sweeps
-  from different corners and energy groups allows us to launch
-  CUDA kernels with significantly less parallelism, but also much
-  better locality. All GPU sweeps in this version of SNAP
-  launch a single CTA per energy group and corner. We can do
-  this because we run ahead and get enough of these "kernels"
-  in flight to fill the GPU's SMs. Try doing that in another
-  programming system. :)
+* This version of SNAP only implements the mini-KBA sweep algorithm
+  for performing the computation. It also only supports 3D computations.
+  The Legion version issues index space launches for each stage of a
+  sweep for each energy group and direction. This allows Legion to 
+  extract task parallelism from the different sweeps. This proves
+  especially useful for way Legion performs the GPU computation. 
+  This version launches a single CTA per sweep and energy group and
+  relies on task parallelism to launch multiple kernels onto the GPU
+  to keep all the SMs on the GPU busy. This is unorthodox, but allows
+  for a more effecient implementation that can store per-angle fluxes
+  in the register file as the CTA sweeps through cells.
+
+* The Legion style of this implementation is designed to illustrate
+  how code should be generated from a higher-level compiler, with
+  good application-specific abstractions and multiple different task
+  variants for each logical task. This allows the application to
+  specialize itself for different target architectures. The downside
+  is that the code can appear to be verbose. This is not a function
+  of Legion, but of what needs to be done to make a code portable
+  across many different architectures. In general you will notice
+  that there are very few places where Legion shows up in this code.
+  There are fewer than 100 Legion runtime calls which represents 
+  less than 2% of all the code in the application. All of the task
+  variants are highly tuned so it is possible to accurately gauge
+  the runtime overhead that is incurred.
+
+* This version of SNAP is the first real Legion application that
+  pushes heavily upon using predication to handle the dynamic
+  convergence tests needed in SNAP. This implementation shows 
+  how to chain together predicates to perform the convergence
+  tests. It also demonstrates how to use Legion futures and 
+  tasks to construct a monad for performing accurate timing of
+  tasks in a deferred execution environment (similar to how
+  monads in Haskell are needed to handle the laziness of the
+  execution model).
+
+* Included in this version of SNAP is a custom mapper that 
+  demonstrates how a mapper can be specialized to a particular
+  application by overriding specific calls from the default
+  mapper implementation. An interesting observation is that
+  the implementation of the mapper calls for a custom mapper
+  are considerably simpler than the default mapper 
+  implementations. The reason for this is that with an 
+  application specific mapper the implementation can be 
+  tailored directly to the application and we know exactly
+  what layouts and locations to use for physical instances.
 
