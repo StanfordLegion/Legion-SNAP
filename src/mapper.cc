@@ -104,6 +104,21 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
 }
 
 //------------------------------------------------------------------------------
+void Snap::SnapMapper::speculate(const MapperContext ctx,
+                                 const Copy &copy,
+                                       SpeculativeOutput &output)
+//------------------------------------------------------------------------------
+{
+#ifdef DISABLE_SPECULATION
+  output.speculate = false;
+#else
+  output.speculate = true;
+  output.speculative_value = true; // not converged
+  output.speculate_mapping_only = true;
+#endif
+}
+
+//------------------------------------------------------------------------------
 void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                 const Copy &copy,
                                 const MapCopyInput &input,
@@ -174,6 +189,21 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
       output.slices.push_back(slice);
     }
   }
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::speculate(const MapperContext ctx,
+                                 const Task &task,
+                                       SpeculativeOutput &output)
+//------------------------------------------------------------------------------
+{
+#ifdef DISABLE_SPECULATION
+  output.speculate = false;
+#else
+  output.speculate = true;
+  output.speculative_value = true; // not converged
+  output.speculate_mapping_only = true;
+#endif
 }
 
 //------------------------------------------------------------------------------

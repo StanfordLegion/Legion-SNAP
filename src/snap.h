@@ -264,6 +264,9 @@ public:
                                       const Task& task,
                                       const SelectTunableInput& input,
                                             SelectTunableOutput& output);
+    virtual void speculate(const MapperContext ctx,
+                           const Copy &copy,
+                                 SpeculativeOutput &output);
     virtual void map_copy(const MapperContext ctx,
                           const Copy &copy,
                           const MapCopyInput &input,
@@ -272,6 +275,9 @@ public:
                             const Task &task,
                             const SliceTaskInput &input,
                                   SliceTaskOutput &output);
+    virtual void speculate(const MapperContext ctx,
+                           const Task &task,
+                                 SpeculativeOutput &output);
     virtual void map_task(const MapperContext ctx,
                           const Task &task,
                           const MapTaskInput &input,
