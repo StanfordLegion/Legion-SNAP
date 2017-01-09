@@ -530,6 +530,10 @@ public:
                                 unsigned index, 
                                 LogicalPartition upper_bound,
                                 const DomainPoint &point);
+  virtual LogicalRegion project(LogicalRegion upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(LogicalPartition upper_bound,
+                                const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 };
 
@@ -544,6 +548,10 @@ public:
   virtual LogicalRegion project(Context ctx, Task *task,
                                 unsigned index, 
                                 LogicalPartition upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(LogicalRegion upper_bound,
+                                const DomainPoint &point);
+  virtual LogicalRegion project(LogicalPartition upper_bound,
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 public:

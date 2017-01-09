@@ -761,6 +761,8 @@ void Snap::save_fluxes(const Predicate &pred,
                        const SnapArray &src, const SnapArray &dst) const
 //------------------------------------------------------------------------------
 {
+  // Use this macro to disable index space copy launches
+#ifdef NO_INDEX_SPACE_COPIES
   // Build the CopyLauncher
   CopyLauncher launcher(pred);
   launcher.add_copy_requirements(
@@ -787,6 +789,25 @@ void Snap::save_fluxes(const Predicate &pred,
     dst_req.region = dst.get_subregion(dp);
     runtime->issue_copy_operation(ctx, launcher);
   }
+#else
+  IndexCopyLauncher launcher(Domain::from_rect<3>(get_launch_bounds()), pred);
+  launcher.add_copy_requirements(
+      RegionRequirement(src.get_partition(), 0/*projection id*/, 
+                        READ_ONLY, EXCLUSIVE, src.get_region()),
+      RegionRequirement(dst.get_partition(), 0/*projection id*/,
+                        WRITE_DISCARD, EXCLUSIVE, dst.get_region()));
+  const std::set<FieldID> &src_fields = src.get_all_fields();
+  RegionRequirement &src_req = launcher.src_requirements.back();
+  src_req.privilege_fields = src_fields;
+  src_req.instance_fields.insert(src_req.instance_fields.end(),
+      src_fields.begin(), src_fields.end());
+  const std::set<FieldID> &dst_fields = dst.get_all_fields();
+  RegionRequirement &dst_req = launcher.dst_requirements.back();
+  dst_req.privilege_fields = dst_fields;
+  dst_req.instance_fields.insert(dst_req.instance_fields.end(),
+      dst_fields.begin(), dst_fields.end());
+  runtime->issue_copy_operation(ctx, launcher);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -1543,6 +1564,26 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
 }
 
 //------------------------------------------------------------------------------
+LogicalRegion SnapSweepProjectionFunctor::project(LogicalRegion upper_bound,
+                                                  const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion SnapSweepProjectionFunctor::project(LogicalPartition upper_bound,
+                                                  const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
 FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
   : ProjectionFunctor(), projection_kind(k)
 //------------------------------------------------------------------------------
@@ -1601,6 +1642,26 @@ LogicalRegion FluxProjectionFunctor::project(Context ctx, Task *task,
     default:
       assert(false);
   }
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion FluxProjectionFunctor::project(LogicalRegion upper_bound,
+                                             const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+LogicalRegion FluxProjectionFunctor::project(LogicalPartition upper_bound,
+                                             const DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
   return LogicalRegion::NO_REGION;
 }
 
