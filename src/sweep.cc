@@ -833,7 +833,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
               // Figure out how many negative fluxes we have
               for (int ang = 0; ang < num_vec_angles; ang++) {
                 fx_hv_x[ang] = _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), psii[ang]);
-                __m128d ge = _mm_cmp_pd(fx_hv_x[ang], _mm_set1_pd(0.0), _CMP_GE_OS);
+                __m128d ge = _mm_cmpge_pd(fx_hv_x[ang], _mm_set1_pd(0.0));
                 // If not greater than or equal, set back to zero
                 hv_x[ang] = _mm_and_pd(ge, hv_x[ang]);
                 // Count how many negative fluxes we had
@@ -844,7 +844,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
               }
               for (int ang = 0; ang < num_vec_angles; ang++) {
                 fx_hv_y[ang] = _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), psij[ang]);
-                __m128d ge = _mm_cmp_pd(fx_hv_y[ang], _mm_set1_pd(0.0), _CMP_GE_OS);
+                __m128d ge = _mm_cmpge_pd(fx_hv_y[ang], _mm_set1_pd(0.0));
                 // If not greater than or equal set back to zero
                 hv_y[ang] = _mm_and_pd(ge, hv_y[ang]);
                 // Count how many negative fluxes we had
@@ -855,7 +855,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
               }
               for (int ang = 0; ang < num_vec_angles; ang++) {
                 fx_hv_z[ang] = _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), psik[ang]);
-                __m128d ge = _mm_cmp_pd(fx_hv_z[ang], _mm_set1_pd(0.0), _CMP_GE_OS);
+                __m128d ge = _mm_cmpge_pd(fx_hv_z[ang], _mm_set1_pd(0.0));
                 // If not greater than or equal set back to zero
                 hv_z[ang] = _mm_and_pd(ge, hv_z[ang]);
                 // Count how many negative fluxes we had
@@ -868,7 +868,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                 for (int ang = 0; ang < num_vec_angles; ang++) {
                   fx_hv_t[ang] = _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), 
                                                         time_flux_in[ang]);
-                  __m128d ge = _mm_cmp_pd(fx_hv_t[ang], _mm_set1_pd(0.0), _CMP_GE_OS);
+                  __m128d ge = _mm_cmpge_pd(fx_hv_t[ang], _mm_set1_pd(0.0));
                   // If not greater than or equal, set back to zero
                   hv_t[ang] = _mm_and_pd(ge, hv_t[ang]);
                   // Count how many negative fluxes we had
@@ -908,10 +908,10 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                         _mm_mul_pd( _mm_mul_pd( _mm_set_pd(Snap::xi[2*ang+1],
                               Snap::xi[2*ang]), _mm_set1_pd(Snap::hk)), hv_z[ang])),
                         _mm_mul_pd(_mm_set1_pd(vdelt), hv_t[ang])));
-                  __m128d pc_gt = _mm_cmp_pd(pc[ang], _mm_set1_pd(0.0), _CMP_GT_OS);
+                  __m128d pc_gt = _mm_cmpgt_pd(pc[ang], _mm_set1_pd(0.0));
                   // Set the denominator back to zero if it is too small
                   den = _mm_and_pd(den, pc_gt);
-                  __m128d den_ge = _mm_cmp_pd(den, tolr, _CMP_GE_OS);
+                  __m128d den_ge = _mm_cmpge_pd(den, tolr);
                   pc[ang] = _mm_and_pd(den_ge, _mm_div_pd(pc[ang], den));
                 }
               } else {
@@ -936,10 +936,10 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                               Snap::eta[2*ang]), _mm_set1_pd(Snap::hj)), hv_y[ang])),
                         _mm_mul_pd( _mm_mul_pd( _mm_set_pd(Snap::xi[2*ang+1],
                               Snap::xi[2*ang]), _mm_set1_pd(Snap::hk)), hv_z[ang])));
-                  __m128d pc_gt = _mm_cmp_pd(pc[ang], _mm_set1_pd(0.0), _CMP_GT_OS);
+                  __m128d pc_gt = _mm_cmpgt_pd(pc[ang], _mm_set1_pd(0.0));
                   // Set the denominator back to zero if it is too small
                   den = _mm_and_pd(den, pc_gt);
-                  __m128d den_ge = _mm_cmp_pd(den, tolr, _CMP_GE_OS);
+                  __m128d den_ge = _mm_cmpge_pd(den, tolr);
                   pc[ang] = _mm_and_pd(den_ge, _mm_div_pd(pc[ang], den));
                 }
               }
@@ -1052,6 +1052,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
 #endif
 }
 
+#ifdef __AVX__
 template<int DIM>
 inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                                   const Point<DIM> &point)
@@ -1589,6 +1590,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
   free(zflux_plane);
 #endif
 }
+#endif // __AVX__
 
 #ifdef USE_GPU_KERNELS
 extern void run_gpu_sweep(const Point<3> origin, 
