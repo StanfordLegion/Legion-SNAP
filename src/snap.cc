@@ -1442,8 +1442,18 @@ SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
     lp = runtime->get_logical_partition(lr, ip);
     snprintf(name_buffer,63,"%s Spatial Partition", name);
     runtime->attach_name(lp, name_buffer);
+    // Also get the color space if we have one
+    color_space = 
+      runtime->get_index_partition_color_space(ctx, lp.get_index_partition());
   }
   runtime->get_field_space_fields(fs, all_fields);
+  assert(!all_fields.empty());
+  // Assume all the fields are the same size
+  field_size = runtime->get_field_size(lr.get_field_space(),
+                                       *(all_fields.begin()));
+  assert(field_size > 0);
+  fill_buffer = malloc(field_size);
+  memset(fill_buffer, 0, field_size);
 }
 
 //------------------------------------------------------------------------------
@@ -1460,6 +1470,7 @@ SnapArray::~SnapArray(void)
 //------------------------------------------------------------------------------
 {
   runtime->destroy_logical_region(ctx, lr);
+  free(fill_buffer);
 }
 
 //------------------------------------------------------------------------------
@@ -1491,16 +1502,23 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 void SnapArray::initialize(Predicate pred) const
 //------------------------------------------------------------------------------
 {
-  assert(!all_fields.empty());
-  // Assume all the fields are the same size
-  size_t field_size = runtime->get_field_size(lr.get_field_space(),
-                                              *(all_fields.begin()));
-  void *buffer = malloc(field_size);
-  memset(buffer, 0, field_size);
-  FillLauncher launcher(lr, lr, TaskArgument(buffer, field_size), pred);
-  launcher.fields = all_fields;
-  runtime->fill_fields(ctx, launcher);
-  free(buffer);
+#ifndef NO_INDEX_SPACE_FILLS
+  // If we have partition it is better to do an index space fill for scalability
+  if (lp.exists())
+  {
+    IndexFillLauncher launcher(color_space, lp, lr, 
+                               TaskArgument(fill_buffer, field_size),
+                               0/*identity*/, pred);
+    launcher.fields = all_fields;
+    runtime->fill_fields(ctx, launcher);
+  }
+  else
+#endif
+  {
+    FillLauncher launcher(lr, lr, TaskArgument(fill_buffer, field_size), pred);
+    launcher.fields = all_fields;
+    runtime->fill_fields(ctx, launcher);
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -1508,9 +1526,23 @@ template<typename T>
 void SnapArray::initialize(T value, Predicate pred) const
 //------------------------------------------------------------------------------
 {
-  FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)), pred);
-  launcher.fields = all_fields;
-  runtime->fill_fields(ctx, launcher);
+#ifndef NO_INDEX_SPACE_FILLS
+  // If we have partition it is better to do an index space fill for scalability
+  if (lp.exists())
+  {
+    IndexFillLauncher launcher(color_space, lp, lr, 
+                               TaskArgument(&value, sizeof(value)),
+                               0/*identity*/, pred);
+    launcher.fields = all_fields;
+    runtime->fill_fields(ctx, launcher);
+  }
+  else
+#endif
+  {
+    FillLauncher launcher(lr, lr, TaskArgument(&value, sizeof(value)), pred);
+    launcher.fields = all_fields;
+    runtime->fill_fields(ctx, launcher);
+  }
 }
 
 //------------------------------------------------------------------------------

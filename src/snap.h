@@ -521,7 +521,10 @@ protected:
   LogicalRegion lr;
   LogicalPartition lp;
   std::set<FieldID> all_fields;
+  Domain color_space;
   mutable std::map<DomainPoint,LogicalRegion> subregions;
+  void *fill_buffer;
+  size_t field_size;
 };
 
 class SnapSweepProjectionFunctor : public ProjectionFunctor {
