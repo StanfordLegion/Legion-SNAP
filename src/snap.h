@@ -531,17 +531,11 @@ class SnapSweepProjectionFunctor : public ProjectionFunctor {
 public:
   SnapSweepProjectionFunctor(void);
 public:
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index, 
+  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
                                 LogicalRegion upper_bound,
                                 const DomainPoint &point);
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index, 
+  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
                                 LogicalPartition upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(LogicalRegion upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(LogicalPartition upper_bound,
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 };
@@ -550,17 +544,11 @@ class FluxProjectionFunctor : public ProjectionFunctor {
 public:
   FluxProjectionFunctor(Snap::SnapProjectionID kind);
 public:
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index, 
+  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
                                 LogicalRegion upper_bound,
                                 const DomainPoint &point);
-  virtual LogicalRegion project(Context ctx, Task *task,
-                                unsigned index, 
+  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
                                 LogicalPartition upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(LogicalRegion upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(LogicalPartition upper_bound,
                                 const DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 public:

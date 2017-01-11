@@ -1569,7 +1569,7 @@ SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(void)
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion SnapSweepProjectionFunctor::project(const Mappable *mappable,
             unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
@@ -1579,10 +1579,12 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion SnapSweepProjectionFunctor::project(const Mappable *mappable,
          unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
+  const Task *task = mappable->as_task();
+  assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
@@ -1596,26 +1598,6 @@ LogicalRegion SnapSweepProjectionFunctor::project(Context ctx, Task *task,
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(LogicalRegion upper_bound,
-                                                  const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(LogicalPartition upper_bound,
-                                                  const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
 FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
   : ProjectionFunctor(), projection_kind(k)
 //------------------------------------------------------------------------------
@@ -1623,7 +1605,7 @@ FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion FluxProjectionFunctor::project(const Mappable *mappble,
             unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
@@ -1633,10 +1615,12 @@ LogicalRegion FluxProjectionFunctor::project(Context ctx, Task *task,
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(Context ctx, Task *task,
+LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
          unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
 //------------------------------------------------------------------------------
 {
+  const Task *task = mappable->as_task();
+  assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
   assert(point.get_dim() == 1);
   Point<1> p = point.get_point<1>();
@@ -1674,26 +1658,6 @@ LogicalRegion FluxProjectionFunctor::project(Context ctx, Task *task,
     default:
       assert(false);
   }
-  return LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(LogicalRegion upper_bound,
-                                             const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(LogicalPartition upper_bound,
-                                             const DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
   return LogicalRegion::NO_REGION;
 }
 
