@@ -40,6 +40,12 @@ public:
     int time_step_number;
     int inner_loop_number;
     int outer_loop_number;
+  public:
+    int total_inner_loops;
+    int total_outer_loops;
+    long long total_inner_time;
+    long long total_outer_time;
+    long long total_step_time;
   };
 public:
   ConvergenceMonad(Context ctx, Runtime *runtime);
@@ -61,6 +67,8 @@ public:
   static MonadData bind_inner_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
   static MonadData bind_outer_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static void summary_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 

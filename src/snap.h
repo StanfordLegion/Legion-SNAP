@@ -67,6 +67,7 @@ public:
     MMS_COMPARE_TASK_ID,
     BIND_INNER_CONVERGENCE_TASK_ID,
     BIND_OUTER_CONVERGENCE_TASK_ID,
+    SUMMARY_TASK_ID,
     LAST_TASK_ID, // must be last
   };
 #define SNAP_TASK_NAMES                 \
@@ -88,7 +89,8 @@ public:
     "MMS_Scale",                        \
     "MMS_Compare",                      \
     "Bind_Inner_Convergence",           \
-    "Bind_Outer_Convergence",
+    "Bind_Outer_Convergence",           \
+    "Summary"
   static const char* task_names[LAST_TASK_ID];
   enum MaterialLayout {
     HOMOGENEOUS_LAYOUT = 0,

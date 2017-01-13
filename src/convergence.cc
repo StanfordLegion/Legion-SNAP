@@ -36,6 +36,11 @@ ConvergenceMonad::ConvergenceMonad(Context c, Runtime *rt)
   init_data.time_step_number = 0;
   init_data.inner_loop_number = 0;
   init_data.outer_loop_number = 0;
+  init_data.total_inner_loops = 0;
+  init_data.total_outer_loops = 0;
+  init_data.total_inner_time = 0;
+  init_data.total_outer_time = 0;
+  init_data.total_step_time = 0;
 
   monad_future = Future::from_untyped_pointer(runtime, &init_data, 
                                               sizeof(init_data));
@@ -54,6 +59,11 @@ ConvergenceMonad::ConvergenceMonad(const ConvergenceMonad &rhs)
 ConvergenceMonad::~ConvergenceMonad(void)
 //------------------------------------------------------------------------------
 {
+  // Launch the summary task
+  TaskLauncher launcher(Snap::SUMMARY_TASK_ID, TaskArgument(NULL, 0));
+  launcher.add_future(monad_future);
+
+  runtime->execute_task(ctx, launcher);
 }
 
 //------------------------------------------------------------------------------
@@ -129,6 +139,17 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   outer_registrar.inner_variant = false;
   Runtime::preregister_task_variant<MonadData, bind_outer_implementation>(
       outer_registrar, Snap::task_names[Snap::BIND_OUTER_CONVERGENCE_TASK_ID]);
+
+  strcpy(variant_name, "CPU ");
+  strncat(variant_name,
+      Snap::task_names[Snap::SUMMARY_TASK_ID], 123);
+  TaskVariantRegistrar summary_registrar(
+      Snap::SUMMARY_TASK_ID, true/*global*/, NULL/*generator*/, variant_name);
+  summary_registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+  summary_registrar.leaf_variant = true;
+  summary_registrar.inner_variant = false;
+  Runtime::preregister_task_variant<summary_implementation>(summary_registrar,
+      Snap::task_names[Snap::SUMMARY_TASK_ID]);
 }
 
 //------------------------------------------------------------------------------
@@ -164,6 +185,9 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
                    data.time_step_number, loop_time);
     data.inner_loop_number++;
   }
+  // Remember the results
+  data.total_inner_loops++;
+  data.total_inner_time += loop_time;
   // Reset the timer
   data.inner_start = time;
   return data;
@@ -197,17 +221,46 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
     data.time_step_number++;
     data.outer_loop_number = 0;
     data.step_start = time;
+    data.total_step_time += step_time;
   } else {
     log_snap.print("Outer loop %d of time step %d did not converge "
                    "in %lld microsecond", data.outer_loop_number,
                    data.time_step_number, loop_time);
     data.outer_loop_number++;
   }
+  data.total_outer_loops++;
+  data.total_outer_time += loop_time;
   // Reset the timer
   data.outer_start = time;
   // And the inner loop number
   data.inner_loop_number = 0;
 
   return data;
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void ConvergenceMonad::summary_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  // Should always have one future
+  assert(task->futures.size() == 1);
+  // Get the monad data
+  MonadData data = 
+    task->futures[0].get_result<MonadData>(true/*silence warnings*/);
+
+  log_snap.print("---------------------------------------------------------");
+  log_snap.print("SNAP Execution Summary");
+  log_snap.print("---------------------------------------------------------");
+  log_snap.print("  Total Inner Loops: %d (avg %.8g us / iter)", 
+      data.total_inner_loops, 
+      double(data.total_inner_time) / double(data.total_inner_loops));
+  log_snap.print("  Total Outer Loops: %d (avg %.8g us / iter)",
+      data.total_outer_loops,
+      double(data.total_outer_time) / double(data.total_outer_loops));
+  log_snap.print("  Total Time Steps: %d (avg %.8g us / iter)",
+      data.time_step_number,
+      double(data.total_step_time) / double(data.time_step_number));
+  log_snap.print("---------------------------------------------------------");
 }
 

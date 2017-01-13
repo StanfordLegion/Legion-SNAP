@@ -64,13 +64,14 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
   {
     case OUTER_RUNAHEAD_TUNABLE:
       {
-        runtime->pack_tunable<unsigned>(4, output);
+        // Just need to unroll this enough to avoid blocking
+        runtime->pack_tunable<unsigned>(2, output);
         break;
       }
     case INNER_RUNAHEAD_TUNABLE:
       {
-        // Should be enough to always unroll the inner loop
-        runtime->pack_tunable<unsigned>(8, output);
+        // Just need to unroll this enough to avoid blocking
+        runtime->pack_tunable<unsigned>(2, output);
         break;
       }
     case SWEEP_ENERGY_CHUNKS_TUNABLE:

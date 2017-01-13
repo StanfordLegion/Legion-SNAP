@@ -522,7 +522,7 @@ void Snap::transport_solve(void)
         }
       }
       // Test for outer convergence
-      // SNAP says to skip this on the first iteration
+      // Original SNAP says to skip this on the first iteration
       if (otno == 0)
         continue;
       Predicate converged = test_outer_convergence(outer_pred, flux0,
