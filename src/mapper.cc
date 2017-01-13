@@ -109,7 +109,7 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
                                        SpeculativeOutput &output)
 //------------------------------------------------------------------------------
 {
-#ifndef ENABLE_SPECULATION
+#ifdef DISABLE_SPECULATION
   output.speculate = false;
 #else
   output.speculate = true;
@@ -197,7 +197,7 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
                                        SpeculativeOutput &output)
 //------------------------------------------------------------------------------
 {
-#ifndef ENABLE_SPECULATION
+#ifdef DISABLE_SPECULATION
   output.speculate = false;
 #else
   output.speculate = true;

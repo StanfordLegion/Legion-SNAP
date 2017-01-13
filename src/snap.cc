@@ -505,13 +505,12 @@ void Snap::transport_solve(void)
                        even_time_step ? time_flux_odd : time_flux_even, 
                        qim, flux_xy, flux_yz, flux_xz, energy_group_chunks); 
         // Test for inner convergence
-        TestInnerConvergence inner_conv(*this, inner_pred, 
-                                        flux0, flux0pi, true_future);
-        inner_converged = inner_conv.dispatch<AndReduction>(ctx, runtime);
+        Predicate converged = test_inner_convergence(inner_pred, flux0, 
+                             flux0pi, true_future, energy_group_chunks);
+        inner_converged = runtime->get_predicate_future(ctx, converged);
         inner_converged_tests.push_back(inner_converged);
         convergence.bind_inner(inner_pred, inner_converged);
         // Update the next predicate
-        Predicate converged = runtime->create_predicate(ctx, inner_converged);
         inner_pred = runtime->predicate_not(ctx, converged);
         // See if we've run far enough ahead
         if (inner_converged_tests.size() == inner_runahead)
@@ -526,14 +525,12 @@ void Snap::transport_solve(void)
       // SNAP says to skip this on the first iteration
       if (otno == 0)
         continue;
-      TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po, 
-                                      inner_converged, true_future);
-      Future outer_converged = 
-        outer_conv.dispatch<AndReduction>(ctx, runtime);
+      Predicate converged = test_outer_convergence(outer_pred, flux0,
+           flux0po, inner_converged, true_future, energy_group_chunks);
+      Future outer_converged = runtime->get_predicate_future(ctx, converged);
       outer_converged_tests.push_back(outer_converged);
       convergence.bind_outer(outer_pred, outer_converged);
       // Update the next predicate
-      Predicate converged = runtime->create_predicate(ctx, outer_converged);
       outer_pred = runtime->predicate_not(ctx, converged);
       // See if we've run far enough ahead
       if (outer_converged_tests.size() == outer_runahead)
@@ -839,10 +836,7 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
       // Clamp to the upper bound
       if (group_stop >= num_groups)
         group_stop = num_groups-1;
-      // Launch the sweep from this corner for the given field
-      // We alternate between even and odd ghost fields since
-      // Legion can't prove that some of the region requirements
-      // are non-interfering with it's current projection analysis
+      // Launch the sweep from this corner for the given set of fields
       MiniKBATask mini_kba(*this, pred, flux, fluxm, 
                            qtot, vdelt, dinv, t_xs, 
                            *time_flux_in[corner], *time_flux_out[corner],
@@ -852,6 +846,55 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
         mini_kba.dispatch_wavefront(idx, launch_domains[idx], ctx, runtime);
     }
   }
+}
+
+//------------------------------------------------------------------------------
+Predicate Snap::test_inner_convergence(const Predicate &inner_pred, 
+                                       const SnapArray &flux0,
+                                       const SnapArray &flux0pi, 
+                                       const Future &pred_false_result,
+                                       int energy_group_chunks) const
+//------------------------------------------------------------------------------
+{
+  PredicateLauncher launcher(true/*and predicate*/);
+  // Iterate over the energy group chunks
+  for (int group = 0; group < num_groups; group+=energy_group_chunks)
+  {
+    int group_stop = group + energy_group_chunks - 1;
+    // Clamp to the upper bound
+    if (group_stop >= num_groups)
+      group_stop = num_groups-1;
+    TestInnerConvergence inner_conv(*this, inner_pred, flux0, flux0pi,
+                                    pred_false_result, group, group_stop);
+    Future f = inner_conv.dispatch<AndReduction>(ctx, runtime);
+    launcher.add_predicate(runtime->create_predicate(ctx, f));
+  }
+  return runtime->create_predicate(ctx, launcher);
+}
+
+//------------------------------------------------------------------------------
+Predicate Snap::test_outer_convergence(const Predicate &outer_pred,
+                                       const SnapArray &flux0,
+                                       const SnapArray &flux0po,
+                                       const Future &inner_converged,
+                                       const Future &pred_false_result,
+                                       int energy_group_chunks) const
+//------------------------------------------------------------------------------
+{
+  PredicateLauncher launcher(true/*and predicate*/);
+  // Iterate over the energy group chunks
+  for (int group = 0; group < num_groups; group+=energy_group_chunks)
+  {
+    int group_stop = group + energy_group_chunks - 1;
+    // Clamp to the upper bound
+    if (group_stop >= num_groups)
+      group_stop = num_groups-1;
+    TestOuterConvergence outer_conv(*this, outer_pred, flux0, flux0po,
+                inner_converged, pred_false_result, group, group_stop);
+    Future f = outer_conv.dispatch<AndReduction>(ctx, runtime);
+    launcher.add_predicate(runtime->create_predicate(ctx, f));
+  }
+  return runtime->create_predicate(ctx, launcher);
 }
 
 //------------------------------------------------------------------------------

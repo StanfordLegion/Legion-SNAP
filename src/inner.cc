@@ -306,13 +306,25 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
                                            const Predicate &pred,
                                            const SnapArray &flux0,
                                            const SnapArray &flux0pi,
-                                           const Future &true_future)
+                                           const Future &true_future,
+                                           int group_start, int group_stop)
   : SnapTask<TestInnerConvergence, Snap::TEST_INNER_CONVERGENCE_TASK_ID>(
       snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
-  flux0.add_projection_requirement(READ_ONLY, *this);
-  flux0pi.add_projection_requirement(READ_ONLY, *this);
+  if (group_start == group_stop) {
+    // Special case for a single field
+    const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
+    flux0.add_projection_requirement(READ_ONLY, *this, group_field);
+    flux0pi.add_projection_requirement(READ_ONLY, *this, group_field);
+  } else {
+    // General case for arbitrary set of fields
+    std::vector<Snap::SnapFieldID> group_fields((group_stop - group_start) + 1);
+    for (int group = group_start; group <= group_stop; group++)
+      group_fields[group-group_start] = SNAP_ENERGY_GROUP_FIELD(group);
+    flux0.add_projection_requirement(READ_ONLY, *this, group_fields);
+    flux0pi.add_projection_requirement(READ_ONLY, *this, group_fields);
+  }
   predicate_false_future = true_future;
 }
 

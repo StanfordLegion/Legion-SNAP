@@ -49,7 +49,8 @@ class TestOuterConvergence : public SnapTask<TestOuterConvergence,
 public:
   TestOuterConvergence(const Snap &snap, const Predicate &pred,
                        const SnapArray &flux0, const SnapArray &flux0po,
-                       const Future &inner_converged, const Future &true_future);
+                       const Future &inner_converged, const Future &true_future,
+                       int group_start, int group_stop);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

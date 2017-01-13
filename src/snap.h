@@ -159,6 +159,13 @@ protected:
                       SnapArray *time_flux_out[8], SnapArray *qim[8],
                       const SnapArray &flux_xy, const SnapArray &flux_yz,
                       const SnapArray &flux_xz, int energy_group_chunks) const;
+  Predicate test_inner_convergence(const Predicate &pred, const SnapArray &flux0,
+                      const SnapArray &flux0pi, const Future &pred_false_result,
+                      int energy_group_chunks) const;
+  Predicate test_outer_convergence(const Predicate &pred, const SnapArray &flux0,
+                      const SnapArray &flux0po, const Future &inner_converged,
+                      const Future &pred_false_result,
+                      int energy_group_chunks) const;
 private:
   const Context ctx;
   Runtime *const runtime;
