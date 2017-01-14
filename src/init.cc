@@ -36,7 +36,11 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 /*static*/ void InitMaterial::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -119,7 +123,11 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 /*static*/ void InitSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -212,7 +220,11 @@ InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
 /*static*/ void InitGPUSweep::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 #ifdef USE_GPU_KERNELS

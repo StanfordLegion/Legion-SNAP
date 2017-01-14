@@ -146,14 +146,22 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 /*static*/ void MiniKBATask::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<sse_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<sse_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void MiniKBATask::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 static inline Point<2> ghostx_point(const Point<3> &local_point)

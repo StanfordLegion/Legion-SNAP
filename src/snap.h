@@ -208,6 +208,7 @@ public:
   static void perform_registrations(void);
   static void mapper_registration(Machine machine, Runtime *runtime,
                                   const std::set<Processor> &local_procs);
+  static LayoutConstraintID get_soa_layout(void);
 public:
   // Configuration parameters read from input file
   static int num_dims; // originally ndimen 1-3
@@ -371,13 +372,17 @@ protected:
   // For registering CPU variants
   template<void (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_cpu_variant(bool leaf = false, bool inner = false)
+  static void register_cpu_variant(const ExecutionConstraintSet &execution_constraints,
+                                   const TaskLayoutConstraintSet &layout_constraints,
+                                   bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
     TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
+    registrar.execution_constraints = execution_constraints;
+    registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
@@ -387,13 +392,17 @@ protected:
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_cpu_variant(bool leaf = false, bool inner = false)
+  static void register_cpu_variant(const ExecutionConstraintSet &execution_constraints,
+                                   const TaskLayoutConstraintSet &layout_constraints,
+                                   bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "CPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
     TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
+    registrar.execution_constraints = execution_constraints;
+    registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
@@ -405,13 +414,17 @@ protected:
   // For registering GPU variants
   template<void (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_gpu_variant(bool leaf = false, bool inner = false)
+  static void register_gpu_variant(const ExecutionConstraintSet &execution_constraints,
+                                   const TaskLayoutConstraintSet &layout_constraints,
+                                   bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
     TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
+    registrar.execution_constraints = execution_constraints;
+    registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;
@@ -421,13 +434,17 @@ protected:
   }
   template<typename RET_T, RET_T (*TASK_PTR)(const Task*,
       const std::vector<PhysicalRegion>&, Context, Runtime*)>
-  static void register_gpu_variant(bool leaf = false, bool inner = false)
+  static void register_gpu_variant(const ExecutionConstraintSet &execution_constraints,
+                                   const TaskLayoutConstraintSet &layout_constraints,
+                                   bool leaf = false, bool inner = false)
   {
     char variant_name[128];
     strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
     TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
         NULL/*generator*/, variant_name);
+    registrar.execution_constraints = execution_constraints;
+    registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
     registrar.leaf_variant = leaf;
     registrar.inner_variant = inner;

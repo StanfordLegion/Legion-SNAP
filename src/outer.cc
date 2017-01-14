@@ -51,14 +51,48 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcOuterSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
+  // Need L1 cache at least 32 KB
+  execution_constraints.add_constraint(
+      ResourceConstraint(L1_CACHE_SIZE, GE_EK/*>=*/, 32768/*32 KB*/));
+  // Need L1 cache with at least 8 way set associativity
+  execution_constraints.add_constraint(
+      ResourceConstraint(L1_CACHE_ASSOCIATIVITY, GE_EK/*>=*/, 8));
+  TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 7; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout()); 
+  register_cpu_variant<fast_implementation>(execution_constraints,
+                                            layout_constraints,
+                                            true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU with at least sm30
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA | SM_30_ISA));
+  // Need at least 48 KB of shared memory
+  execution_constraints.add_constraint(
+      ResourceConstraint(SHARED_MEMORY_SIZE, GE_EK/*>=*/, 49152/*48KB*/));
+  // Need at least 64K registers
+  execution_constraints.add_constraint(
+      ResourceConstraint(REGISTER_FILE_SIZE, GE_EK/*>=*/, 65536/*registers*/));
+  // Need at least two CTAs per SM for performance
+  execution_constraints.add_constraint(LaunchConstraint(CTAS_PER_SM, 2));
+  TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 7; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/, 
+                                             Snap::get_soa_layout());
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -533,14 +567,22 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 /*static*/ void TestOuterConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<bool, fast_implementation>(execution_constraints,
+                                                  layout_constraints,
+                                                  true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void TestOuterConvergence::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<bool, gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<bool, gpu_implementation>(execution_constraints,
+                                                 layout_constraints,
+                                                 true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

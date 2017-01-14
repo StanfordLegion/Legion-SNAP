@@ -1471,6 +1471,28 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 }
 
 //------------------------------------------------------------------------------
+/*static*/ LayoutConstraintID Snap::get_soa_layout(void)
+//------------------------------------------------------------------------------
+{
+  static LayoutConstraintID layout_id = 0;
+  if (layout_id > 0)
+    return layout_id;
+  // If we haven't made it yet, make it now
+  LayoutConstraintRegistrar constraints;
+  // This should be a normal instance
+  constraints.add_constraint(SpecializedConstraint(NORMAL_SPECIALIZE));
+  // Want fortran ordering of dimensions
+  std::vector<DimensionKind> dim_order(4);
+  dim_order[0] = DIM_X;
+  dim_order[1] = DIM_Y;
+  dim_order[2] = DIM_Z;
+  dim_order[3] = DIM_F; // SOA: fields are least quickly changing
+  constraints.add_constraint(OrderingConstraint(dim_order, true/*contiguous*/));
+  layout_id = Runtime::preregister_layout(constraints);
+  return layout_id;
+}
+
+//------------------------------------------------------------------------------
 SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
                      Context c, Runtime *rt, const char *name)
   : ctx(c), runtime(rt)

@@ -70,7 +70,11 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
 /*static*/ void MMSInitFlux::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -198,7 +202,11 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 /*static*/ void MMSInitSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -371,7 +379,11 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
 /*static*/ void MMSInitTimeDependent::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -428,7 +440,11 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
 /*static*/ void MMSScale::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -483,7 +499,11 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
 /*static*/ void MMSCompare::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<MomentTriple,cpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<MomentTriple,cpu_implementation>(execution_constraints,
+                                                        layout_constraints,
+                                                        true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

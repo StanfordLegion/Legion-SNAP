@@ -49,14 +49,22 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 /*static*/ void CalcInnerSource::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<fast_implementation>(execution_constraints,
+                                            layout_constraints,
+                                            true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -332,14 +340,22 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 /*static*/ void TestInnerConvergence::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<bool, fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<bool, fast_implementation>(execution_constraints,
+                                                  layout_constraints,
+                                                  true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void TestInnerConvergence::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<bool, gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<bool, gpu_implementation>(execution_constraints,
+                                                 layout_constraints,
+                                                 true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------

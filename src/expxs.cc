@@ -53,14 +53,22 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 /*static*/ void ExpandCrossSection::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<fast_implementation>(execution_constraints,
+                                            layout_constraints,
+                                            true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void ExpandCrossSection::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -267,14 +275,22 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 /*static*/ void ExpandScatteringCrossSection::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<fast_implementation>(execution_constraints,
+                                            layout_constraints,
+                                            true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void ExpandScatteringCrossSection::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -528,14 +544,22 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 /*static*/ void CalculateGeometryParam::preregister_cpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_cpu_variant<fast_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_cpu_variant<fast_implementation>(execution_constraints,
+                                            layout_constraints,
+                                            true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
 /*static*/ void CalculateGeometryParam::preregister_gpu_variants(void)
 //------------------------------------------------------------------------------
 {
-  register_gpu_variant<gpu_implementation>(true/*leaf*/);
+  ExecutionConstraintSet execution_constraints;
+  TaskLayoutConstraintSet layout_constraints;
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
