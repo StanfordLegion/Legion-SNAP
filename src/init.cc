@@ -37,7 +37,11 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  layout_constraints.add_layout_constraint(0/*idx*/,
+                                           Snap::get_soa_layout());
   register_cpu_variant<cpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -124,7 +128,11 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  layout_constraints.add_layout_constraint(0/*index*/,
+                                           Snap::get_soa_layout());
   register_cpu_variant<cpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -221,6 +229,8 @@ InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU with at least sm30
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA));
   TaskLayoutConstraintSet layout_constraints;
   register_gpu_variant<gpu_implementation>(execution_constraints,
                                            layout_constraints,

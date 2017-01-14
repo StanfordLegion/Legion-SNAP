@@ -147,7 +147,21 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU with SSE instructions
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA | SSE_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // Most requirements are normal SOA, the others are reductions
+  layout_constraints.add_layout_constraint(0/*index*/,
+                                           Snap::get_soa_layout());
+  layout_constraints.add_layout_constraint(1/*index*/,
+                                           Snap::get_reduction_layout());
+  layout_constraints.add_layout_constraint(2/*index*/,
+                                           Snap::get_soa_layout());
+  layout_constraints.add_layout_constraint(3/*index*/,
+                                           Snap::get_reduction_layout());
+  for (unsigned idx = 4; idx < 12; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_cpu_variant<sse_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);

@@ -568,7 +568,13 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 2; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_cpu_variant<bool, fast_implementation>(execution_constraints,
                                                   layout_constraints,
                                                   true/*leaf*/);
@@ -579,7 +585,16 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU with at least sm30
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA | SM_30_ISA));
+  // Need at least 128B of shared memory
+  execution_constraints.add_constraint(
+      ResourceConstraint(SHARED_MEMORY_SIZE, GE_EK/*>=*/, 128/*B*/));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 2; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/, 
+                                             Snap::get_soa_layout());
   register_gpu_variant<bool, gpu_implementation>(execution_constraints,
                                                  layout_constraints,
                                                  true/*leaf*/);

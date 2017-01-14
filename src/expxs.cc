@@ -54,7 +54,13 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
@@ -65,7 +71,13 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU 
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_gpu_variant<gpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -276,7 +288,13 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
@@ -287,7 +305,13 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU 
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/, 
+                                             Snap::get_soa_layout());
   register_gpu_variant<gpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -545,7 +569,13 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need x86 CPU
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
@@ -556,7 +586,13 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU with at least sm30
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // All regions need to be SOA
+  for (unsigned idx = 0; idx < 3; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/, 
+                                             Snap::get_soa_layout());
   register_gpu_variant<gpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);

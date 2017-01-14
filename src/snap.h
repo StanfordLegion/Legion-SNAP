@@ -209,6 +209,7 @@ public:
   static void mapper_registration(Machine machine, Runtime *runtime,
                                   const std::set<Processor> &local_procs);
   static LayoutConstraintID get_soa_layout(void);
+  static LayoutConstraintID get_reduction_layout(void);
 public:
   // Configuration parameters read from input file
   static int num_dims; // originally ndimen 1-3
