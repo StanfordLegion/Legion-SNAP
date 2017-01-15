@@ -22,7 +22,7 @@ $(error LG_RT_DIR variable is not defined, aborting build)
 endif
 
 # Flags for directing the runtime makefile what to include
-DEBUG           ?= 1		# Include debugging symbols
+DEBUG           ?= 0		# Include debugging symbols
 OUTPUT_LEVEL    ?= LEVEL_DEBUG	# Compile time logging level
 SHARED_LOWLEVEL ?= 0		# Use shared-memory runtime (not recommended)
 USE_CUDA        ?= 0		# Include CUDA support (requires CUDA)
@@ -50,7 +50,7 @@ GEN_GPU_SRC	?= gpu_outer.cu \
 
 # You can modify these variables, some will be appended to by the runtime makefile
 INC_FLAGS	?=
-CC_FLAGS	?= -DNO_INDEX_SPACE_FILLS
+CC_FLAGS	?=
 NVCC_FLAGS	?=
 GASNET_FLAGS	?=
 LD_FLAGS	?=
