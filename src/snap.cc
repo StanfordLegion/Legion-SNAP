@@ -1590,7 +1590,7 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 void SnapArray::initialize(Predicate pred) const
 //------------------------------------------------------------------------------
 {
-#ifndef NO_INDEX_SPACE_FILLS
+#ifdef INDEX_SPACE_FILLS
   // If we have partition it is better to do an index space fill for scalability
   if (lp.exists())
   {
