@@ -411,7 +411,7 @@ ByteOffset operator*(const ByteOffsetArray<3> &offsets, const Point<3> &point)
 }
 
 // We have double precision atomicAdd starting in Pascal
-#ifdef __CUDA_ARCH__ < 600
+#if __CUDA_ARCH__ < 600
 __device__ __forceinline__
 void atomicAdd(double *ptr, double value)
 {
