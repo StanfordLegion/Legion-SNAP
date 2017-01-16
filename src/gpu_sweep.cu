@@ -426,7 +426,6 @@ void ourAtomicAdd(double *ptr, double value)
   atomicAdd(ptr, value);
 #endif
 }
-#endif
 
 template<int DIM>
 __device__ __forceinline__
