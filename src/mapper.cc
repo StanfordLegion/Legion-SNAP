@@ -51,6 +51,34 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
   } else {
     local_framebuffer = Memory::NO_MEMORY;
   }
+  // Compute the local CPU and GPU mappings
+  const int upper_bounds[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
+  const Rect<3> bounds(Point<3>::ZEROES(), Point<3>(upper_bounds));
+  {
+    // Round robin these across nodes
+    for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
+      const int index = 
+        (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
+      global_cpu_mapping[pir.p] = remote_cpus[index % remote_cpus.size()];
+    }
+  }
+  {
+    // Round robin these across all GPUs
+    Machine::ProcessorQuery all_procs(machine);
+    all_procs.only_kind(Processor::TOC_PROC);
+    if (all_procs.count() > 0) {
+      std::vector<Processor> all_gpus(all_procs.count());
+      unsigned idx = 0;
+      for (Machine::ProcessorQuery::iterator it = all_procs.begin();
+            it != all_procs.end(); it++, idx++)
+        all_gpus[idx] = *it;
+      for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
+        const int index = 
+          (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
+        global_gpu_mapping[pir.p] = all_gpus[index % all_gpus.size()];
+      }
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -157,13 +185,9 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     for (GenericPointInRectIterator<1> pir(all_points); pir; pir++) {
       // Get the physical space point
       Point<3> point = wavefront_points[pir.p[0]].get_point<3>();
-      const int index = 
-        (point.x[2] * ny_per_chunk + point.x[1]) * nx_per_chunk + point.x[0];
       TaskSlice slice;
       slice.domain = Domain::from_rect<1>(Rect<1>(pir.p, pir.p));
-      slice.proc = use_gpu ? 
-        remote_gpus[index % remote_gpus.size()] :
-        remote_cpus[index % remote_cpus.size()];
+      slice.proc = use_gpu ? global_gpu_mapping[point] : global_cpu_mapping[point];
       slice.recurse = false;
       slice.stealable = false;
       output.slices.push_back(slice);
@@ -185,14 +209,9 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
       (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
 #endif
     for (GenericPointInRectIterator<3> pir(all_points); pir; pir++) {
-      // Map it onto the processors
-      const int index = 
-        (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
       TaskSlice slice;
       slice.domain = Domain::from_rect<3>(Rect<3>(pir.p, pir.p));
-      slice.proc = use_gpu ? 
-        remote_gpus[index % remote_gpus.size()] :
-        remote_cpus[index % remote_cpus.size()];
+      slice.proc = use_gpu ? global_gpu_mapping[pir.p] : global_cpu_mapping[pir.p];
       slice.recurse = false;
       slice.stealable = false;
       output.slices.push_back(slice);
