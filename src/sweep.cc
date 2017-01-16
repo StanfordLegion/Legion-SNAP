@@ -1085,7 +1085,7 @@ inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
 inline __m256d* malloc_avx_aligned(size_t size)
 {
   __m256d *result;
-  posix_memalign((void**)&result, 32, size);
+  (void)posix_memalign((void**)&result, 32, size);
   return result;
 }
 
