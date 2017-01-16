@@ -46,6 +46,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
     Machine::MemoryQuery fb_query(machine);
     fb_query.local_address_space();
     fb_query.only_kind(Memory::GPU_FB_MEM);
+    fb_query.best_affinity_to(local_proc);
     local_framebuffer = fb_query.first();
     assert(local_framebuffer.exists());
   } else {
