@@ -410,11 +410,10 @@ ByteOffset operator*(const ByteOffsetArray<3> &offsets, const Point<3> &point)
   return (offsets[0] * point.x[0] + offsets[1] * point.x[1] + offsets[2] * point.x[2]);
 }
 
-// We have double precision atomicAdd starting in Pascal
-#if __CUDA_ARCH__ < 600
 __device__ __forceinline__
-void atomicAdd(double *ptr, double value)
+void ourAtomicAdd(double *ptr, double value)
 {
+#if __CUDA_ARCH__ < 600
   unsigned long long int* address_as_ull = (unsigned long long int*)ptr; 
   unsigned long long int old = *address_as_ull, assumed; 
   do { 
@@ -422,6 +421,10 @@ void atomicAdd(double *ptr, double value)
     old = atomicCAS(address_as_ull, assumed, 
         __double_as_longlong(value + __longlong_as_double(assumed))); 
   } while (assumed != old);
+#else
+  // We have double precision atomicAdd starting in Pascal
+  atomicAdd(ptr, value);
+#endif
 }
 #endif
 
@@ -814,7 +817,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
           // Do the reduction
           if (laneid == 0) {
             double *local_flux = flux_ptr + flux_offsets * local_point;
-            atomicAdd(local_flux, total);
+            ourAtomicAdd(local_flux, total);
           }
         }
         if (num_moments > 1) {
@@ -842,7 +845,7 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
             if (laneid == 0) {
               double *local_fluxm = (double*)(fluxm_ptr + fluxm_offsets * local_point);
               local_fluxm += (l-1);
-              atomicAdd(local_fluxm, total);
+              ourAtomicAdd(local_fluxm, total);
             }
           }
         }
@@ -1092,7 +1095,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
           // Do the reduction
           if (laneid == 0) {
             double *local_flux = flux_ptr + flux_offsets * local_point;
-            atomicAdd(local_flux, total);
+            ourAtomicAdd(local_flux, total);
           }
         }
         if (num_moments > 1) {
@@ -1120,7 +1123,7 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
             if (laneid == 0) {
               double *local_fluxm = (double*)(fluxm_ptr + fluxm_offsets * local_point);
               local_fluxm += (l-1);
-              atomicAdd(local_fluxm, total);
+              ourAtomicAdd(local_fluxm, total);
             }
           }
         }
@@ -1437,7 +1440,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
           // Do the reduction
           if (laneid == 0) {
             double *local_flux = flux_ptr + flux_offsets * local_point;
-            atomicAdd(local_flux, total);
+            ourAtomicAdd(local_flux, total);
           }
         }
         if (num_moments > 1) {
@@ -1465,7 +1468,7 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
             if (laneid == 0) {
               double *local_fluxm = (double*)(fluxm_ptr + fluxm_offsets * local_point);
               local_fluxm += (l-1);
-              atomicAdd(local_fluxm, total);
+              ourAtomicAdd(local_fluxm, total);
             }
           }
         }
@@ -1699,7 +1702,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
           // Do the reduction
           if (laneid == 0) {
             double *local_flux = flux_ptr + flux_offsets * local_point;
-            atomicAdd(local_flux, total);
+            ourAtomicAdd(local_flux, total);
           }
         }
         if (num_moments > 1) {
@@ -1727,7 +1730,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
             if (laneid == 0) {
               double *local_fluxm = (double*)(fluxm_ptr + fluxm_offsets * local_point);
               local_fluxm += (l-1);
-              atomicAdd(local_fluxm, total);
+              ourAtomicAdd(local_fluxm, total);
             }
           }
         }
