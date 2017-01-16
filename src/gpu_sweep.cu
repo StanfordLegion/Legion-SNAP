@@ -410,6 +410,8 @@ ByteOffset operator*(const ByteOffsetArray<3> &offsets, const Point<3> &point)
   return (offsets[0] * point.x[0] + offsets[1] * point.x[1] + offsets[2] * point.x[2]);
 }
 
+// We have double precision atomicAdd starting in Pascal
+#ifdef __CUDA_ARCH__ < 600
 __device__ __forceinline__
 void atomicAdd(double *ptr, double value)
 {
@@ -421,6 +423,7 @@ void atomicAdd(double *ptr, double value)
         __double_as_longlong(value + __longlong_as_double(assumed))); 
   } while (assumed != old);
 }
+#endif
 
 template<int DIM>
 __device__ __forceinline__
