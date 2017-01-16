@@ -113,12 +113,12 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
                                        SpeculativeOutput &output)
 //------------------------------------------------------------------------------
 {
-#ifdef DISABLE_SPECULATION
-  output.speculate = false;
-#else
+#ifdef ENABLE_SPECULATION
   output.speculate = true;
   output.speculative_value = true; // not converged
   output.speculate_mapping_only = true;
+#else
+  output.speculate = false;
 #endif
 }
 
@@ -174,11 +174,16 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
   } else {
     // Iterate over the points and assign them to the best target processors
     Rect<3> all_points = input.domain.get_rect<3>();
-    // We still keep convergence tests on the CPU
+    // We still keep convergence tests on the CPU if we're doing reductions
+#ifndef SNAP_USE_RELAXED_COHERENCE
     const bool use_gpu = !local_gpus.empty() &&
       (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end()) &&
       (task.task_id != TEST_OUTER_CONVERGENCE_TASK_ID) && 
       (task.task_id != TEST_INNER_CONVERGENCE_TASK_ID);;
+#else
+    const bool use_gpu = !local_gpus.empty() &&
+      (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
+#endif
     for (GenericPointInRectIterator<3> pir(all_points); pir; pir++) {
       // Map it onto the processors
       const int index = 
@@ -300,20 +305,30 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
         // qtot is normal
         map_snap_array(ctx, task.regions[0].region, target_mem,
                        output.chosen_instances[0]);
+#ifndef SNAP_USE_RELAXED_COHERENCE
         // have to make reductions for flux, use default mapper implementation
         std::set<FieldID> dummy_fields;
         TaskLayoutConstraintSet dummy_constraints;
         default_create_custom_instances(ctx, task.target_proc,
             reduction_mem, task.regions[1], 1/*index*/, dummy_fields,
             dummy_constraints, false/*need check*/, output.chosen_instances[1]);
+#else
+        map_snap_array(ctx, task.regions[1].region, target_mem,
+                       output.chosen_instances[1]);
+#endif
         if (task.regions[2].privilege != NO_ACCESS) {
           // qim is normal
           map_snap_array(ctx, task.regions[2].region, target_mem,
                          output.chosen_instances[2]);
+#ifndef SNAP_USE_RELAXED_COHERENCE
           // Need reductions for fluxm
           default_create_custom_instances(ctx, task.target_proc,
             reduction_mem, task.regions[3], 3/*index*/, dummy_fields,
             dummy_constraints, false/*need check*/, output.chosen_instances[3]); 
+#else
+          map_snap_array(ctx, task.regions[3].region, target_mem,
+                         output.chosen_instances[3]);
+#endif
         }
         // Remaining arrays that are not vdelt are normal
         const unsigned last_idx = task.regions.size() - 1;

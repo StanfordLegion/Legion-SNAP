@@ -48,15 +48,27 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
     const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
     qtot.add_projection_requirement(READ_ONLY, *this, 
                                     group_field, Snap::SWEEP_PROJECTION);
+#ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_field, Snap::SWEEP_PROJECTION);
+#else
+    flux.add_projection_requirement(READ_WRITE, *this, 
+                                    group_field, Snap::SWEEP_PROJECTION);
+    region_requirements.back().prop = SIMULTANEOUS;
+#endif
     if (Snap::source_layout == Snap::MMS_SOURCE) {
       qim.add_projection_requirement(READ_ONLY, *this,
                                      group_field, Snap::SWEEP_PROJECTION);
+#ifndef SNAP_USE_RELAXED_COHERENCE
       fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
                                        group_field, Snap::SWEEP_PROJECTION);
+#else
+      fluxm.add_projection_requirement(READ_WRITE, *this,
+                                       group_field, Snap::SWEEP_PROJECTION);
+      region_requirements.back().prop = SIMULTANEOUS;
+#endif
     }
     else {
       qim.add_projection_requirement(NO_ACCESS, *this,
@@ -89,15 +101,27 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
       group_fields[group-group_start] = SNAP_ENERGY_GROUP_FIELD(group);
     qtot.add_projection_requirement(READ_ONLY, *this, 
                                     group_fields, Snap::SWEEP_PROJECTION);
+#ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
     flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
                                     group_fields, Snap::SWEEP_PROJECTION);
+#else
+    flux.add_projection_requirement(READ_WRITE, *this,
+                                    group_fields, Snap::SWEEP_PROJECTION);
+    region_requirements.back().prop = SIMULTANEOUS;
+#endif
     if (Snap::source_layout == Snap::MMS_SOURCE) {
       qim.add_projection_requirement(READ_ONLY, *this,
                                      group_fields, Snap::SWEEP_PROJECTION);
+#ifndef SNAP_USE_RELAXED_COHERENCE
       fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
                                        group_fields, Snap::SWEEP_PROJECTION);
+#else
+      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+                                       group_fields, Snap::SWEEP_PROJECTION);
+      region_requirements.back().prop = SIMULTANEOUS;
+#endif
     }
     else {
       qim.add_projection_requirement(NO_ACCESS, *this,
@@ -153,8 +177,13 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   // Most requirements are normal SOA, the others are reductions
   layout_constraints.add_layout_constraint(0/*index*/,
                                            Snap::get_soa_layout());
+#ifndef SNAP_USE_RELAXED_COHERENCE
   layout_constraints.add_layout_constraint(1/*index*/,
                                            Snap::get_reduction_layout());
+#else
+  layout_constraints.add_layout_constraint(1/*index*/,
+                                           Snap::get_soa_layout());
+#endif
   layout_constraints.add_layout_constraint(2/*index*/,
                                            Snap::get_soa_layout());
   layout_constraints.add_layout_constraint(3/*index*/,
@@ -172,7 +201,26 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
+  // Need a CUDA GPU with at least SM 30
+  execution_constraints.add_constraint(ISAConstraint(CUDA_ISA | SM_30_ISA));
   TaskLayoutConstraintSet layout_constraints;
+  // Most requirements are normal SOA, the others are reductions
+  layout_constraints.add_layout_constraint(0/*index*/,
+                                           Snap::get_soa_layout());
+#ifndef SNAP_USE_RELAXED_COHERENCE
+  layout_constraints.add_layout_constraint(1/*index*/,
+                                           Snap::get_reduction_layout());
+#else
+  layout_constraints.add_layout_constraint(1/*index*/,
+                                           Snap::get_soa_layout());
+#endif
+  layout_constraints.add_layout_constraint(2/*index*/,
+                                           Snap::get_soa_layout());
+  layout_constraints.add_layout_constraint(3/*index*/,
+                                           Snap::get_reduction_layout());
+  for (unsigned idx = 4; idx < 12; idx++)
+    layout_constraints.add_layout_constraint(idx/*index*/,
+                                             Snap::get_soa_layout());
   register_gpu_variant<gpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -566,7 +614,11 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           double *local_flux = flux;
           for (int i = 0; i < 3; i++)
             local_flux += local_point[i] * flux_offsets[i];
-          SumReduction::fold<false>(*local_flux, total);
+#ifndef SNAP_USE_RELAXED_COHERENCE
+          SumReduction::fold<true/*exclusive*/>(*local_flux, total);
+#else
+          SumReduction::fold<false/*exclusive*/>(*local_flux, total);
+#endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
@@ -581,7 +633,11 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             MomentTriple *local_fluxm = fluxm;
             for (int i = 0; i < 3; i++)
               local_fluxm += local_point[i] * fluxm_offsets[i];
-            TripleReduction::fold<false>(*local_fluxm, triple);
+#ifndef SNAP_USE_RELAXED_COHERENCE
+            TripleReduction::fold<true/*exclusive*/>(*local_fluxm, triple);
+#else
+            TripleReduction::fold<false/*exclusive*/>(*local_fluxm, triple);
+#endif
           }
         }
       }
@@ -1039,7 +1095,11 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
             vec_total = _mm_add_pd(vec_total, psi[ang]);
           }
           double total = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
+#ifndef SNAP_USE_RELAXED_COHERENCE
+          SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
+#else
           SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
+#endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
@@ -1051,7 +1111,11 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                       _mm_set_pd(Snap::ec[offset+2*ang+1], Snap::ec[offset+2*ang])));
               triple[l-1] = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
             }
+#ifndef SNAP_USE_RELAXED_COHERENCE
+            TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
+#else
             TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
+#endif
           }
         }
       }
@@ -1577,7 +1641,11 @@ inline __m256d* malloc_avx_aligned(size_t size)
           vec_total = _mm256_hadd_pd(vec_total, vec_total);
           double total = _mm_cvtsd_f64( _mm256_extractf128_pd(
                 _mm256_hadd_pd(vec_total, vec_total), 0));
+#ifndef SNAP_USE_RELAXED_COHERENCE
+          SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
+#else
           SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
+#endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
             for (int l = 1; l < Snap::num_moments; l++) {
@@ -1592,7 +1660,11 @@ inline __m256d* malloc_avx_aligned(size_t size)
               triple[l-1] = _mm_cvtsd_f64( _mm256_extractf128_pd(
                               _mm256_hadd_pd(vec_total, vec_total), 0));
             }
+#ifndef SNAP_USE_RELAXED_COHERENCE
+            TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
+#else
             TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
+#endif
           }
         }
       }
