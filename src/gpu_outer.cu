@@ -22,6 +22,7 @@
 
 #include <vector>
 
+using namespace LegionRuntime::Arrays;
 using namespace LegionRuntime::Accessor;
 
 template<int GROUPS, int STRIP_SIZE>

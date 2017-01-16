@@ -20,6 +20,7 @@
 #include "accessor.h"
 #include "snap_cuda_help.h"
 
+using namespace LegionRuntime::Arrays;
 using namespace LegionRuntime::Accessor;
 
 __global__
