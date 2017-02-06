@@ -1590,7 +1590,7 @@ LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
 void SnapArray::initialize(Predicate pred) const
 //------------------------------------------------------------------------------
 {
-#ifdef INDEX_SPACE_FILLS
+#ifndef NO_INDEX_SPACE_FILLS
   // If we have partition it is better to do an index space fill for scalability
   if (lp.exists())
   {
@@ -1614,7 +1614,7 @@ template<typename T>
 void SnapArray::initialize(T value, Predicate pred) const
 //------------------------------------------------------------------------------
 {
-#ifdef INDEX_SPACE_FILLS
+#ifndef NO_INDEX_SPACE_FILLS
   // If we have partition it is better to do an index space fill for scalability
   if (lp.exists())
   {
