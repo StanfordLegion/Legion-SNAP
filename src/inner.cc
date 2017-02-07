@@ -458,7 +458,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   // Iterate over all the energy groups
   assert(task->regions[0].privilege_fields.size() == 
          task->regions[1].privilege_fields.size());
-  for (int group = 0; group < flux0_ptrs.size(); group++)
+  for (unsigned group = 0; group < flux0_ptrs.size(); group++)
   {
     double *flux0_ptr = flux0_ptrs[group];
     double *flux0pi_ptr = flux0pi_ptrs[group];

@@ -760,7 +760,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
   __m128d *yflux_pencil = (__m128d*)malloc(x_range * angle_buffer_size);
   __m128d *zflux_plane  = (__m128d*)malloc(y_range * x_range * angle_buffer_size);
 
-  for (int group = 0; group < flux_ptrs.size(); group++) {
+  for (unsigned group = 0; group < flux_ptrs.size(); group++) {
     const MomentQuad *const qtot_ptr = qtot_ptrs[group];
     double *const flux = flux_ptrs[group];
 
@@ -1206,7 +1206,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
   __m256d *yflux_pencil = malloc_avx_aligned(x_range * angle_buffer_size);
   __m256d *zflux_plane  = malloc_avx_aligned(y_range * x_range * angle_buffer_size); 
 
-  for (int group = 0; group < flux_ptrs.size(); group++) {
+  for (unsigned group = 0; group < flux_ptrs.size(); group++) {
     const MomentQuad *const qtot_ptr = qtot_ptrs[group];
     double *const flux = flux_ptrs[group];
 
