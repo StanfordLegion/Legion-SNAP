@@ -53,7 +53,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
     local_framebuffer = Memory::NO_MEMORY;
   }
   // Compute the local CPU and GPU mappings
-  const int upper_bounds[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
+  const int upper_bounds[3] = { nx_chunks, ny_chunks, nz_chunks };
   const Rect<3> bounds(Point<3>::ZEROES(), Point<3>(upper_bounds));
   {
     // Round robin these across nodes, not individual processors so we
