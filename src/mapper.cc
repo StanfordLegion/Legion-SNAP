@@ -56,11 +56,24 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
   const int upper_bounds[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
   const Rect<3> bounds(Point<3>::ZEROES(), Point<3>(upper_bounds));
   {
-    // Round robin these across nodes
+    // Round robin these across nodes, not individual processors so we
+    // evenly distribute blocks of cells across the machine, then let 
+    // individual nodes use field parallelism across processors
+    std::map<AddressSpace,Processor> node_cpus;
+    for (std::vector<Processor>::const_iterator it = remote_cpus.begin();
+          it != remote_cpus.end(); it++)
+    {
+      const AddressSpace space = it->address_space();
+      if (node_cpus.find(space) == node_cpus.end())
+        node_cpus[space] = *it;
+    }
     for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
       const int index = 
         (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
-      global_cpu_mapping[pir.p] = remote_cpus[index % remote_cpus.size()];
+      std::map<AddressSpace,Processor>::const_iterator finder = 
+        node_cpus.find(index % node_cpus.size());
+      assert(finder != node_cpus.end());
+      global_cpu_mapping[pir.p] = finder->second;
     }
   }
   {
