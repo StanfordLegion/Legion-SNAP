@@ -53,6 +53,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
     local_framebuffer = Memory::NO_MEMORY;
   }
   // Compute the local CPU and GPU mappings
+  // TODO: make these topology aware
   const int upper_bounds[3] = { nx_chunks, ny_chunks, nz_chunks };
   const Rect<3> bounds(Point<3>::ZEROES(), Point<3>(upper_bounds));
   {
@@ -69,7 +70,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
     }
     for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
       const int index = 
-        (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
+        (pir.p.x[2] * ny_chunks + pir.p.x[1]) * nx_chunks + pir.p.x[0];
       std::map<AddressSpace,Processor>::const_iterator finder = 
         node_cpus.find(index % node_cpus.size());
       assert(finder != node_cpus.end());
@@ -88,7 +89,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
         all_gpus[idx] = *it;
       for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
         const int index = 
-          (pir.p.x[2] * ny_per_chunk + pir.p.x[1]) * nx_per_chunk + pir.p.x[0];
+          (pir.p.x[2] * ny_chunks + pir.p.x[1]) * nx_chunks + pir.p.x[0];
         global_gpu_mapping[pir.p] = all_gpus[index % all_gpus.size()];
       }
     }
