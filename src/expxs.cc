@@ -61,9 +61,15 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
+#else
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -295,9 +301,15 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
+#else
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -576,9 +588,15 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
+#else
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------

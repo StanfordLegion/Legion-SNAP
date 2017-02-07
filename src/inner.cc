@@ -57,9 +57,15 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   for (unsigned idx = 0; idx < 6; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
+#else
   register_cpu_variant<fast_implementation>(execution_constraints,
                                             layout_constraints,
                                             true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -360,9 +366,15 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   for (unsigned idx = 0; idx < 2; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<bool, cpu_implementation>(execution_constraints,
+                                                 layout_constraints,
+                                                 true/*leaf*/);
+#else
   register_cpu_variant<bool, fast_implementation>(execution_constraints,
                                                   layout_constraints,
                                                   true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------

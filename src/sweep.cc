@@ -191,9 +191,15 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
   for (unsigned idx = 4; idx < 12; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
+#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+  register_cpu_variant<cpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
+#else
   register_cpu_variant<sse_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
+#endif
 }
 
 //------------------------------------------------------------------------------
