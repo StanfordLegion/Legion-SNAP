@@ -18,10 +18,12 @@
 
 #include "snap.h"
 #include "expxs.h"
+#include "legion_stl.h"
 
 extern LegionRuntime::Logger::Category log_snap;
 
 using namespace LegionRuntime::Accessor;
+using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
@@ -66,9 +68,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
                                            layout_constraints,
                                            true/*leaf*/);
 #else
-  register_cpu_variant<fast_implementation>(execution_constraints,
-                                            layout_constraints,
-                                            true/*leaf*/);
+  register_cpu_variant<
+    raw_rect_task_wrapper<double,1,int,3,double,3,fast_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 #endif
 }
 
@@ -84,9 +86,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
-  register_gpu_variant<gpu_implementation>(execution_constraints,
-                                           layout_constraints,
-                                           true/*leaf*/);
+  register_gpu_variant<
+    raw_rect_task_wrapper<double,1,int,3,double,3,gpu_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -129,7 +131,10 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
 
 //------------------------------------------------------------------------------
 /*static*/ void ExpandCrossSection::fast_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+                                           Context ctx, Runtime *runtime,
+      const std::vector<double*> &sig_ptrs, const ByteOffset sig_offsets[1],
+      const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
+      const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -139,46 +144,18 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
-  ByteOffset sig_offsets[1];
-  std::vector<double*> sig_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,double> fa_sig = 
-      regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    if (group == group_start) {
-      sig_ptrs[0] = fa_sig.raw_rect_ptr<1>(sig_offsets);
-    } else {
-      ByteOffset temp_offsets[1];
-      sig_ptrs[group - group_start] = fa_sig.raw_rect_ptr<1>(temp_offsets);
-      assert(offsets_match<1>(temp_offsets, sig_offsets));
-    }
-  }
-
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[1].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
-  ByteOffset mat_offsets[3];
-  int *mat_ptr = fa_mat.raw_rect_ptr<3>(mat_offsets);
-
-  ByteOffset xs_offsets[3];
-  std::vector<double*> xs_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,double> fa_xs = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    if (group == group_start) {
-      xs_ptrs[0] = fa_xs.raw_rect_ptr<3>(xs_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      xs_ptrs[group - group_start] = fa_xs.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, xs_offsets));
-    }
-  }
-
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[2].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
-  for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
-    for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
-      for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+  const int *const mat_ptr = mat_ptrs[0];
+  const int max_x = subgrid_bounds.hi[0] - subgrid_bounds.lo[0] + 1;
+  const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
+  const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
+
+  for (int z = 0; z < max_z ; z++) {
+    for (int y = 0; y < max_y; y++) {
+      for (int x = 0; x < max_x; x++) {
         const int mat = *(mat_ptr + x * mat_offsets[0] + y * mat_offsets[1] + 
                           z * mat_offsets[2]);
         const ByteOffset offset = mat * sig_offsets[0];
@@ -190,7 +167,6 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
       }
     }
   }
-
 #endif
 }
 
@@ -205,54 +181,22 @@ extern void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void ExpandCrossSection::gpu_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+/*static*/ void ExpandCrossSection::gpu_implementation(
+    const Task *task, Context ctx, Runtime *runtime,
+    const std::vector<double*> &sig_ptrs, const ByteOffset sig_offsets[1],
+    const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
+    const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
 #ifdef USE_GPU_KERNELS
   log_snap.info("Running GPU Expand Cross Section");
 
-  const int group_start = *((int*)task->args);
-  const int group_stop  = *(((int*)task->args) + 1);
-  const int num_groups = (group_stop - group_start) + 1;
-
-  ByteOffset sig_offsets[1];
-  std::vector<double*> sig_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,double> fa_sig = 
-      regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    if (group == group_start) {
-      sig_ptrs[0] = fa_sig.raw_rect_ptr<1>(sig_offsets);
-    } else {
-      ByteOffset temp_offsets[1];
-      sig_ptrs[group - group_start] = fa_sig.raw_rect_ptr<1>(temp_offsets);
-      assert(offsets_match<1>(temp_offsets, sig_offsets));
-    }
-  }
-
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[1].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
-  ByteOffset mat_offsets[3];
-  int *mat_ptr = fa_mat.raw_rect_ptr<3>(mat_offsets);
-
-  ByteOffset xs_offsets[3];
-  std::vector<double*> xs_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,double> fa_xs = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    if (group == group_start) {
-      xs_ptrs[0] = fa_xs.raw_rect_ptr<3>(xs_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      xs_ptrs[group - group_start] = fa_xs.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, xs_offsets));
-    }
-  }
-
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[2].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
+
+  const int *const mat_ptr = mat_ptrs[0];
 
   run_expand_cross_section(sig_ptrs, mat_ptr, xs_ptrs,
                            sig_offsets, mat_offsets, xs_offsets, subgrid_bounds);
@@ -306,9 +250,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
                                            layout_constraints,
                                            true/*leaf*/);
 #else
-  register_cpu_variant<fast_implementation>(execution_constraints,
-                                            layout_constraints,
-                                            true/*leaf*/);
+  register_cpu_variant<
+    raw_rect_task_wrapper<MomentQuad,2,int,3,MomentQuad,3,fast_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 #endif
 }
 
@@ -324,9 +268,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<gpu_implementation>(execution_constraints,
-                                           layout_constraints,
-                                           true/*leaf*/);
+  register_gpu_variant<
+    raw_rect_task_wrapper<MomentQuad,2,int,3,MomentQuad,3,gpu_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -371,8 +315,11 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void ExpandScatteringCrossSection::fast_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+/*static*/ void ExpandScatteringCrossSection::fast_implementation(
+    const Task *task, Context ctx, Runtime *runtime,
+    const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
+    const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
+    const std::vector<MomentQuad*> &xs_ptrs, const ByteOffset xs_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -382,74 +329,23 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
-#ifndef LEGION_ISSUE_214_FIX
-  Rect<2> slgg_bounds, actual_bounds;
-  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
-  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
-  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
-#endif
-  ByteOffset slgg_offsets[2];
-  std::vector<MomentQuad*> slgg_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
-      regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
-    if (group == group_start) {
-#ifdef LEGION_ISSUE_214_FIX
-      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
-#else
-      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
-      assert(slgg_bounds == actual_bounds);
-#endif
-    } else {
-      ByteOffset temp_offsets[2];
-#ifdef LEGION_ISSUE_214_FIX
-      slgg_ptrs[group - group_start] = fa_slgg.raw_rect_ptr<2>(temp_offsets);
-      assert(offsets_match<2>(temp_offsets, slgg_offsets));
-#else
-      slgg_ptrs[group - group_start] = 
-        fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp_offsets);
-      assert(slgg_bounds == actual_bounds);
-      assert(offsets_match<2>(temp_offsets, slgg_offsets));
-#endif
-    }
-  }
-
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[1].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
-  ByteOffset mat_offsets[3];
-  int *mat_ptr = fa_mat.raw_rect_ptr<3>(mat_offsets);
-
-  ByteOffset xs_offsets[3];
-  std::vector<MomentQuad*> xs_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_xs = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
-    if (group == group_start) {
-      xs_ptrs[0] = fa_xs.raw_rect_ptr<3>(xs_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      xs_ptrs[group - group_start] = fa_xs.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, xs_offsets));
-    }
-  }
-
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[2].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
-  for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
-    for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
-      for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+  const int *const mat_ptr = mat_ptrs[0];
+  const int max_x = subgrid_bounds.hi[0] - subgrid_bounds.lo[0] + 1;
+  const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
+  const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
+
+  for (int z = 0; z < max_z; z++) {
+    for (int y = 0; y < max_y; y++) { 
+      for (int x = 0; x < max_x; x++) {
         const int mat = *(mat_ptr + x * mat_offsets[0] + y * mat_offsets[1] + 
                           z * mat_offsets[2]);
         for (int idx = 0; idx < num_groups; idx++) {
-#ifdef LEGION_ISSUE_214_FIX
-          MomentQuad val = *(slgg_ptrs[idx] + mat * slgg_offsets[0] + 
-                              (group_start + idx) * slgg_offsets[1]);
-#else
           MomentQuad val = *(slgg_ptrs[idx] + (mat-1) * slgg_offsets[0] + 
                               (group_start + idx) * slgg_offsets[1]);
-#endif
           *(xs_ptrs[idx] + x * xs_offsets[0] + y * xs_offsets[1] + 
               z * xs_offsets[2]) = val;
         }
@@ -472,8 +368,11 @@ extern void run_expand_scattering_cross_section(
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void ExpandScatteringCrossSection::gpu_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+/*static*/ void ExpandScatteringCrossSection::gpu_implementation(
+    const Task *task, Context ctx, Runtime *runtime,
+    const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
+    const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
+    const std::vector<MomentQuad*> &xs_ptrs, const ByteOffset xs_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -481,59 +380,7 @@ extern void run_expand_scattering_cross_section(
   log_snap.info("Running GPU Expand Scattering Cross Section");
 
   const int group_start = *((int*)task->args);
-  const int group_stop  = *(((int*)task->args) + 1);
-  const int num_groups = (group_stop - group_start) + 1;
-
-#ifndef LEGION_ISSUE_214_FIX
-  Rect<2> slgg_bounds, actual_bounds;
-  slgg_bounds.lo.x[0] = 1; slgg_bounds.lo.x[1] = 0;
-  slgg_bounds.hi.x[0] = (Snap::material_layout == Snap::HOMOGENEOUS_LAYOUT) ? 1 : 2;
-  slgg_bounds.hi.x[1] = Snap::num_groups - 1;
-#endif
-  ByteOffset slgg_offsets[2];
-  std::vector<MomentQuad*> slgg_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
-      regions[0].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
-    if (group == group_start) {
-#ifdef LEGION_ISSUE_214_FIX
-      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_offsets);
-#else
-      slgg_ptrs[0] = fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, slgg_offsets);
-      assert(slgg_bounds == actual_bounds);
-#endif
-    } else {
-      ByteOffset temp_offsets[2];
-#ifdef LEGION_ISSUE_214_FIX
-      slgg_ptrs[group - group_start] = fa_slgg.raw_rect_ptr<2>(temp_offsets);
-      assert(offsets_match<2>(temp_offsets, slgg_offsets));
-#else
-      slgg_ptrs[group - group_start] = 
-        fa_slgg.raw_rect_ptr<2>(slgg_bounds, actual_bounds, temp_offsets);
-      assert(slgg_bounds == actual_bounds);
-      assert(offsets_match<2>(temp_offsets, slgg_offsets));
-#endif
-    }
-  }
-
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[1].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
-  ByteOffset mat_offsets[3];
-  int *mat_ptr = fa_mat.raw_rect_ptr<3>(mat_offsets);
-
-  ByteOffset xs_offsets[3];
-  std::vector<MomentQuad*> xs_ptrs(num_groups);
-  for (int group = group_start; group <= group_stop; group++) {
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_xs = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
-    if (group == group_start) {
-      xs_ptrs[0] = fa_xs.raw_rect_ptr<3>(xs_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      xs_ptrs[group - group_start] = fa_xs.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, xs_offsets));
-    }
-  }
+  const int *const mat_ptr = mat_ptrs[0];
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[2].region.get_index_space());
@@ -593,9 +440,9 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
                                            layout_constraints,
                                            true/*leaf*/);
 #else
-  register_cpu_variant<fast_implementation>(execution_constraints,
-                                            layout_constraints,
-                                            true/*leaf*/);
+  register_cpu_variant<
+    raw_rect_task_wrapper<double,3,double,1,double,3,fast_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 #endif
 }
 
@@ -611,9 +458,9 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   for (unsigned idx = 0; idx < 3; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<gpu_implementation>(execution_constraints,
-                                           layout_constraints,
-                                           true/*leaf*/);
+  register_gpu_variant<
+    raw_rect_task_wrapper<double,3,double,1,double,3,gpu_implementation> >(
+        execution_constraints, layout_constraints, true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -661,8 +508,11 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void CalculateGeometryParam::fast_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+/*static*/ void CalculateGeometryParam::fast_implementation(
+    const Task *task, Context ctx, Runtime *runtime,
+    const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3],
+    const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1],
+    const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -675,26 +525,19 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
           task->regions[2].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
-  for (int group = group_start; group <= group_stop; group++)
+  const int max_x = subgrid_bounds.hi[0] - subgrid_bounds.lo[0] + 1;
+  const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
+  const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
+
+  for (int group = 0; group < (group_stop - group_start); group++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_xs = 
-      regions[0].get_field_accessor(
-          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-    ByteOffset xs_offsets[3];
-    double *xs_ptr = fa_xs.raw_rect_ptr<3>(xs_offsets);
+    const double *const xs_ptr = xs_ptrs[group]; 
+    double *const dinv_ptr = dinv_ptrs[group];
+    const double vdelt = *(vdelt_ptrs[group]);
 
-    RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    ByteOffset dinv_offsets[3];
-    double *dinv_ptr = (double*)fa_dinv.raw_rect_ptr<3>(dinv_offsets);
-
-    const double vdelt = regions[1].get_field_accessor(
-       SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
-
-    for (int z = subgrid_bounds.lo[2]; z <= subgrid_bounds.hi[2]; z++) {
-      for (int y = subgrid_bounds.lo[1]; y <= subgrid_bounds.hi[1]; y++) {
-        for (int x = subgrid_bounds.lo[0]; x <= subgrid_bounds.hi[0]; x++) {
+    for (int z = 0; z < max_z; z++) {
+      for (int y = 0; y < max_y; y++) {
+        for (int x = 0; x < max_x; x++) {
           const double xs = *(xs_ptr + x * xs_offsets[0] + y * xs_offsets[1] +
                               z * xs_offsets[2]);
           double *out_ptr = dinv_ptr + x * dinv_offsets[0] + y * dinv_offsets[1] +
@@ -720,8 +563,11 @@ extern void run_geometry_param(const std::vector<double*> &xs_ptrs,
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void CalculateGeometryParam::gpu_implementation(const Task *task,
-      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+/*static*/ void CalculateGeometryParam::gpu_implementation(
+    const Task *task, Context ctx, Runtime *runtime,
+    const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3],
+    const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1],
+    const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3])
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -736,40 +582,9 @@ extern void run_geometry_param(const std::vector<double*> &xs_ptrs,
           task->regions[2].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
 
-  ByteOffset xs_offsets[3];
-  std::vector<double*> xs_ptrs(num_groups);
-  for (int idx = 0; idx < num_groups; idx++) {
-    RegionAccessor<AccessorType::Generic,double> fa_xs = 
-      regions[0].get_field_accessor(
-          SNAP_ENERGY_GROUP_FIELD(group_start + idx)).typeify<double>();
-    if (idx == 0) {
-      xs_ptrs[idx] = fa_xs.raw_rect_ptr<3>(xs_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      xs_ptrs[idx] = fa_xs.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, xs_offsets));
-    }
-  }
-
   std::vector<double> vdelts(num_groups);
   for (int idx = 0; idx < num_groups; idx++)
-    vdelts[idx] = regions[1].get_field_accessor(
-       SNAP_ENERGY_GROUP_FIELD(group_start + idx)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
-
-  ByteOffset dinv_offsets[3];
-  std::vector<double*> dinv_ptrs(num_groups);
-  for (int idx = 0; idx < num_groups; idx++) {
-    RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group_start + idx));
-    if (idx == 0) {
-      dinv_ptrs[idx] = (double*)fa_dinv.raw_rect_ptr<3>(dinv_offsets);
-    } else {
-      ByteOffset temp_offsets[3];
-      dinv_ptrs[idx] = (double*)fa_dinv.raw_rect_ptr<3>(temp_offsets);
-      assert(offsets_match<3>(temp_offsets, dinv_offsets));
-    }
-  }
+    vdelts[idx] = *(vdelt_ptrs[idx]);
 
   run_geometry_param(xs_ptrs, dinv_ptrs, xs_offsets, dinv_offsets,
                      vdelts, Snap::hi, Snap::hj, Snap::hk, 

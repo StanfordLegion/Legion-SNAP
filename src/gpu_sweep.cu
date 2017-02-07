@@ -78,11 +78,11 @@ void gpu_geometry_param(const PointerBuffer<GROUPS,double> xs_ptrs,
                         const ByteOffsetArray<3> dinv_offsets,
                         const ConstBuffer<GROUPS,double> vdelt,
                         const double hi, const double hj, const double hk,
-                        const Point<3> origin, const int angles_per_thread)
+                        const int angles_per_thread)
 {
-  const int x = origin.x[0] + blockIdx.x;
-  const int y = origin.x[1] + blockIdx.y;
-  const int z = origin.x[2] + blockIdx.z;
+  const int x = blockIdx.x;
+  const int y = blockIdx.y;
+  const int z = blockIdx.z;
   for (int i = 0; i < angles_per_thread; i++) {
     const int ang = i * blockDim.x + threadIdx.x;
 
@@ -137,8 +137,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<1,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 2:
@@ -149,8 +148,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<2,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 3:
@@ -161,8 +159,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<3,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 4:
@@ -173,8 +170,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<4,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 5:
@@ -185,8 +181,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<5,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 6:
@@ -197,8 +192,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<6,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 7:
@@ -209,8 +203,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<7,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 8:
@@ -221,8 +214,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<8,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 9:
@@ -233,8 +225,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<9,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 10:
@@ -245,8 +236,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<10,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 11:
@@ -257,8 +247,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<11,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 12:
@@ -269,8 +258,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<12,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 13:
@@ -281,8 +269,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<13,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 14:
@@ -293,8 +280,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<14,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 15:
@@ -305,8 +291,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<15,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 16:
@@ -317,8 +302,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<16,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 24:
@@ -329,8 +313,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<24,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 32:
@@ -341,8 +324,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<32,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 40:
@@ -353,8 +335,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<40,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 48:
@@ -365,8 +346,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<48,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 56:
@@ -377,8 +357,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<56,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     case 64:
@@ -389,8 +368,7 @@ void run_geometry_param(const std::vector<double*> &xs_ptrs,
                                       ByteOffsetArray<3>(xs_offsets),
                                       ByteOffsetArray<3>(dinv_offsets),
                                       ConstBuffer<64,double>(vdelts),
-                                      hi, hj, hk, subgrid_bounds.lo,
-                                      angles_per_thread);
+                                      hi, hj, hk, angles_per_thread);
         break;
       }
     default:

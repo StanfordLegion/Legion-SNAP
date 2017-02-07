@@ -29,12 +29,11 @@ void gpu_expand_cross_section(const PointerBuffer<GROUPS,double> sig_ptrs,
                                     PointerBuffer<GROUPS,double> xs_ptrs,
                               const ByteOffsetArray<1> sig_offsets,
                               const ByteOffsetArray<3> mat_offsets,
-                              const ByteOffsetArray<3> xs_offsets,
-                              const Point<3> origin)
+                              const ByteOffsetArray<3> xs_offsets)
 {
-  const int x = origin.x[0] + (blockIdx.x * blockDim.x + threadIdx.x);
-  const int y = origin.x[1] + (blockIdx.y * blockDim.y + threadIdx.y);
-  const int z = origin.x[2] + (blockIdx.z * blockDim.z + threadIdx.z);
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
   const int mat = *(mat_ptr + x * mat_offsets[0] + 
                               y * mat_offsets[1] + z * mat_offsets[2]);
@@ -78,8 +77,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<1,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 2:
@@ -89,8 +87,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<2,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 3:
@@ -100,8 +97,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<3,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 4:
@@ -111,8 +107,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<4,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 5:
@@ -122,8 +117,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<5,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 6:
@@ -133,8 +127,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<6,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 7:
@@ -144,8 +137,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<7,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 8:
@@ -155,8 +147,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<8,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 9:
@@ -166,8 +157,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<9,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 10:
@@ -177,8 +167,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<10,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 11:
@@ -188,8 +177,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<11,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 12:
@@ -199,8 +187,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<12,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 13:
@@ -210,8 +197,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<13,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 14:
@@ -221,8 +207,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<14,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 15:
@@ -232,8 +217,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<15,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 16:
@@ -243,8 +227,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<16,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 24:
@@ -254,8 +237,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<24,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 32:
@@ -265,8 +247,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<32,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 40:
@@ -276,8 +257,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<40,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 48:
@@ -287,8 +267,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<48,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 56:
@@ -298,8 +277,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<56,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     case 64:
@@ -309,8 +287,7 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
                                        PointerBuffer<64,double>(xs_ptrs), 
                                        ByteOffsetArray<1>(sig_offsets),
                                        ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets),
-                                       subgrid_bounds.lo);
+                                       ByteOffsetArray<3>(xs_offsets));
         break;
       }
     default:
@@ -326,12 +303,11 @@ void gpu_expand_scattering_cross_section(const PointerBuffer<GROUPS,MomentQuad> 
                                          const ByteOffsetArray<2> slgg_offsets,
                                          const ByteOffsetArray<3> mat_offsets,
                                          const ByteOffsetArray<3> xs_offsets,
-                                         const Point<3> origin,
                                          const int group_start)
 {
-  const int x = origin.x[0] + (blockIdx.x * blockDim.x + threadIdx.x);
-  const int y = origin.x[1] + (blockIdx.y * blockDim.y + threadIdx.y);
-  const int z = origin.x[2] + (blockIdx.z * blockDim.z + threadIdx.z);
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
   const int mat = *(mat_ptr + x * mat_offsets[0] + 
                               y * mat_offsets[1] + z * mat_offsets[2]);
@@ -381,7 +357,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 2:
@@ -392,7 +368,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 3:
@@ -403,7 +379,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 4:
@@ -414,7 +390,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 5:
@@ -425,7 +401,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 6:
@@ -436,7 +412,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 7:
@@ -447,7 +423,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 8:
@@ -458,7 +434,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 9:
@@ -469,7 +445,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 10:
@@ -480,7 +456,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 11:
@@ -491,7 +467,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 12:
@@ -502,7 +478,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 13:
@@ -513,7 +489,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 14:
@@ -524,7 +500,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 15:
@@ -535,7 +511,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 16:
@@ -546,7 +522,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 24:
@@ -557,7 +533,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 32:
@@ -568,7 +544,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 40:
@@ -579,7 +555,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 48:
@@ -590,7 +566,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 56:
@@ -601,7 +577,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     case 64:
@@ -612,7 +588,7 @@ void run_expand_scattering_cross_section(
                             ByteOffsetArray<2>(slgg_offsets),
                             ByteOffsetArray<3>(mat_offsets),
                             ByteOffsetArray<3>(xs_offsets),
-                            subgrid_bounds.lo, group_start);
+                            group_start);
         break;
       }
     default:
