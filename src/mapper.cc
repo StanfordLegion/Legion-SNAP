@@ -172,9 +172,111 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                       MapCopyOutput &output)
 //------------------------------------------------------------------------------
 {
-  // Copies in snap are always saving fluxes to system memory
-  // so find the right system memory for the target copy
-  DefaultMapper::map_copy(ctx, copy, input, output);
+  assert(!copy.is_index_space);
+  // See if we already know where the copy is going
+  for (unsigned idx = 0; idx < copy.src_requirements.size(); idx++)
+  {
+    // Source first
+    const LogicalRegion &src_region = copy.src_requirements[idx].region;
+    std::map<LogicalRegion,PhysicalInstance>::const_iterator finder = 
+      copy_instances.find(src_region);
+    if (finder == copy_instances.end()) {
+      // Didn't find it, so we have to make it
+      // First figure out which memory it is going into
+      assert(copy.index_point.get_dim() == 3);
+      Point<3> point = copy.index_point.get_point<3>();
+      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+      Processor cpu_proc = global_cpu_mapping[point];
+      // Find the target memory with affinity to the proper node
+      Machine::MemoryQuery target_query(machine);
+      target_query.has_affinity_to(cpu_proc);
+      target_query.only_kind(Memory::SYSTEM_MEM);
+      Memory target = target_query.first();
+      assert(target.exists());
+      // Now we can make the instance
+      std::vector<LogicalRegion> regions(1, src_region);  
+      LayoutConstraintSet layout_constraints;
+      // No specialization
+      layout_constraints.add_constraint(SpecializedConstraint());
+      // SOA-Fortran dimension ordering
+      std::vector<DimensionKind> dimension_ordering(4);
+      dimension_ordering[0] = DIM_X;
+      dimension_ordering[1] = DIM_Y;
+      dimension_ordering[2] = DIM_Z;
+      dimension_ordering[3] = DIM_F;
+      layout_constraints.add_constraint(OrderingConstraint(dimension_ordering, 
+                                                           false/*contiguous*/));
+      // Constrained for the target memory kind
+      layout_constraints.add_constraint(MemoryConstraint(target.kind()));
+      // Have all the field for the instance available
+      std::vector<FieldID> all_fields;
+      runtime->get_field_space_fields(ctx, src_region.get_field_space(), all_fields);
+      layout_constraints.add_constraint(FieldConstraint(all_fields, false/*contiguous*/,
+                                                        false/*inorder*/));
+      PhysicalInstance result; bool created;
+      if (!runtime->find_or_create_physical_instance(ctx, target, layout_constraints,
+            regions, result, created, true/*acquire*/, GC_NEVER_PRIORITY)) {
+        log_snap.error("ERROR: SNAP mapper failed to allocate instance for copy");
+        assert(false);
+      }
+      output.src_instances[idx].push_back(result);
+      // Save it for the next time
+      assert(copy_instances.find(src_region) == copy_instances.end());
+      copy_instances[src_region] = result;
+    } else {
+      // Found it, add it to the set
+      output.src_instances[idx].push_back(finder->second);
+    }
+    const LogicalRegion &dst_region = copy.dst_requirements[idx].region;
+    finder = copy_instances.find(dst_region);
+    if (finder == copy_instances.end()) {
+      // Didn't find it so we have to make it
+      // First figure out which memory it is going into
+      assert(copy.index_point.get_dim() == 3);
+      Point<3> point = copy.index_point.get_point<3>();
+      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+      Processor cpu_proc = global_cpu_mapping[point];
+      // Find the target memory with affinity to the proper node
+      Machine::MemoryQuery target_query(machine);
+      target_query.has_affinity_to(cpu_proc);
+      target_query.only_kind(Memory::SYSTEM_MEM);
+      Memory target = target_query.first();
+      assert(target.exists());
+      // Now we can make the instance
+      std::vector<LogicalRegion> regions(1, dst_region);  
+      LayoutConstraintSet layout_constraints;
+      // No specialization
+      layout_constraints.add_constraint(SpecializedConstraint());
+      // SOA-Fortran dimension ordering
+      std::vector<DimensionKind> dimension_ordering(4);
+      dimension_ordering[0] = DIM_X;
+      dimension_ordering[1] = DIM_Y;
+      dimension_ordering[2] = DIM_Z;
+      dimension_ordering[3] = DIM_F;
+      layout_constraints.add_constraint(OrderingConstraint(dimension_ordering, 
+                                                           false/*contiguous*/));
+      // Constrained for the target memory kind
+      layout_constraints.add_constraint(MemoryConstraint(target.kind()));
+      // Have all the field for the instance available
+      std::vector<FieldID> all_fields;
+      runtime->get_field_space_fields(ctx, dst_region.get_field_space(), all_fields);
+      layout_constraints.add_constraint(FieldConstraint(all_fields, false/*contiguous*/,
+                                                        false/*inorder*/));
+      PhysicalInstance result; bool created;
+      if (!runtime->find_or_create_physical_instance(ctx, target, layout_constraints,
+            regions, result, created, true/*acquire*/, GC_NEVER_PRIORITY)) {
+        log_snap.error("ERROR: SNAP mapper failed to allocate instance for copy");
+        assert(false);
+      }
+      output.dst_instances[idx].push_back(result);
+      // Save it for the next time
+      assert(copy_instances.find(dst_region) == copy_instances.end());
+      copy_instances[dst_region] = result;
+    } else {
+      // Found it, add it to the set
+      output.dst_instances[idx].push_back(finder->second);
+    }
+  }
 }
 
 //------------------------------------------------------------------------------

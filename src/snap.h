@@ -305,6 +305,8 @@ public:
   protected:
     Memory local_sysmem, local_zerocopy, local_framebuffer;
     std::map<std::pair<LogicalRegion,Memory>,PhysicalInstance> local_instances;
+    // Copy instances always go in the system memory
+    std::map<LogicalRegion,PhysicalInstance> copy_instances;
   protected:
     std::map<Point<3>,Processor,Point<3>::STLComparator> global_cpu_mapping;
     std::map<Point<3>,Processor,Point<3>::STLComparator> global_gpu_mapping;
