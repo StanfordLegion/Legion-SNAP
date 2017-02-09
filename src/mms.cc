@@ -290,13 +290,19 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
   RegionAccessor<AccessorType::Generic,int> fa_mat = 
     regions[2].get_field_accessor(Snap::FID_SINGLE).typeify<int>(); 
 
-  unsigned g = 1;
+  unsigned g_idx = 0;
+  std::vector<RegionAccessor<AccessorType::Generic,double> > 
+    fa_fluxes(task->regions[0].privilege_fields.size());
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
-        task->regions[0].privilege_fields.end(); it++, g++)
+        task->regions[0].privilege_fields.end(); it++, g_idx++)
+    fa_fluxes[g_idx] = regions[0].get_field_accessor(*it).typeify<double>();
+  g_idx = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g_idx++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[0].get_field_accessor(*it).typeify<double>();
+    RegionAccessor<AccessorType::Generic,double> &fa_flux = fa_fluxes[g_idx]; 
     RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
       regions[1].get_field_accessor(*it).typeify<MomentTriple>();
     RegionAccessor<AccessorType::Generic,double> fa_sigt = 
@@ -321,18 +327,17 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
 
       fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);      
       for (int ang = 0; ang < Snap::num_angles; ang++) {
-        angle_buffer[ang] += (double(g) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
+        angle_buffer[ang] += (double(g_idx+1) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
         angle_buffer[ang] += flux_update;
         if (Snap::num_dims > 1)
-          angle_buffer[ang] += (double(g) * js * Snap::eta[ang] * cx[i] * sy[j] * cz[k]);
+          angle_buffer[ang] += (double(g_idx+1) * js * Snap::eta[ang] * cx[i] * sy[j] * cz[k]);
         if (Snap::num_dims > 2)
-          angle_buffer[ang] += (double(g) * ks * Snap::xi[ang] * cx[i] * cy[j] * sz[k]);
+          angle_buffer[ang] += (double(g_idx+1) * ks * Snap::xi[ang] * cx[i] * cy[j] * sz[k]);
         unsigned gp_idx = 0;
         for (std::set<FieldID>::const_iterator gp = 
               task->regions[0].privilege_fields.begin(); gp !=
               task->regions[0].privilege_fields.end(); gp++, gp_idx++) {
-          RegionAccessor<AccessorType::Generic,double> fa_flux_gp = 
-            regions[0].get_field_accessor(*gp).typeify<double>();
+          RegionAccessor<AccessorType::Generic,double> &fa_flux_gp = fa_fluxes[gp_idx];
           const double flux_gp = fa_flux_gp.read(dp);
           const coord_t slgg_point[2] = { mat, gp_idx };
           const MomentQuad quad = 
