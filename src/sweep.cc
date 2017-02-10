@@ -188,12 +188,18 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 #endif
   layout_constraints.add_layout_constraint(2/*index*/,
                                            Snap::get_soa_layout());
+#ifndef SNAP_USE_RELAXED_COHERENCE
   layout_constraints.add_layout_constraint(3/*index*/,
                                            Snap::get_reduction_layout());
+#else
+  layout_constraints.add_layout_constraint(3/*index*/,
+                                           Snap::get_soa_layout());
+#endif
   for (unsigned idx = 4; idx < 12; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
-#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+//#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
+#if 0
   register_cpu_variant<cpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
@@ -226,8 +232,13 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 #endif
   layout_constraints.add_layout_constraint(2/*index*/,
                                            Snap::get_soa_layout());
+#ifndef SNAP_USE_RELAXED_COHERENCE
   layout_constraints.add_layout_constraint(3/*index*/,
                                            Snap::get_reduction_layout());
+#else
+  layout_constraints.add_layout_constraint(3/*index*/,
+                                           Snap::get_soa_layout());
+#endif
   for (unsigned idx = 4; idx < 12; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
@@ -705,9 +716,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
   const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
   const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
   const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
+  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
   const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
   const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
   const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
 //------------------------------------------------------------------------------
 {
@@ -1151,9 +1162,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
   const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
   const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
   const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
+  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
   const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
   const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
   const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
 //------------------------------------------------------------------------------
 {
@@ -1694,9 +1705,9 @@ extern void run_gpu_sweep(const Point<3> origin,
  const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
  const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
  const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
+ const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
  const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
  const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
- const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
  const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
 //------------------------------------------------------------------------------
 {
