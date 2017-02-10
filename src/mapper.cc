@@ -279,6 +279,8 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       output.dst_instances[idx].push_back(finder->second);
     }
   }
+  runtime->acquire_instances(ctx, output.src_instances);
+  runtime->acquire_instances(ctx, output.dst_instances);
 }
 
 //------------------------------------------------------------------------------
