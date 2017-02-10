@@ -203,11 +203,19 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
                                            layout_constraints,
                                            true/*leaf*/);
 #else
+#ifdef __AVX__
+  register_cpu_variant<
+    raw_rect_task_wrapper<MomentQuad, 3, double, 3, double, 3, MomentTriple, 3,
+                       double, 3, double, 3, double, 3, double, 3, double, 2,
+                       double, 2, double, 2, double, 1, avx_implementation> >(
+              execution_constraints, layout_constraints, true/*leaf*/);
+#else
   register_cpu_variant<
     raw_rect_task_wrapper<MomentQuad, 3, double, 3, double, 3, MomentTriple, 3,
                        double, 3, double, 3, double, 3, double, 3, double, 2,
                        double, 2, double, 2, double, 1, sse_implementation> >(
               execution_constraints, layout_constraints, true/*leaf*/);
+#endif
 #endif
 }
 
