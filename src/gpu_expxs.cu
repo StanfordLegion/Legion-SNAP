@@ -36,7 +36,8 @@ void gpu_expand_cross_section(const PointerBuffer<GROUPS,double> sig_ptrs,
   const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
   const int mat = *(mat_ptr + x * mat_offsets[0] + 
-                              y * mat_offsets[1] + z * mat_offsets[2]);
+                              y * mat_offsets[1] + 
+                              z * mat_offsets[2]) - 1/*IS starts at 1*/;
   #pragma unroll
   for (int g = 0; g < GROUPS; g++) {
     const double *sig_ptr = sig_ptrs[g] + mat * sig_offsets[0];
@@ -310,16 +311,12 @@ void gpu_expand_scattering_cross_section(const PointerBuffer<GROUPS,MomentQuad> 
   const int z = blockIdx.z * blockDim.z + threadIdx.z;
 
   const int mat = *(mat_ptr + x * mat_offsets[0] + 
-                              y * mat_offsets[1] + z * mat_offsets[2]);
+                              y * mat_offsets[1] + 
+                              z * mat_offsets[2]) - 1/*IS starts at 1*/;
   #pragma unroll
   for (int g = 0; g < GROUPS; g++) {
-#ifdef LEGION_ISSUE_214_FIX
     MomentQuad quad = *(slgg_ptrs[g] + mat * slgg_offsets[0] +
                         (group_start + g) * slgg_offsets[1]);
-#else
-    MomentQuad quad = *(slgg_ptrs[g] + (mat-1) * slgg_offsets[0] +
-                        (group_start + g) * slgg_offsets[1]);
-#endif
     *(xs_ptrs[g] + x * xs_offsets[0] + y * xs_offsets[1] +
         z * xs_offsets[2]) = quad;
   }

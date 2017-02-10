@@ -157,7 +157,7 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
     for (int y = 0; y < max_y; y++) {
       for (int x = 0; x < max_x; x++) {
         const int mat = *(mat_ptr + x * mat_offsets[0] + y * mat_offsets[1] + 
-                          z * mat_offsets[2]);
+                          z * mat_offsets[2]) - 1/*IS starts at 1*/;
         const ByteOffset offset = mat * sig_offsets[0];
         for (int idx = 0; idx < num_groups; idx++) {
           double val = *(sig_ptrs[idx] + offset);
@@ -342,9 +342,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
     for (int y = 0; y < max_y; y++) { 
       for (int x = 0; x < max_x; x++) {
         const int mat = *(mat_ptr + x * mat_offsets[0] + y * mat_offsets[1] + 
-                          z * mat_offsets[2]);
+                          z * mat_offsets[2]) - 1/*IS starts at 1*/;
         for (int idx = 0; idx < num_groups; idx++) {
-          MomentQuad val = *(slgg_ptrs[idx] + (mat-1) * slgg_offsets[0] + 
+          MomentQuad val = *(slgg_ptrs[idx] + mat * slgg_offsets[0] + 
                               (group_start + idx) * slgg_offsets[1]);
           *(xs_ptrs[idx] + x * xs_offsets[0] + y * xs_offsets[1] + 
               z * xs_offsets[2]) = val;
@@ -520,6 +520,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 
   const int group_start = *((int*)task->args);
   const int group_stop  = *(((int*)task->args) + 1);
+  const int num_groups = group_stop - group_start + 1;
 
   Domain dom = runtime->get_index_space_domain(ctx, 
           task->regions[2].region.get_index_space());
@@ -529,7 +530,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
   const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
 
-  for (int group = 0; group < (group_stop - group_start); group++)
+  for (int group = 0; group < num_groups; group++)
   {
     const double *const xs_ptr = xs_ptrs[group]; 
     double *const dinv_ptr = dinv_ptrs[group];
