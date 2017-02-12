@@ -651,7 +651,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
 #ifndef SNAP_USE_RELAXED_COHERENCE
           SumReduction::fold<true/*exclusive*/>(*local_flux, total);
 #else
-          SumReduction::fold<false/*exclusive*/>(*local_flux, total);
+          SumReduction::apply<false/*exclusive*/>(*local_flux, total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -670,7 +670,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
 #ifndef SNAP_USE_RELAXED_COHERENCE
             TripleReduction::fold<true/*exclusive*/>(*local_fluxm, triple);
 #else
-            TripleReduction::fold<false/*exclusive*/>(*local_fluxm, triple);
+            TripleReduction::apply<false/*exclusive*/>(*local_fluxm, triple);
 #endif
           }
         }
@@ -1105,7 +1105,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
 #ifndef SNAP_USE_RELAXED_COHERENCE
           SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
 #else
-          SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
+          SumReduction::apply<false>(*(flux + flux_offsets * local_point), total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -1121,7 +1121,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
 #ifndef SNAP_USE_RELAXED_COHERENCE
             TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
 #else
-            TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::apply<false>(*(fluxm + fluxm_offsets * local_point), triple);
 #endif
           }
         }
@@ -1625,7 +1625,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
 #ifndef SNAP_USE_RELAXED_COHERENCE
           SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
 #else
-          SumReduction::fold<false>(*(flux + flux_offsets * local_point), total);
+          SumReduction::apply<false>(*(flux + flux_offsets * local_point), total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -1644,7 +1644,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
 #ifndef SNAP_USE_RELAXED_COHERENCE
             TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
 #else
-            TripleReduction::fold<false>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::apply<false>(*(fluxm + fluxm_offsets * local_point), triple);
 #endif
           }
         }
