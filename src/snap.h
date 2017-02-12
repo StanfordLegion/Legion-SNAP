@@ -282,6 +282,9 @@ public:
                           const Copy &copy,
                           const MapCopyInput &input,
                                 MapCopyOutput &output);
+    virtual void select_task_options(const MapperContext ctx,
+                                     const Task& task,
+                                           TaskOptions& options);
     virtual void slice_task(const MapperContext ctx,
                             const Task &task,
                             const SliceTaskInput &input,
@@ -298,6 +301,13 @@ public:
     void map_snap_array(const MapperContext ctx, 
                         LogicalRegion region, Memory target,
                         std::vector<PhysicalInstance> &instances);
+#ifdef LOCAL_MAP_TASKS
+  protected:
+    Memory get_associated_sysmem(Processor proc);
+    Memory get_associated_framebuffer(Processor proc);
+    Memory get_associated_zerocopy(Processor proc);
+    void get_associated_procs(Processor proc, std::vector<Processor> &procs);
+#endif
   protected:
     bool has_variants;
     std::map<SnapTaskID,VariantID> cpu_variants;
@@ -307,6 +317,12 @@ public:
     std::map<std::pair<LogicalRegion,Memory>,PhysicalInstance> local_instances;
     // Copy instances always go in the system memory
     std::map<LogicalRegion,PhysicalInstance> copy_instances;
+#ifdef LOCAL_MAP_TASKS
+    std::map<Processor,Memory> associated_sysmems;
+    std::map<Processor,Memory> associated_framebuffers;
+    std::map<Processor,Memory> associated_zerocopy;
+    std::map<Processor,std::vector<Processor> > associated_procs;
+#endif
   protected:
     std::map<Point<3>,Processor,Point<3>::STLComparator> global_cpu_mapping;
     std::map<Point<3>,Processor,Point<3>::STLComparator> global_gpu_mapping;
