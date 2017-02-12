@@ -523,17 +523,16 @@ public:
                                         fields.begin(), fields.end());
   }
   template<typename T>
-  inline void add_projection_requirement(Snap::SnapReductionID reduction,
-      T &launcher, Snap::SnapFieldID field, ProjectionID proj_id = 0) const
+  inline void add_projection_requirement(T &launcher, Snap::SnapReductionID reduction,
+      Snap::SnapFieldID field, ProjectionID proj_id = 0) const
   {
     launcher.add_region_requirement(RegionRequirement(lp, proj_id, reduction,
                                                       EXCLUSIVE, lr));
     launcher.region_requirements.back().privilege_fields.insert(field);
   }
   template<typename T>
-  inline void add_projection_requirement(Snap::SnapReductionID reduction,
-      T &launcher, const std::vector<Snap::SnapFieldID> &fields, 
-      ProjectionID proj_id = 0) const
+  inline void add_projection_requirement(T &launcher, Snap::SnapReductionID reduction,
+      const std::vector<Snap::SnapFieldID> &fields, ProjectionID proj_id = 0) const
   {
     launcher.add_region_requirement(RegionRequirement(lp, proj_id, reduction,
                                                       EXCLUSIVE, lr));

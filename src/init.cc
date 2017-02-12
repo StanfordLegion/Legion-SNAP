@@ -180,13 +180,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
         }
         break;
       }
-    case Snap::MMS_SOURCE:
-      {
-        // TODO: Implement this
-        assert(false);
-        break;
-      }
-    default:
+    default: // nothing else should be called
       assert(false);
   }
   Domain dom = runtime->get_index_space_domain(ctx, 

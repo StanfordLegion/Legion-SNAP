@@ -53,7 +53,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
 #ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
-    flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
+    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID,
                                     group_field, Snap::SWEEP_PROJECTION);
 #else
     flux.add_projection_requirement(READ_WRITE, *this, 
@@ -64,7 +64,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
       qim.add_projection_requirement(READ_ONLY, *this,
                                      group_field, Snap::SWEEP_PROJECTION);
 #ifndef SNAP_USE_RELAXED_COHERENCE
-      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID,
                                        group_field, Snap::SWEEP_PROJECTION);
 #else
       fluxm.add_projection_requirement(READ_WRITE, *this,
@@ -106,7 +106,7 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
 #ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
-    flux.add_projection_requirement(Snap::SUM_REDUCTION_ID, *this, 
+    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID,
                                     group_fields, Snap::SWEEP_PROJECTION);
 #else
     flux.add_projection_requirement(READ_WRITE, *this,
@@ -117,10 +117,10 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
       qim.add_projection_requirement(READ_ONLY, *this,
                                      group_fields, Snap::SWEEP_PROJECTION);
 #ifndef SNAP_USE_RELAXED_COHERENCE
-      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID,
                                        group_fields, Snap::SWEEP_PROJECTION);
 #else
-      fluxm.add_projection_requirement(Snap::TRIPLE_REDUCTION_ID, *this,
+      fluxm.add_projection_requirement(READ_WRITE, *this,
                                        group_fields, Snap::SWEEP_PROJECTION);
       region_requirements.back().prop = SIMULTANEOUS;
 #endif
