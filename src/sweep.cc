@@ -173,8 +173,12 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
 //------------------------------------------------------------------------------
 {
   ExecutionConstraintSet execution_constraints;
-  // Need x86 CPU with SSE instructions
+  // Need x86 CPU with SSE or AVX instructions
+#ifdef __AVX__
+  execution_constraints.add_constraint(ISAConstraint(X86_ISA | AVX_ISA));
+#else
   execution_constraints.add_constraint(ISAConstraint(X86_ISA | SSE_ISA));
+#endif
   TaskLayoutConstraintSet layout_constraints;
   // Most requirements are normal SOA, the others are reductions
   layout_constraints.add_layout_constraint(0/*index*/,
@@ -1600,7 +1604,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Else nothing: psij is already in place in the pencil
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
-            Point<2> ghost_point = ghosty_point(local_point);
+            Point<2> ghost_point = ghostz_point(local_point);
             __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghostz_ptr, 
                                               ghostz_offsets, ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -1616,8 +1620,8 @@ inline __m256d* malloc_avx_aligned(size_t size)
             vec_total = _mm256_add_pd(vec_total, psi[ang]);
           }
           vec_total = _mm256_hadd_pd(vec_total, vec_total);
-          double total = _mm_cvtsd_f64( _mm256_extractf128_pd(
-                _mm256_hadd_pd(vec_total, vec_total), 0));
+          double total = _mm_cvtsd_f64(_mm256_extractf128_pd(vec_total, 0)) + 
+                         _mm_cvtsd_f64(_mm256_extractf128_pd(vec_total, 1));
 #ifndef SNAP_USE_RELAXED_COHERENCE
           SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
 #else
