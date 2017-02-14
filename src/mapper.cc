@@ -172,10 +172,133 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                       MapCopyOutput &output)
 //------------------------------------------------------------------------------
 {
-  // Copies in snap are always saving fluxes to system memory
-  // so find the right system memory for the target copy
-  DefaultMapper::map_copy(ctx, copy, input, output);
+  assert(!copy.is_index_space);
+  // See if we already know where the copy is going
+  for (unsigned idx = 0; idx < copy.src_requirements.size(); idx++)
+  {
+    // Source first
+    const LogicalRegion &src_region = copy.src_requirements[idx].region;
+    std::map<LogicalRegion,PhysicalInstance>::const_iterator finder = 
+      copy_instances.find(src_region);
+    if (finder == copy_instances.end()) {
+      // Didn't find it, so we have to make it
+      // First figure out which memory it is going into
+      assert(copy.index_point.get_dim() == 3);
+      Point<3> point = copy.index_point.get_point<3>();
+      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+      Processor cpu_proc = global_cpu_mapping[point];
+      // Find the target memory with affinity to the proper node
+      Machine::MemoryQuery target_query(machine);
+      target_query.has_affinity_to(cpu_proc);
+      target_query.only_kind(Memory::SYSTEM_MEM);
+      Memory target = target_query.first();
+      assert(target.exists());
+      // Now we can make the instance
+      std::vector<LogicalRegion> regions(1, src_region);  
+      LayoutConstraintSet layout_constraints;
+      // No specialization
+      layout_constraints.add_constraint(SpecializedConstraint());
+      // SOA-Fortran dimension ordering
+      std::vector<DimensionKind> dimension_ordering(4);
+      dimension_ordering[0] = DIM_X;
+      dimension_ordering[1] = DIM_Y;
+      dimension_ordering[2] = DIM_Z;
+      dimension_ordering[3] = DIM_F;
+      layout_constraints.add_constraint(OrderingConstraint(dimension_ordering, 
+                                                           false/*contiguous*/));
+      // Constrained for the target memory kind
+      layout_constraints.add_constraint(MemoryConstraint(target.kind()));
+      // Have all the field for the instance available
+      std::vector<FieldID> all_fields;
+      runtime->get_field_space_fields(ctx, src_region.get_field_space(), all_fields);
+      layout_constraints.add_constraint(FieldConstraint(all_fields, false/*contiguous*/,
+                                                        false/*inorder*/));
+      PhysicalInstance result; bool created;
+      if (!runtime->find_or_create_physical_instance(ctx, target, layout_constraints,
+            regions, result, created, true/*acquire*/, GC_NEVER_PRIORITY)) {
+        log_snap.error("ERROR: SNAP mapper failed to allocate instance for copy");
+        assert(false);
+      }
+      output.src_instances[idx].push_back(result);
+      // Save it for the next time
+      assert((copy_instances.find(src_region) == copy_instances.end()) ||
+              (copy_instances[src_region] == result));;
+      copy_instances[src_region] = result;
+    } else {
+      // Found it, add it to the set
+      output.src_instances[idx].push_back(finder->second);
+    }
+    const LogicalRegion &dst_region = copy.dst_requirements[idx].region;
+    finder = copy_instances.find(dst_region);
+    if (finder == copy_instances.end()) {
+      // Didn't find it so we have to make it
+      // First figure out which memory it is going into
+      assert(copy.index_point.get_dim() == 3);
+      Point<3> point = copy.index_point.get_point<3>();
+      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+      Processor cpu_proc = global_cpu_mapping[point];
+      // Find the target memory with affinity to the proper node
+      Machine::MemoryQuery target_query(machine);
+      target_query.has_affinity_to(cpu_proc);
+      target_query.only_kind(Memory::SYSTEM_MEM);
+      Memory target = target_query.first();
+      assert(target.exists());
+      // Now we can make the instance
+      std::vector<LogicalRegion> regions(1, dst_region);  
+      LayoutConstraintSet layout_constraints;
+      // No specialization
+      layout_constraints.add_constraint(SpecializedConstraint());
+      // SOA-Fortran dimension ordering
+      std::vector<DimensionKind> dimension_ordering(4);
+      dimension_ordering[0] = DIM_X;
+      dimension_ordering[1] = DIM_Y;
+      dimension_ordering[2] = DIM_Z;
+      dimension_ordering[3] = DIM_F;
+      layout_constraints.add_constraint(OrderingConstraint(dimension_ordering, 
+                                                           false/*contiguous*/));
+      // Constrained for the target memory kind
+      layout_constraints.add_constraint(MemoryConstraint(target.kind()));
+      // Have all the field for the instance available
+      std::vector<FieldID> all_fields;
+      runtime->get_field_space_fields(ctx, dst_region.get_field_space(), all_fields);
+      layout_constraints.add_constraint(FieldConstraint(all_fields, false/*contiguous*/,
+                                                        false/*inorder*/));
+      PhysicalInstance result; bool created;
+      if (!runtime->find_or_create_physical_instance(ctx, target, layout_constraints,
+            regions, result, created, true/*acquire*/, GC_NEVER_PRIORITY)) {
+        log_snap.error("ERROR: SNAP mapper failed to allocate instance for copy");
+        assert(false);
+      }
+      output.dst_instances[idx].push_back(result);
+      // Save it for the next time
+      assert((copy_instances.find(dst_region) == copy_instances.end()) ||
+              (copy_instances[dst_region] == result));
+      copy_instances[dst_region] = result;
+    } else {
+      // Found it, add it to the set
+      output.dst_instances[idx].push_back(finder->second);
+    }
+  }
+  runtime->acquire_instances(ctx, output.src_instances);
+  runtime->acquire_instances(ctx, output.dst_instances);
 }
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::select_task_options(const MapperContext ctx,
+                                           const Task& task,
+                                                 TaskOptions& options)
+//------------------------------------------------------------------------------
+{
+  options.initial_proc = default_policy_select_initial_processor(ctx, task);
+  options.inline_task = false;
+  options.stealable = false;
+#ifdef LOCAL_MAP_TASKS
+  options.map_locally = true;
+#else
+  options.map_locally = false;
+#endif
+}
+
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::slice_task(const MapperContext ctx,
@@ -259,7 +382,9 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
   if (!has_variants)
     update_variants(ctx);
   // Assume we are mapping on the target processor
+#ifndef LOCAL_MAP_TASKS
   assert(task.target_proc == local_proc);
+#endif
   output.chosen_instances.resize(task.regions.size());
   switch (task.task_id)
   {
@@ -279,12 +404,22 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
         if (finder != gpu_variants.end() && 
             (local_kind == Processor::TOC_PROC)) {
           output.chosen_variant = finder->second; 
+#ifdef LOCAL_MAP_TASKS
+          output.target_procs.push_back(task.target_proc);
+          target_mem = get_associated_framebuffer(task.target_proc);
+#else
           output.target_procs.push_back(local_proc);
           target_mem = local_framebuffer;
+#endif
         } else {
           output.chosen_variant = cpu_variants[(SnapTaskID)task.task_id];
+#ifdef LOCAL_MAP_TASKS
+          get_associated_procs(task.target_proc, output.target_procs);
+          target_mem = get_associated_sysmem(task.target_proc);
+#else
           output.target_procs = local_cpus;
           target_mem = local_sysmem;
+#endif
         }
         for (unsigned idx = 0; idx < task.regions.size(); idx++) { 
           if (task.regions[idx].privilege == NO_ACCESS)
@@ -301,9 +436,15 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
     case TEST_INNER_CONVERGENCE_TASK_ID:
       {
         output.chosen_variant = cpu_variants[(SnapTaskID)task.task_id];
+#ifdef LOCAL_MAP_TASKS
+        get_associated_procs(task.target_proc, output.target_procs);
+        Memory target_mem = get_associated_sysmem(task.target_proc);
+#else
         output.target_procs = local_cpus;
+        Memory target_mem = local_sysmem;   
+#endif
         for (unsigned idx = 0; idx < task.regions.size(); idx++)
-          map_snap_array(ctx, task.regions[idx].region, local_sysmem, 
+          map_snap_array(ctx, task.regions[idx].region, target_mem, 
                          output.chosen_instances[idx]);
         break;
       }
@@ -313,7 +454,11 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
         // These tasks have no region requirements so they 
         // can go wherever on the cpus
         output.chosen_variant = cpu_variants[(SnapTaskID)task.task_id];
+#ifdef LOCAL_MAP_TASKS
+        get_associated_procs(task.target_proc, output.target_procs);
+#else
         output.target_procs = local_cpus;
+#endif
         break;
       }
     case MINI_KBA_TASK_ID:
@@ -325,16 +470,30 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
         if (finder != gpu_variants.end() && 
             (local_kind == Processor::TOC_PROC)) {
           output.chosen_variant = finder->second; 
+#ifdef LOCAL_MAP_TASKS
+          output.target_procs.push_back(task.target_proc);
+          target_mem = get_associated_framebuffer(task.target_proc);
+          reduction_mem = get_associated_zerocopy(task.target_proc);
+          vdelt_mem = get_associated_zerocopy(task.target_proc);
+#else
           output.target_procs.push_back(local_proc);
           target_mem = local_framebuffer;
           reduction_mem = local_zerocopy;
           vdelt_mem = local_zerocopy;
+#endif
         } else {
           output.chosen_variant = cpu_variants[(SnapTaskID)task.task_id];
+#ifdef LOCAL_MAP_TASKS
+          get_associated_procs(task.target_proc, output.target_procs);
+          target_mem = get_associated_sysmem(task.target_proc);
+          reduction_mem = get_associated_sysmem(task.target_proc);
+          vdelt_mem = get_associated_sysmem(task.target_proc);
+#else
           output.target_procs = local_cpus;
           target_mem = local_sysmem;
           reduction_mem = local_sysmem;
           vdelt_mem = local_sysmem;
+#endif
         }
         // qtot is normal
         map_snap_array(ctx, task.regions[0].region, target_mem,
@@ -446,3 +605,75 @@ void Snap::SnapMapper::map_snap_array(const MapperContext ctx,
   local_instances[key] = result;
 }
 
+#ifdef LOCAL_MAP_TASKS
+//------------------------------------------------------------------------------
+Memory Snap::SnapMapper::get_associated_sysmem(Processor proc)
+//------------------------------------------------------------------------------
+{
+  std::map<Processor,Memory>::const_iterator finder = 
+    associated_sysmems.find(proc);
+  if (finder != associated_sysmems.end())
+    return finder->second;
+  Machine::MemoryQuery sysmem_query(machine);
+  sysmem_query.same_address_space_as(proc);
+  sysmem_query.only_kind(Memory::SYSTEM_MEM);
+  Memory result = sysmem_query.first();
+  assert(result.exists());
+  associated_sysmems[proc] = result;
+  return result;
+}
+
+//------------------------------------------------------------------------------
+Memory Snap::SnapMapper::get_associated_framebuffer(Processor proc)
+//------------------------------------------------------------------------------
+{
+  std::map<Processor,Memory>::const_iterator finder = 
+    associated_framebuffers.find(proc);
+  if (finder != associated_framebuffers.end())
+    return finder->second;
+  Machine::MemoryQuery fbmem_query(machine);
+  fbmem_query.same_address_space_as(proc);
+  fbmem_query.only_kind(Memory::GPU_FB_MEM);
+  Memory result = fbmem_query.first();
+  assert(result.exists());
+  associated_framebuffers[proc] = result;
+  return result;
+}
+
+//------------------------------------------------------------------------------
+Memory Snap::SnapMapper::get_associated_zerocopy(Processor proc)
+//------------------------------------------------------------------------------
+{
+  std::map<Processor,Memory>::const_iterator finder = 
+    associated_zerocopy.find(proc);
+  if (finder != associated_zerocopy.end())
+    return finder->second;
+  Machine::MemoryQuery zcmem_query(machine);
+  zcmem_query.same_address_space_as(proc);
+  zcmem_query.only_kind(Memory::Z_COPY_MEM);
+  Memory result = zcmem_query.first();
+  assert(result.exists());
+  associated_zerocopy[proc] = result;
+  return result;
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::get_associated_procs(Processor proc,
+                                            std::vector<Processor> &procs)
+//------------------------------------------------------------------------------
+{
+  std::map<Processor,std::vector<Processor> >::const_iterator finder = 
+    associated_procs.find(proc);
+  if (finder != associated_procs.end()) {
+    procs = finder->second;
+    return;
+  }
+  Machine::ProcessorQuery proc_query(machine);
+  proc_query.same_address_space_as(proc);
+  proc_query.only_kind(proc.kind());
+  for (Machine::ProcessorQuery::iterator it = proc_query.begin();
+        it != proc_query.end(); it++)
+    procs.push_back(*it);
+  associated_procs[proc] = procs;
+}
+#endif

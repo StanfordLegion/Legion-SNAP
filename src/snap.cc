@@ -1808,7 +1808,7 @@ template<>
 void SumReduction::apply<false>(LHS &lhs, RHS rhs)
 //------------------------------------------------------------------------------
 {
-  long *target = (long *)&lhs;
+  volatile long *target = (volatile long *)&lhs;
   union { long as_int; double as_float; } oldval, newval;
   do {
     oldval.as_int = *target;
@@ -1829,7 +1829,7 @@ template<>
 void SumReduction::fold<false>(RHS &rhs1, RHS rhs2)
 //------------------------------------------------------------------------------
 {
-  long *target = (long *)&rhs1;
+  volatile long *target = (volatile long *)&rhs1;
   union { long as_int; double as_float; } oldval, newval;
   do {
     oldval.as_int = *target;
@@ -1855,7 +1855,7 @@ void TripleReduction::apply<false>(LHS &lhs, RHS rhs)
 {
   for (int i = 0; i < 3; i++)
   {
-    long *target = (long *)&lhs[i];
+    volatile long *target = (volatile long *)&lhs[i];
     union { long as_int; double as_float; } oldval, newval;
     do {
       oldval.as_int = *target;
@@ -1880,7 +1880,7 @@ void TripleReduction::fold<false>(RHS &rhs1, RHS rhs2)
 {
   for (int i = 0; i < 3; i++)
   {
-    long *target = (long *)&rhs1[i];
+    volatile long *target = (volatile long *)&rhs1[i];
     union { long as_int; double as_float; } oldval, newval;
     do {
       oldval.as_int = *target;
