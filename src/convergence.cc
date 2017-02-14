@@ -252,7 +252,7 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   log_snap.print("---------------------------------------------------------");
   log_snap.print("SNAP Execution Summary");
   log_snap.print("---------------------------------------------------------");
-  log_snap.print("  Execution Time: %zd us", data.total_step_time);
+  log_snap.print("  Execution Time: %lld us", data.total_step_time);
   log_snap.print("  Total Time Steps: %d (avg %.8g us / iter)",
       data.time_step_number,
       double(data.total_step_time) / double(data.time_step_number));
