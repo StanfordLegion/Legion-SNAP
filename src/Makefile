@@ -50,7 +50,8 @@ GEN_GPU_SRC	?= gpu_outer.cu \
 
 # You can modify these variables, some will be appended to by the runtime makefile
 INC_FLAGS	?=
-CC_FLAGS	?= -DSNAP_USE_RELAXED_COHERENCE # Do this until Realm supports multi-field reduction instances
+CC_FLAGS	?=
+CC_FLAGS	+= -DSNAP_USE_RELAXED_COHERENCE # Do this until Realm supports multi-field reduction instances
 CC_FLAGS	+= -std=c++11 # Need this to deal with linkage issues
 NVCC_FLAGS	?=
 GASNET_FLAGS	?=
