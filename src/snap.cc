@@ -553,8 +553,16 @@ void Snap::transport_solve(void)
     log_snap.print("MMS Max Diff: %.8g", result[0]);
     log_snap.print("MMS Min Diff: %.8g", result[1]);
     const size_t total_cells = nx * nx_chunks * ny * ny_chunks * nz * nz_chunks;
-    log_snap.print("MMS Avg Diff: %.8g", 
-        result[2]/double(total_cells * Snap::num_groups));
+    const double avg_diff = result[2] / double(total_cells * Snap::num_groups);
+    log_snap.print("MMS Avg Diff: %.8g", avg_diff);
+    if (result[0] > 0.1) {
+      log_snap.error("MMS FAILURE! MAX IS LARGER THAN 0.1!");
+      assert(false);
+    }
+    if (avg_diff > 0.001) {
+      log_snap.error("MMS FAILURE! AVG IS LARGER THAN 0.001!\n");
+      assert(false);
+    }
   }
   for (int i = 0; i < 8; i++) {
     delete time_flux_even[i];
