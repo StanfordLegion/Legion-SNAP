@@ -393,10 +393,9 @@ void ourAtomicAdd(double *ptr, double value)
 {
 #if __CUDA_ARCH__ < 600
   unsigned long long int* address_as_ull = (unsigned long long int*)ptr; 
-  unsigned long long int old, assumed;
+  unsigned long long int old = *address_as_ull;
+  unsigned long long int assumed;
   do { 
-    // force the compiler to re-read the value here
-    asm volatile("ld.volatile.global.u64 %0, [%1];" : "=l"(old) : "l"(address_as_ull) : "memory");
     assumed = old; 
     old = atomicCAS(address_as_ull, assumed, 
         __double_as_longlong(value + __longlong_as_double(assumed))); 
