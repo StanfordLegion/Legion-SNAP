@@ -364,7 +364,10 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
 
     // Reduction accessors don't support structured points yet
     ByteOffset flux_offsets[3], fluxm_offsets[3];
-    double *const flux = fa_flux.raw_rect_ptr<3>(flux_offsets);
+    Rect<3> temp_bounds; 
+    double *const flux = 
+      fa_flux.raw_rect_ptr<3>(subgrid_bounds, temp_bounds, flux_offsets);
+    assert(temp_bounds == subgrid_bounds);
     MomentTriple *fluxm = NULL;
     RegionAccessor<AccessorType::Generic> fa_qim;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
@@ -372,7 +375,8 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
       RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
         regions[3].get_field_accessor(
             SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
-      fluxm = fa_fluxm.raw_rect_ptr<3>(fluxm_offsets);
+      fluxm = fa_fluxm.raw_rect_ptr<3>(subgrid_bounds, temp_bounds, fluxm_offsets);
+      assert(temp_bounds == subgrid_bounds);
     }
     
     // No types here since the size of these fields are dependent
@@ -646,8 +650,10 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             total += psi[ang];
           }
           double *local_flux = flux;
+          // Have to convert to local coordinates for raw pointer
+          const Point<3> local_flux_point = local_point - subgrid_bounds.lo;
           for (int i = 0; i < 3; i++)
-            local_flux += local_point[i] * flux_offsets[i];
+            local_flux += local_flux_point[i] * flux_offsets[i];
 #ifndef SNAP_USE_RELAXED_COHERENCE
           SumReduction::fold<true/*exclusive*/>(*local_flux, total);
 #else
@@ -666,7 +672,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             }
             MomentTriple *local_fluxm = fluxm;
             for (int i = 0; i < 3; i++)
-              local_fluxm += local_point[i] * fluxm_offsets[i];
+              local_fluxm += local_flux_point[i] * fluxm_offsets[i];
 #ifndef SNAP_USE_RELAXED_COHERENCE
             TripleReduction::fold<true/*exclusive*/>(*local_fluxm, triple);
 #else
