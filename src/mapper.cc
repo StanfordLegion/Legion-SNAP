@@ -19,6 +19,7 @@
 #include "snap.h"
 #include "sweep.h"
 
+#if 0
 //------------------------------------------------------------------------------
 Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine, 
                              Processor local, const char *mapper_name)
@@ -95,6 +96,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
     }
   }
 }
+#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
@@ -165,6 +167,7 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
 #endif
 }
 
+#if 0
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                 const Copy &copy,
@@ -282,6 +285,7 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
   runtime->acquire_instances(ctx, output.src_instances);
   runtime->acquire_instances(ctx, output.dst_instances);
 }
+#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::select_task_options(const MapperContext ctx,
@@ -299,7 +303,7 @@ void Snap::SnapMapper::select_task_options(const MapperContext ctx,
 #endif
 }
 
-
+#if 0
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::slice_task(const MapperContext ctx,
                                   const Task &task, 
@@ -356,6 +360,7 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     }
   }
 }
+#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::speculate(const MapperContext ctx,

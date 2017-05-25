@@ -22,8 +22,6 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
 // This class will issue a chain of single task launches
 // that when executed will emulate the execution of a 
 // monad. We use them in SNAP to print out the convergence

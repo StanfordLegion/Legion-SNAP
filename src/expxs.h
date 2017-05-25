@@ -22,13 +22,11 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
 class ExpandCrossSection : public SnapTask<ExpandCrossSection,
                                            Snap::EXPAND_CROSS_SECTION_TASK_ID> {
 public:
-  ExpandCrossSection(const Snap &snap, const SnapArray &sig, 
-                     const SnapArray &mat, const SnapArray &xs, 
+  ExpandCrossSection(const Snap &snap, const SnapArray<1> &sig, 
+                     const SnapArray<3> &mat, const SnapArray<3> &xs, 
                      int group_start, int group_stop);
 public:
   const int group_start;
@@ -52,8 +50,8 @@ public:
 class ExpandScatteringCrossSection : public SnapTask<ExpandScatteringCrossSection,
                                     Snap::EXPAND_SCATTERING_CROSS_SECTION_TASK_ID> {
 public:
-  ExpandScatteringCrossSection(const Snap &snap, const SnapArray &slgg,
-                               const SnapArray &mat, const SnapArray &s_xs, 
+  ExpandScatteringCrossSection(const Snap &snap, const SnapArray<2> &slgg,
+                               const SnapArray<3> &mat, const SnapArray<3> &s_xs, 
                                int group_start, int group_stop);
 public:
   const int group_start;
@@ -77,8 +75,8 @@ public:
 class CalculateGeometryParam : public SnapTask<CalculateGeometryParam,
                                                Snap::CALCULATE_GEOMETRY_PARAM_TASK_ID> {
 public:
-  CalculateGeometryParam(const Snap &snap, const SnapArray &t_xs, 
-                         const SnapArray &vdelt, const SnapArray &dinv, 
+  CalculateGeometryParam(const Snap &snap, const SnapArray<3> &t_xs, 
+                         const SnapArray<1> &vdelt, const SnapArray<3> &dinv, 
                          int group_start, int group_stop);
 public:
   const int group_start;

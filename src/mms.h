@@ -24,8 +24,8 @@
 
 class MMSInitFlux : public SnapTask<MMSInitFlux, Snap::MMS_INIT_FLUX_TASK_ID> {
 public:
-  MMSInitFlux(const Snap &snap, const SnapArray &ref_flux, 
-              const SnapArray &ref_fluxm);
+  MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux, 
+              const SnapArray<3> &ref_fluxm);
 public:
   static void preregister_cpu_variants(void);
 public:
@@ -35,10 +35,10 @@ public:
 
 class MMSInitSource : public SnapTask<MMSInitSource, Snap::MMS_INIT_SOURCE_TASK_ID> {
 public:
-  MMSInitSource(const Snap &snap, const SnapArray &ref_flux, 
-                const SnapArray &ref_fluxm, const SnapArray &mat,
-                const SnapArray &sigt, const SnapArray &slgg,
-                const SnapArray &qim, int corner);
+  MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux, 
+                const SnapArray<3> &ref_fluxm, const SnapArray<3> &mat,
+                const SnapArray<1> &sigt, const SnapArray<2> &slgg,
+                const SnapArray<3> &qim, int corner);
 public:
   const int corner;
 public:
@@ -51,8 +51,8 @@ public:
 class MMSInitTimeDependent : public SnapTask<MMSInitTimeDependent, 
                                              Snap::MMS_INIT_TIME_DEPENDENT_TASK_ID> {
 public:
-  MMSInitTimeDependent(const Snap &snap, const SnapArray &vel,
-                       const SnapArray &ref_flux, const SnapArray &qi);
+  MMSInitTimeDependent(const Snap &snap, const SnapArray<1> &vel,
+                       const SnapArray<3> &ref_flux, const SnapArray<3> &qi);
 public:
   static void preregister_cpu_variants(void);
 public:
@@ -62,7 +62,7 @@ public:
 
 class MMSScale : public SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID> {
 public:
-  MMSScale(const Snap &snap, const SnapArray &qim, double factor);
+  MMSScale(const Snap &snap, const SnapArray<3> &qim, double factor);
 public:
   const double scale_factor;
 public:
@@ -74,7 +74,7 @@ public:
 
 class MMSCompare : public SnapTask<MMSCompare, Snap::MMS_COMPARE_TASK_ID> {
 public:
-  MMSCompare(const Snap &snap, const SnapArray &flux, const SnapArray &ref_flux);
+  MMSCompare(const Snap &snap, const SnapArray<3> &flux, const SnapArray<3> &ref_flux);
 public:
   static void preregister_cpu_variants(void);
 public:

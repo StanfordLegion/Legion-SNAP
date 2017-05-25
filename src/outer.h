@@ -22,16 +22,14 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
 class CalcOuterSource : public SnapTask<CalcOuterSource, 
                                         Snap::CALC_OUTER_SOURCE_TASK_ID> {
 public:
   CalcOuterSource(const Snap &snap, const Predicate &pred,
-                  const SnapArray &qi, const SnapArray &slgg,
-                  const SnapArray &mat, const SnapArray &q2rgp0, 
-                  const SnapArray &q2grpm, const SnapArray &flux0,
-                  const SnapArray &fluxm);
+                  const SnapArray<3> &qi, const SnapArray<2> &slgg,
+                  const SnapArray<3> &mat, const SnapArray<3> &q2rgp0, 
+                  const SnapArray<3> &q2grpm, const SnapArray<3> &flux0,
+                  const SnapArray<3> &fluxm);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);
@@ -60,7 +58,7 @@ class TestOuterConvergence : public SnapTask<TestOuterConvergence,
                                              Snap::TEST_OUTER_CONVERGENCE_TASK_ID> {
 public:
   TestOuterConvergence(const Snap &snap, const Predicate &pred,
-                       const SnapArray &flux0, const SnapArray &flux0po,
+                       const SnapArray<3> &flux0, const SnapArray<3> &flux0po,
                        const Future &inner_converged, const Future &true_future,
                        int group_start, int group_stop);
 public:
