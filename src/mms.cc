@@ -28,7 +28,7 @@
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
 #endif
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 using namespace LegionRuntime::Accessor;
 
@@ -60,8 +60,8 @@ void mms_trigint<false/*COS*/>(const int lc, const double d, const double del,
 }
 
 //------------------------------------------------------------------------------
-MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux, 
-                         const SnapArray &ref_fluxm)
+MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux, 
+                         const SnapArray<3> &ref_fluxm)
   : SnapTask<MMSInitFlux, Snap::MMS_INIT_FLUX_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
@@ -81,6 +81,7 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitFlux::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -183,12 +184,13 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray &ref_flux,
   free(tz);
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
-                             const SnapArray &ref_fluxm, const SnapArray &mat,
-                             const SnapArray &sigt, const SnapArray &slgg,
-                             const SnapArray &qim,int c)
+MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
+                         const SnapArray<3> &ref_fluxm, const SnapArray<3> &mat,
+                         const SnapArray<1> &sigt, const SnapArray<2> &slgg,
+                         const SnapArray<3> &qim,int c)
   : SnapTask<MMSInitSource, Snap::MMS_INIT_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), corner(c)
 //------------------------------------------------------------------------------
@@ -213,6 +215,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitSource::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -371,10 +374,13 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray &ref_flux,
   free(angle_buffer);
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
-                                 const SnapArray &ref_flux, const SnapArray &qi)
+MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, 
+                                           const SnapArray<1> &v,
+                                           const SnapArray<3> &ref_flux, 
+                                           const SnapArray<3> &qi)
   : SnapTask<MMSInitTimeDependent, Snap::MMS_INIT_TIME_DEPENDENT_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
@@ -395,6 +401,7 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitTimeDependent::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -434,9 +441,10 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, const SnapArray &v,
   }
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
+MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
   : SnapTask<MMSScale, Snap::MMS_SCALE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), scale_factor(f)
 //------------------------------------------------------------------------------
@@ -456,6 +464,7 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSScale::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -492,10 +501,11 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray &qim, double f)
   free(angle_buffer);
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux, 
-                       const SnapArray &ref_flux)
+MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux, 
+                       const SnapArray<3> &ref_flux)
   : SnapTask<MMSCompare, Snap::MMS_COMPARE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
@@ -515,6 +525,7 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
                                                         true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ MomentTriple MMSCompare::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -570,6 +581,7 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray &flux,
 #endif
   return result;
 }
+#endif
 
 const MomentTriple MMSReduction::identity = MomentTriple(-INFINITY, INFINITY, 0.0);
 

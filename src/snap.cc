@@ -36,7 +36,7 @@
 
 using namespace LegionRuntime::Accessor;
 
-LegionRuntime::Logger::Category log_snap("snap");
+Legion::Logger log_snap("snap");
 
 const char* Snap::task_names[LAST_TASK_ID] = { SNAP_TASK_NAMES };
 
@@ -45,79 +45,72 @@ void Snap::setup(void)
 //------------------------------------------------------------------------------
 {
   // This is the index space for the spatial simulation 
-  const int upper[3] = { nx_chunks*nx_per_chunk - 1,
-                         ny_chunks*ny_per_chunk - 1,
-                         nz_chunks*nz_per_chunk - 1 };
-  simulation_bounds = Rect<3>(Point<3>::ZEROES(), Point<3>(upper));
-  simulation_is = 
-    runtime->create_index_space(ctx, Domain::from_rect<3>(simulation_bounds));
+  const long long zeroes[3] = { 0, 0, 0 };
+  const long long upper[3] = { nx_chunks*nx_per_chunk - 1,
+                               ny_chunks*ny_per_chunk - 1,
+                               nz_chunks*nz_per_chunk - 1 };
+  simulation_bounds = Rect<3>(Point<3>(zeroes), Point<3>(upper));
+  simulation_is = runtime->create_index_space(ctx, simulation_bounds);
   runtime->attach_name(simulation_is, "Simulation Space");
+  const long long chunks[3] = { nx_chunks-1, ny_chunks-1, nz_chunks-1 };
+  launch_bounds = runtime->create_index_space(ctx,
+                    Rect<3>(Point<3>(zeroes), Point<3>(chunks)));
   // Create the disjoint partition of the index space 
   {
-    const int bf[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
-    Point<3> blocking_factor(bf);
-    Blockify<3> spatial_map(blocking_factor);
-    spatial_ip = 
-      runtime->create_index_partition(ctx, simulation_is,
-                                      spatial_map, DISJOINT_PARTITION);
+    const long long bf[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
+    spatial_ip = runtime->create_partition_by_blockify(ctx, simulation_is,
+                                            Point<3>(bf), DISJOINT_PARTITION);
     runtime->attach_name(spatial_ip, "Spatial Partition");
   }
-  // Launch bounds though ignore the boundary condition chunks
-  // so they start at 1 and go to number of chunks, just like Fortran!
-  const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
-  launch_bounds = Rect<3>(Point<3>::ZEROES(), 
-                          Point<3>(chunks) - Point<3>::ONES()); 
+  // The color space of the partition is also our launch bounds
+  launch_bounds = 
+    runtime->get_index_partition_color_space_name<3, long long,
+                                                  3, long long>(spatial_ip);
   // Make the index spaces for the flux exchanges
   {
-    const int upper_xy[2] = { nx_chunks * nx_per_chunk - 1, 
-                              ny_chunks * ny_per_chunk - 1};
-    xy_flux_is = runtime->create_index_space(ctx, Domain::from_rect<2>(
-          Rect<2>(Point<2>::ZEROES(), Point<2>(upper_xy))));
+    const long long upper_xy[2] = { nx_chunks * nx_per_chunk - 1, 
+                                    ny_chunks * ny_per_chunk - 1};
+    xy_flux_is = runtime->create_index_space(ctx, 
+          Rect<2>(Point<2>(zeroes), Point<2>(upper_xy)));
     runtime->attach_name(xy_flux_is, "XY Flux");
-    const int bf[2] = { nx_per_chunk, ny_per_chunk };
-    Point<2> flux_bf(bf);
-    Blockify<2> flux_map(flux_bf);
-    xy_flux_ip = runtime->create_index_partition(ctx, xy_flux_is, 
-                                    flux_map, DISJOINT_PARTITION);
+    const long long bf[2] = { nx_per_chunk - 1, ny_per_chunk - 1 };
+    xy_flux_ip = runtime->create_partition_by_blockify(ctx, xy_flux_is, 
+                                      Point<2>(bf), DISJOINT_PARTITION);
     runtime->attach_name(xy_flux_ip, "XY Flux Partition");
   }
   {
-    const int upper_yz[2] = { ny_chunks * ny_per_chunk - 1, 
-                              nz_chunks * nz_per_chunk - 1};
-    yz_flux_is = runtime->create_index_space(ctx, Domain::from_rect<2>(
-          Rect<2>(Point<2>::ZEROES(), Point<2>(upper_yz))));
+    const long long upper_yz[2] = { ny_chunks * ny_per_chunk - 1, 
+                                    nz_chunks * nz_per_chunk - 1};
+    yz_flux_is = runtime->create_index_space(ctx,
+          Rect<2>(Point<2>(zeroes), Point<2>(upper_yz)));
     runtime->attach_name(yz_flux_is, "YZ Flux");
-    const int bf[2] = { ny_per_chunk, nz_per_chunk };
-    Point<2> flux_bf(bf);
-    Blockify<2> flux_map(bf);
-    yz_flux_ip = runtime->create_index_partition(ctx, yz_flux_is,
-                                      flux_map, DISJOINT_PARTITION);
+    const long long bf[2] = { ny_per_chunk, nz_per_chunk };
+    yz_flux_ip = runtime->create_partition_by_blockify(ctx, yz_flux_is,
+                                      Point<2>(bf), DISJOINT_PARTITION);
     runtime->attach_name(yz_flux_ip, "YZ Flux Partition");
   }
   {
-    const int upper_xz[2] = { nx_chunks * nx_per_chunk - 1, 
-                              nz_chunks * nz_per_chunk - 1};
-    xz_flux_is = runtime->create_index_space(ctx, Domain::from_rect<2>(
-          Rect<2>(Point<2>::ZEROES(), Point<2>(upper_xz))));
+    const long long upper_xz[2] = { nx_chunks * nx_per_chunk - 1, 
+                                    nz_chunks * nz_per_chunk - 1};
+    xz_flux_is = runtime->create_index_space(ctx,
+          Rect<2>(Point<2>(zeroes), Point<2>(upper_xz)));
     runtime->attach_name(xz_flux_is, "XZ Flux");
-    const int bf[2] = { nx_per_chunk, nz_per_chunk };
-    Point<2> flux_bf(bf);
-    Blockify<2> flux_map(bf);
-    xz_flux_ip = runtime->create_index_partition(ctx, xz_flux_is,
-                                      flux_map, DISJOINT_PARTITION);
+    const long long bf[2] = { nx_per_chunk, nz_per_chunk };
+    xz_flux_ip = runtime->create_partition_by_blockify(ctx, xz_flux_is,
+                                      Point<2>(bf), DISJOINT_PARTITION);
     runtime->attach_name(xz_flux_ip, "XZ Flux Partition");
   }
   // Make some of our other field spaces
-  const int nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
+  const long long nmat = (material_layout == HOMOGENEOUS_LAYOUT) ? 1 : 2;
   material_is = runtime->create_index_space(ctx,
-      Domain::from_rect<1>(Rect<1>(Point<1>(1), Point<1>(nmat))));
-  const int slgg_lower[2] = { 1, 0 };
-  const int slgg_upper[2] = { nmat, num_groups-1 };
+                          Rect<1>(Point<1>(1), Point<1>(nmat)));
+  const long long slgg_lower[2] = { 1, 0 };
+  const long long slgg_upper[2] = { nmat, num_groups-1 };
   Rect<2> slgg_bounds((Point<2>(slgg_lower)), Point<2>(slgg_upper));
-  slgg_is = runtime->create_index_space(ctx, Domain::from_rect<2>(slgg_bounds));
+  slgg_is = runtime->create_index_space(ctx, slgg_bounds);
   runtime->attach_name(slgg_is, "Scattering Index Space");
   point_is = runtime->create_index_space(ctx, 
-      Domain::from_rect<1>(Rect<1>(Point<1>::ZEROES(), Point<1>::ZEROES())));
+                  Rect<1>(Point<1>(zeroes[0]), Point<1>(zeroes[0])));
   runtime->attach_name(point_is, "Point Index Space");
   // Make a field space for all the energy groups
   group_fs = runtime->create_field_space(ctx); 
@@ -232,13 +225,16 @@ void Snap::setup(void)
   for (int corner = 0; corner < num_corners; corner++)
   {
     assert(!wavefront_map[corner].empty());
-    for (std::vector<std::vector<DomainPoint> >::const_iterator it = 
-         wavefront_map[corner].begin(); it != wavefront_map[corner].end(); it++)
+    unsigned wavefront_index = 0;
+    for (std::vector<std::vector<Point<3> > >::const_iterator it = 
+          wavefront_map[corner].begin(); it != 
+          wavefront_map[corner].end(); it++, wavefront_index++)
     {
       const size_t wavefront_points = it->size();
       assert(wavefront_points > 0);
-      wavefront_domains[corner].push_back(Domain::from_rect<1>(
-            Rect<1>(Point<1>(0), Point<1>(wavefront_points-1))));
+      wavefront_domains[corner].push_back(runtime->create_index_space(ctx,
+            Rect<2>(Point<2>(wavefront_index,0), 
+                    Point<2>(wavefront_index,wavefront_points-1))));
     }
   }
 }
@@ -258,70 +254,78 @@ void Snap::transport_solve(void)
     runtime->select_tunable_value(ctx, SWEEP_ENERGY_CHUNKS_TUNABLE);
 
   // Create our important arrays
-  SnapArray flux0(simulation_is, spatial_ip, group_fs, 
-                  ctx, runtime, "flux0");
-  SnapArray flux0po(simulation_is,spatial_ip, group_fs, 
-                    ctx, runtime, "flux0po");
-  SnapArray flux0pi(simulation_is, spatial_ip, group_fs, 
-                    ctx, runtime, "flux0pi");
-  SnapArray fluxm(simulation_is, spatial_ip, flux_moment_fs, 
-                  ctx, runtime, "fluxm");
-  SnapArray flux_xy(xy_flux_is, xy_flux_ip, flux_fs,
-                    ctx, runtime, "fluxXY");
-  SnapArray flux_yz(yz_flux_is, yz_flux_ip, flux_fs,
-                    ctx, runtime, "fluxYZ");
-  SnapArray flux_xz(xz_flux_is, xz_flux_ip, flux_fs,
-                    ctx, runtime, "fluxXZ");
+  SnapArray<3> flux0(simulation_is, spatial_ip, group_fs, 
+                     ctx, runtime, "flux0");
+  SnapArray<3> flux0po(simulation_is,spatial_ip, group_fs, 
+                       ctx, runtime, "flux0po");
+  SnapArray<3> flux0pi(simulation_is, spatial_ip, group_fs, 
+                       ctx, runtime, "flux0pi");
+  SnapArray<3> fluxm(simulation_is, spatial_ip, flux_moment_fs, 
+                     ctx, runtime, "fluxm");
+  SnapArray<2> flux_xy(xy_flux_is, xy_flux_ip, flux_fs,
+                       ctx, runtime, "fluxXY");
+  SnapArray<2> flux_yz(yz_flux_is, yz_flux_ip, flux_fs,
+                       ctx, runtime, "fluxYZ");
+  SnapArray<2> flux_xz(xz_flux_is, xz_flux_ip, flux_fs,
+                       ctx, runtime, "fluxXZ");
 
-  SnapArray qi(simulation_is, spatial_ip, group_fs, ctx, runtime, "qi");
-  SnapArray q2grp0(simulation_is, spatial_ip, group_fs, ctx, runtime, "q2grp0");
-  SnapArray q2grpm(simulation_is, spatial_ip, flux_moment_fs, ctx, runtime,"q2grpm");
-  SnapArray qtot(simulation_is, spatial_ip, moment_fs, ctx, runtime, "qtot");
+  SnapArray<3> qi(simulation_is, spatial_ip, group_fs, 
+                  ctx, runtime, "qi");
+  SnapArray<3> q2grp0(simulation_is, spatial_ip, group_fs, 
+                      ctx, runtime, "q2grp0");
+  SnapArray<3> q2grpm(simulation_is, spatial_ip, flux_moment_fs, 
+                      ctx, runtime,"q2grpm");
+  SnapArray<3> qtot(simulation_is, spatial_ip, moment_fs, 
+                    ctx, runtime, "qtot");
 
-  SnapArray mat(simulation_is, spatial_ip, mat_fs, ctx, runtime, "mat");
-  SnapArray sigt(material_is, IndexPartition::NO_PART, group_fs, 
-                 ctx, runtime, "sigt");
-  SnapArray siga(material_is, IndexPartition::NO_PART, group_fs,
-                 ctx, runtime, "siga");
-  SnapArray sigs(material_is, IndexPartition::NO_PART, group_fs,
-                 ctx, runtime, "sigs");
-  SnapArray slgg(slgg_is, IndexPartition::NO_PART, moment_fs, 
-                 ctx, runtime, "slgg");
+  SnapArray<3> mat(simulation_is, spatial_ip, mat_fs, 
+                   ctx, runtime, "mat");
+  SnapArray<1> sigt(material_is, IndexPartition<1>(), group_fs, 
+                    ctx, runtime, "sigt");
+  SnapArray<1> siga(material_is, IndexPartition<1>(), group_fs,
+                    ctx, runtime, "siga");
+  SnapArray<1> sigs(material_is, IndexPartition<1>(), group_fs,
+                    ctx, runtime, "sigs");
+  SnapArray<2> slgg(slgg_is, IndexPartition<2>(), moment_fs, 
+                    ctx, runtime, "slgg");
 
-  SnapArray t_xs(simulation_is, spatial_ip, group_fs, ctx, runtime, "t_xs");
-  SnapArray a_xs(simulation_is, spatial_ip, group_fs, ctx, runtime, "a_xs");
-  SnapArray s_xs(simulation_is, spatial_ip, moment_fs, ctx, runtime, "s_xs");
+  SnapArray<3> t_xs(simulation_is, spatial_ip, group_fs, 
+                    ctx, runtime, "t_xs");
+  SnapArray<3> a_xs(simulation_is, spatial_ip, group_fs, 
+                    ctx, runtime, "a_xs");
+  SnapArray<3> s_xs(simulation_is, spatial_ip, moment_fs, 
+                    ctx, runtime, "s_xs");
 
-  SnapArray vel(point_is, IndexPartition::NO_PART, group_fs, 
-                ctx, runtime, "vel");
-  SnapArray vdelt(point_is, IndexPartition::NO_PART, group_fs, 
-                  ctx, runtime, "vdelt");
-  SnapArray dinv(simulation_is, spatial_ip, angle_fs, 
-                 ctx, runtime, "dinv"); 
+  SnapArray<1> vel(point_is, IndexPartition<1>(), group_fs, 
+                   ctx, runtime, "vel");
+  SnapArray<1> vdelt(point_is, IndexPartition<1>(), group_fs, 
+                     ctx, runtime, "vdelt");
+  SnapArray<3> dinv(simulation_is, spatial_ip, angle_fs, 
+                    ctx, runtime, "dinv"); 
 
-  SnapArray *time_flux_even[8];
-  SnapArray *time_flux_odd[8]; 
+  SnapArray<3> *time_flux_even[8];
+  SnapArray<3> *time_flux_odd[8]; 
   for (int i = 0; i < 8; i++) {
     char name_buffer[64];
     snprintf(name_buffer, 63, "time flux even %d", i);
-    time_flux_even[i] = new SnapArray(simulation_is, spatial_ip, angle_fs, 
-                                      ctx, runtime, name_buffer);
+    time_flux_even[i] = new SnapArray<3>(simulation_is, spatial_ip, angle_fs, 
+                                         ctx, runtime, name_buffer);
     snprintf(name_buffer, 63, "time flux odd %d", i);
-    time_flux_odd[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
-                                     ctx, runtime, name_buffer);
+    time_flux_odd[i] = new SnapArray<3>(simulation_is, spatial_ip, angle_fs,
+                                        ctx, runtime, name_buffer);
   }
   // Only necessary for MMS
-  SnapArray *qim[8];
-  SnapArray ref_flux(simulation_is, spatial_ip, group_fs, 
-                     ctx, runtime, "ref_flux");
-  SnapArray ref_fluxm(simulation_is, spatial_ip, flux_moment_fs, 
-                      ctx, runtime, "ref_fluxm");
+  SnapArray<3> *qim[8];
+  SnapArray<3> ref_flux(simulation_is, spatial_ip, group_fs, 
+                        ctx, runtime, "ref_flux");
+  SnapArray<3> ref_fluxm(simulation_is, spatial_ip, flux_moment_fs, 
+                         ctx, runtime, "ref_fluxm");
   const bool do_mms = (source_layout == MMS_SOURCE);
   for (int i = 0; i < 8; i++) {
     char name_buffer[64];
     snprintf(name_buffer, 63, "qim %d", i);
-    qim[i] = new SnapArray(simulation_is, spatial_ip, angle_fs,
-                           ctx, runtime, name_buffer);
+    qim[i] = new SnapArray<3>(simulation_is, spatial_ip, angle_fs,
+                              ctx, runtime, name_buffer);
   }
 
   // Initialize our data
@@ -574,9 +578,12 @@ void Snap::transport_solve(void)
   }
 }
 
+#if 0
 //------------------------------------------------------------------------------
-void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
-                             const SnapArray &sigs, const SnapArray &slgg) const
+void Snap::initialize_scattering(const SnapArray<1> &sigt, 
+                                 const SnapArray<1> &siga,
+                                 const SnapArray<1> &sigs, 
+                                 const SnapArray<2> &slgg) const
 //------------------------------------------------------------------------------
 {
   PhysicalRegion sigt_region = sigt.map();
@@ -739,8 +746,8 @@ void Snap::initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
 }
 
 //------------------------------------------------------------------------------
-void Snap::initialize_velocity(const SnapArray &vel, 
-                               const SnapArray &vdelt) const
+void Snap::initialize_velocity(const SnapArray<1> &vel, 
+                               const SnapArray<1> &vdelt) const
 //------------------------------------------------------------------------------
 {
   PhysicalRegion vel_region = vel.map();
@@ -764,10 +771,11 @@ void Snap::initialize_velocity(const SnapArray &vel,
   vel.unmap(vel_region);
   vdelt.unmap(vdelt_region);
 }
+#endif
 
 //------------------------------------------------------------------------------
 void Snap::save_fluxes(const Predicate &pred, 
-                       const SnapArray &src, const SnapArray &dst) const
+                       const SnapArray<3> &src, const SnapArray<3> &dst) const
 //------------------------------------------------------------------------------
 {
   // Use this macro to disable index space copy launches
@@ -799,7 +807,7 @@ void Snap::save_fluxes(const Predicate &pred,
     runtime->issue_copy_operation(ctx, launcher);
   }
 #else
-  IndexCopyLauncher launcher(Domain::from_rect<3>(get_launch_bounds()), pred);
+  IndexCopyLauncher launcher(get_launch_bounds(), pred);
   launcher.add_copy_requirements(
       RegionRequirement(src.get_partition(), 0/*projection id*/, 
                         READ_ONLY, EXCLUSIVE, src.get_region()),
@@ -820,13 +828,15 @@ void Snap::save_fluxes(const Predicate &pred,
 }
 
 //------------------------------------------------------------------------------
-void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                          const SnapArray &fluxm, const SnapArray &qtot, 
-                          const SnapArray &vdelt, const SnapArray &dinv, 
-                          const SnapArray &t_xs, SnapArray *time_flux_in[8],
-                          SnapArray *time_flux_out[8], SnapArray *qim[8], 
-                          const SnapArray &flux_xy, const SnapArray &flux_yz,
-                          const SnapArray &flux_xz, int energy_group_chunks) const
+void Snap::perform_sweeps(const Predicate &pred, const SnapArray<3> &flux,
+                          const SnapArray<3> &fluxm, const SnapArray<3> &qtot, 
+                          const SnapArray<1> &vdelt, const SnapArray<3> &dinv, 
+                          const SnapArray<3> &t_xs,SnapArray<3> *time_flux_in[8],
+                          SnapArray<3> *time_flux_out[8], SnapArray<3> *qim[8], 
+                          const SnapArray<2> &flux_xy, 
+                          const SnapArray<2> &flux_yz,
+                          const SnapArray<2> &flux_xz, 
+                          int energy_group_chunks) const
 //------------------------------------------------------------------------------
 {
   // Boundary fluxes always get initialized to zero before sweeps
@@ -840,7 +850,8 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
     int ghost_offsets[3] = { 0, 0, 0 };
     for (int i = 0; i < num_dims; i++)
       ghost_offsets[i] = (corner & (0x1 << i)) >> i;
-    const std::vector<Domain> &launch_domains = wavefront_domains[corner];
+    const std::vector<IndexSpace<2> > &launch_domains = 
+      wavefront_domains[corner];
     // Then loop over the energy groups by chunks
     for (int group = 0; group < num_groups; group+=energy_group_chunks)
     {
@@ -862,8 +873,8 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray &flux,
 
 //------------------------------------------------------------------------------
 Predicate Snap::test_inner_convergence(const Predicate &inner_pred, 
-                                       const SnapArray &flux0,
-                                       const SnapArray &flux0pi, 
+                                       const SnapArray<3> &flux0,
+                                       const SnapArray<3> &flux0pi, 
                                        const Future &pred_false_result,
                                        int energy_group_chunks) const
 //------------------------------------------------------------------------------
@@ -886,8 +897,8 @@ Predicate Snap::test_inner_convergence(const Predicate &inner_pred,
 
 //------------------------------------------------------------------------------
 Predicate Snap::test_outer_convergence(const Predicate &outer_pred,
-                                       const SnapArray &flux0,
-                                       const SnapArray &flux0po,
+                                       const SnapArray<3> &flux0,
+                                       const SnapArray<3> &flux0po,
                                        const Future &inner_converged,
                                        const Future &pred_false_result,
                                        int energy_group_chunks) const
@@ -986,7 +997,7 @@ int Snap::num_corners = 1;
 int Snap::nx_per_chunk;
 int Snap::ny_per_chunk;
 int Snap::nz_per_chunk;
-std::vector<std::vector<DomainPoint> > Snap::wavefront_map[8];
+std::vector<std::vector<Point<3> > > Snap::wavefront_map[8];
 double Snap::dt;
 int Snap::cmom;
 int Snap::num_octants;
@@ -1155,6 +1166,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   return true;
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void Snap::compute_wavefronts(void)
 //------------------------------------------------------------------------------
@@ -1200,6 +1212,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     }
   }
 }
+#endif
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::compute_derived_globals(void)
@@ -1473,7 +1486,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
                                          const std::set<Processor> &local_procs)
 //------------------------------------------------------------------------------
 {
-  MapperRuntime *mapper_rt = runtime->get_mapper_runtime();
+  Legion::Mapping::MapperRuntime *mapper_rt = runtime->get_mapper_runtime();
   for (std::set<Processor>::const_iterator it = local_procs.begin();
         it != local_procs.end(); it++)
   {
@@ -1528,8 +1541,9 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 }
 
 //------------------------------------------------------------------------------
-SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
-                     Context c, Runtime *rt, const char *name)
+template<int DIM>
+SnapArray<DIM>::SnapArray(IndexSpace<DIM> is, IndexPartition<DIM> ip, 
+    FieldSpace fs, Context c, Runtime *rt, const char *name)
   : ctx(c), runtime(rt)
 //------------------------------------------------------------------------------
 {
@@ -1557,7 +1571,8 @@ SnapArray::SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs,
 }
 
 //------------------------------------------------------------------------------
-SnapArray::SnapArray(const SnapArray &rhs)
+template<int DIM>
+SnapArray<DIM>::SnapArray(const SnapArray &rhs)
   : ctx(rhs.ctx), runtime(rhs.runtime)
 //------------------------------------------------------------------------------
 {
@@ -1566,7 +1581,8 @@ SnapArray::SnapArray(const SnapArray &rhs)
 }
 
 //------------------------------------------------------------------------------
-SnapArray::~SnapArray(void)
+template<int DIM>
+SnapArray<DIM>::~SnapArray(void)
 //------------------------------------------------------------------------------
 {
   runtime->destroy_logical_region(ctx, lr);
@@ -1574,7 +1590,8 @@ SnapArray::~SnapArray(void)
 }
 
 //------------------------------------------------------------------------------
-SnapArray& SnapArray::operator=(const SnapArray &rhs)
+template<int DIM>
+SnapArray<DIM>& SnapArray<DIM>::operator=(const SnapArray<DIM> &rhs)
 //------------------------------------------------------------------------------
 {
   // should never be called
@@ -1583,23 +1600,25 @@ SnapArray& SnapArray::operator=(const SnapArray &rhs)
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapArray::get_subregion(const DomainPoint &color) const
+template<int DIM>
+LogicalRegion<DIM> SnapArray<DIM>::get_subregion(const Point<DIM> &color) const
 //------------------------------------------------------------------------------
 {
   assert(lp.exists());
   // See if we already cached the result
-  std::map<DomainPoint,LogicalRegion>::const_iterator finder = 
+  typename std::map<Point<DIM>,LogicalRegion<DIM>>::const_iterator finder = 
     subregions.find(color);
   if (finder != subregions.end())
     return finder->second;
-  LogicalRegion result = runtime->get_logical_subregion_by_color(lp, color);
+  LogicalRegion<DIM> result = runtime->get_logical_subregion_by_color(lp, color);
   // Save the result for later
   subregions[color] = result;
   return result;
 }
 
 //------------------------------------------------------------------------------
-void SnapArray::initialize(Predicate pred) const
+template<int DIM>
+void SnapArray<DIM>::initialize(Predicate pred) const
 //------------------------------------------------------------------------------
 {
 #ifndef NO_INDEX_SPACE_FILLS
@@ -1622,8 +1641,8 @@ void SnapArray::initialize(Predicate pred) const
 }
 
 //------------------------------------------------------------------------------
-template<typename T>
-void SnapArray::initialize(T value, Predicate pred) const
+template<int DIM> template<typename T>
+void SnapArray<DIM>::initialize(T value, Predicate pred) const
 //------------------------------------------------------------------------------
 {
 #ifndef NO_INDEX_SPACE_FILLS
@@ -1646,7 +1665,8 @@ void SnapArray::initialize(T value, Predicate pred) const
 }
 
 //------------------------------------------------------------------------------
-PhysicalRegion SnapArray::map(void) const
+template<int DIM>
+PhysicalRegion SnapArray<DIM>::map(void) const
 //------------------------------------------------------------------------------
 {
   InlineLauncher launcher(RegionRequirement(lr, READ_WRITE, EXCLUSIVE, lr));
@@ -1655,7 +1675,8 @@ PhysicalRegion SnapArray::map(void) const
 }
 
 //------------------------------------------------------------------------------
-void SnapArray::unmap(const PhysicalRegion &region) const
+template<int DIM>
+void SnapArray<DIM>::unmap(const PhysicalRegion &region) const
 //------------------------------------------------------------------------------
 {
   runtime->unmap_region(ctx, region);
@@ -1669,18 +1690,23 @@ SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(void)
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(const Mappable *mappable,
-            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
+Legion::LogicalRegion 
+  SnapSweepProjectionFunctor::project(const Mappable *mappable,
+             unsigned index, Legion::LogicalRegion upper_bound, 
+             const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   // should never be called
   assert(false);
-  return LogicalRegion::NO_REGION;
+  return Legion::LogicalRegion::NO_REGION;
 }
 
+#if 0
 //------------------------------------------------------------------------------
-LogicalRegion SnapSweepProjectionFunctor::project(const Mappable *mappable,
-         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
+Legion::LogicalRegion 
+  SnapSweepProjectionFunctor::project(const Mappable *mappable,
+          unsigned index, Legion::LogicalPartition upper_bound, 
+          const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   const Task *task = mappable->as_task();
@@ -1692,10 +1718,10 @@ LogicalRegion SnapSweepProjectionFunctor::project(const Mappable *mappable,
   unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
   unsigned corner = ((const MiniKBATask::MiniKBAArgs*)task->args)->corner;
   // Not valid, need to go get the result
-  LogicalRegion result = runtime->get_logical_subregion_by_color(upper_bound,
+  return runtime->get_logical_subregion_by_color(upper_bound,
                                 Snap::wavefront_map[corner][wavefront][p[0]]);
-  return result;
 }
+#endif
 
 //------------------------------------------------------------------------------
 FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
@@ -1705,18 +1731,21 @@ FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
 }
 
 //------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(const Mappable *mappble,
-            unsigned index, LogicalRegion upper_bound, const DomainPoint &point)
+Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappble,
+                           unsigned index, Legion::LogicalRegion upper_bound, 
+                           const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   // should never be called
   assert(false);
-  return LogicalRegion::NO_REGION;
+  return Legion::LogicalRegion::NO_REGION;
 }
 
+#if 0
 //------------------------------------------------------------------------------
-LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
-         unsigned index, LogicalPartition upper_bound, const DomainPoint &point)
+Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
+                         unsigned index, Legion::LogicalPartition upper_bound, 
+                         const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   const Task *task = mappable->as_task();
@@ -1758,8 +1787,9 @@ LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
     default:
       assert(false);
   }
-  return LogicalRegion::NO_REGION;
+  return Legion::LogicalRegion::NO_REGION;
 }
+#endif
 
 //------------------------------------------------------------------------------
 template<>

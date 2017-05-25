@@ -30,17 +30,17 @@ using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
-                         const SnapArray &flux, const SnapArray &fluxm,
-                         const SnapArray &qtot, const SnapArray &vdelt, 
-                         const SnapArray &dinv, const SnapArray &t_xs,
-                         const SnapArray &time_flux_in, 
-                         const SnapArray &time_flux_out,
-                         const SnapArray &qim, const SnapArray &flux_xy,
-                         const SnapArray &flux_yz, const SnapArray &flux_xz,
+                         const SnapArray<3> &flux, const SnapArray<3> &fluxm,
+                         const SnapArray<3> &qtot, const SnapArray<1> &vdelt, 
+                         const SnapArray<3> &dinv, const SnapArray<3> &t_xs,
+                         const SnapArray<3> &time_flux_in, 
+                         const SnapArray<3> &time_flux_out,
+                         const SnapArray<3> &qim, const SnapArray<2> &flux_xy,
+                         const SnapArray<2> &flux_yz, 
+                         const SnapArray<2> &flux_xz,
                          int group_start, int group_stop, int corner, 
                          const int ghost_offsets[3])
-  : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID>(
-      snap, Rect<3>(Point<3>::ZEROES(), Point<3>::ZEROES()), pred), 
+  : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID, 2>(snap,IndexSpace<2>(),pred),
     mini_kba_args(MiniKBAArgs(corner, group_start, group_stop))
 //------------------------------------------------------------------------------
 {
@@ -156,14 +156,14 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
 }
 
 //------------------------------------------------------------------------------
-void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
+void MiniKBATask::dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp,
                                      Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
   // Save our wavefront
   this->mini_kba_args.wavefront = wavefront;
-  // Set our launch domain
-  this->launch_domain = launch_d;
+  // Set our launch space 
+  this->launch_space = launch_sp;
   // Then call the normal dispatch routine
   dispatch(ctx, runtime);
 }
@@ -260,6 +260,7 @@ void MiniKBATask::dispatch_wavefront(int wavefront, const Domain &launch_d,
               execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 static inline Point<2> ghostx_point(const Point<3> &local_point)
 {
   Point<2> ghost;
@@ -1674,6 +1675,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
 #endif
 }
 #endif // __AVX__
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern void run_gpu_sweep(const Point<3> origin, 

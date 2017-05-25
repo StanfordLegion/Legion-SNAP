@@ -37,12 +37,71 @@
 #define PI (3.14159265358979)
 #endif
 
-using namespace Legion;
-using namespace Legion::Mapping;
-using namespace LegionRuntime::Arrays;
+template<int DIM>
+using Point = Legion::Point<DIM,long long>;
+template<int DIM>
+using Rect = Legion::Rect<DIM,long long>;
+template<int DIM1, int DIM2>
+using Matrix = Legion::Matrix<DIM1,DIM2,long long>;
+template<int DIM>
+using IndexSpace = Legion::IndexSpaceT<DIM,long long>;
+template<int DIM>
+using IndexPartition = Legion::IndexPartitionT<DIM,long long>;
+typedef Legion::FieldSpace FieldSpace;
+template<int DIM>
+using LogicalRegion = Legion::LogicalRegionT<DIM,long long>;
+template<int DIM>
+using LogicalPartition = Legion::LogicalPartitionT<DIM,long long>;
+template<int DIM>
+using Domain = Legion::DomainT<DIM, long long>;
+typedef Legion::Runtime Runtime;
+typedef Legion::Context Context;
+typedef Legion::PhysicalRegion PhysicalRegion;
+typedef Legion::TaskLauncher TaskLauncher;
+typedef Legion::CopyLauncher CopyLauncher;
+typedef Legion::FillLauncher FillLauncher;
+typedef Legion::InlineLauncher InlineLauncher;
+typedef Legion::IndexTaskLauncher IndexTaskLauncher;
+typedef Legion::IndexCopyLauncher IndexCopyLauncher;
+typedef Legion::IndexFillLauncher IndexFillLauncher;
+typedef Legion::Predicate Predicate;
+typedef Legion::Future Future;
+typedef Legion::FutureMap FutureMap;
+typedef Legion::ArgumentMap ArgumentMap;
+typedef Legion::TaskArgument TaskArgument;
+typedef Legion::RegionRequirement RegionRequirement;
+typedef Legion::Mappable Mappable;
+typedef Legion::Task Task;
+typedef Legion::Copy Copy;
+typedef Legion::ProjectionID ProjectionID;
+typedef Legion::LayoutConstraintID LayoutConstraintID;
+typedef Legion::FieldID FieldID;
+typedef Legion::PrivilegeMode PrivilegeMode;
+typedef Legion::Machine Machine;
+typedef Legion::Processor Processor;
+typedef Legion::Memory Memory;
+typedef Legion::ExecutionConstraintSet ExecutionConstraintSet;
+typedef Legion::TaskLayoutConstraintSet TaskLayoutConstraintSet;
+typedef Legion::TaskVariantRegistrar TaskVariantRegistrar;
+typedef Legion::ProcessorConstraint ProcessorConstraint;
+typedef Legion::ProjectionFunctor ProjectionFunctor;
+typedef Legion::ByteOffset ByteOffset;
+typedef Legion::FieldAllocator FieldAllocator;
+typedef Legion::PredicateLauncher PredicateLauncher;
+typedef Legion::LayoutConstraintRegistrar LayoutConstraintRegistrar;
+typedef Legion::SpecializedConstraint SpecializedConstraint;
+typedef Legion::DimensionKind DimensionKind;
+typedef Legion::OrderingConstraint OrderingConstraint;
+typedef Legion::ISAConstraint ISAConstraint;
+typedef Legion::ResourceConstraint ResourceConstraint;
+typedef Legion::LaunchConstraint LaunchConstraint;
+typedef Legion::FieldConstraint FieldConstraint;
+typedef Legion::LayoutConstraintSet LayoutConstraintSet;
+typedef Legion::MemoryConstraint MemoryConstraint;
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
+template<int DIM>
 class SnapArray;
 
 class Snap {
@@ -104,9 +163,9 @@ public:
     MMS_SOURCE = 3,
   };
   enum SnapTunable {
-    OUTER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST,
-    INNER_RUNAHEAD_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+1,
-    SWEEP_ENERGY_CHUNKS_TUNABLE = DefaultMapper::DEFAULT_TUNABLE_LAST+2,
+    OUTER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST,
+    INNER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+1,
+    SWEEP_ENERGY_CHUNKS_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+2,
   };
   enum SnapReductionID {
     NO_REDUCTION_ID = 0,
@@ -143,29 +202,29 @@ public:
 public:
   inline const Rect<3>& get_simulation_bounds(void) const 
     { return simulation_bounds; }
-  inline const Rect<3>& get_launch_bounds(void) const
+  inline const IndexSpace<3>& get_launch_bounds(void) const
     { return launch_bounds; }
 public:
   void setup(void);
   void transport_solve(void);
 protected:
-  void initialize_scattering(const SnapArray &sigt, const SnapArray &siga,
-                             const SnapArray &sigs, const SnapArray &slgg) const;
-  void initialize_velocity(const SnapArray &vel, const SnapArray &vdelt) const;
+  void initialize_scattering(const SnapArray<1> &sigt, const SnapArray<1> &siga,
+                             const SnapArray<1> &sigs, const SnapArray<2> &slgg) const;
+  void initialize_velocity(const SnapArray<1> &vel, const SnapArray<1> &vdelt) const;
   void save_fluxes(const Predicate &pred,
-                   const SnapArray &src, const SnapArray &dst) const;
-  void perform_sweeps(const Predicate &pred, const SnapArray &flux,
-                      const SnapArray &fluxm, const SnapArray &qtot, 
-                      const SnapArray &vdelt, const SnapArray &dinv, 
-                      const SnapArray &t_xs, SnapArray *time_flux_in[8], 
-                      SnapArray *time_flux_out[8], SnapArray *qim[8],
-                      const SnapArray &flux_xy, const SnapArray &flux_yz,
-                      const SnapArray &flux_xz, int energy_group_chunks) const;
-  Predicate test_inner_convergence(const Predicate &pred, const SnapArray &flux0,
-                      const SnapArray &flux0pi, const Future &pred_false_result,
+                   const SnapArray<3> &src, const SnapArray<3> &dst) const;
+  void perform_sweeps(const Predicate &pred, const SnapArray<3> &flux,
+                      const SnapArray<3> &fluxm, const SnapArray<3> &qtot, 
+                      const SnapArray<1> &vdelt, const SnapArray<3> &dinv, 
+                      const SnapArray<3> &t_xs, SnapArray<3> *time_flux_in[8], 
+                      SnapArray<3> *time_flux_out[8], SnapArray<3> *qim[8],
+                      const SnapArray<2> &flux_xy, const SnapArray<2> &flux_yz,
+                      const SnapArray<2> &flux_xz, int energy_group_chunks) const;
+  Predicate test_inner_convergence(const Predicate &pred, const SnapArray<3> &flux0,
+                      const SnapArray<3> &flux0pi, const Future &pred_false_result,
                       int energy_group_chunks) const;
-  Predicate test_outer_convergence(const Predicate &pred, const SnapArray &flux0,
-                      const SnapArray &flux0po, const Future &inner_converged,
+  Predicate test_outer_convergence(const Predicate &pred, const SnapArray<3> &flux0,
+                      const SnapArray<3> &flux0po, const Future &inner_converged,
                       const Future &pred_false_result,
                       int energy_group_chunks) const;
 private:
@@ -174,19 +233,19 @@ private:
 private:
   // Simulation bounds
   Rect<3> simulation_bounds;
-  Rect<3> launch_bounds;
 private:
-  IndexSpace simulation_is;
-  IndexPartition spatial_ip;
-  IndexSpace material_is;
-  IndexSpace slgg_is;
-  IndexSpace point_is;
-  IndexSpace xy_flux_is;
-  IndexPartition xy_flux_ip;
-  IndexSpace yz_flux_is;
-  IndexPartition yz_flux_ip;
-  IndexSpace xz_flux_is;
-  IndexPartition xz_flux_ip;
+  IndexSpace<3> simulation_is;
+  IndexSpace<3> launch_bounds;
+  IndexPartition<3> spatial_ip;
+  IndexSpace<1> material_is;
+  IndexSpace<2> slgg_is;
+  IndexSpace<1> point_is;
+  IndexSpace<2> xy_flux_is;
+  IndexPartition<2> xy_flux_ip;
+  IndexSpace<2> yz_flux_is;
+  IndexPartition<2> yz_flux_ip;
+  IndexSpace<2> xz_flux_is;
+  IndexPartition<2> xz_flux_ip;
 private:
   FieldSpace group_fs;
   FieldSpace flux_fs;
@@ -195,7 +254,7 @@ private:
   FieldSpace mat_fs;
   FieldSpace angle_fs;
 private:
-  std::vector<Domain> wavefront_domains[8];
+  std::vector<IndexSpace<2> > wavefront_domains[8];
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
@@ -248,7 +307,7 @@ public: // derived
   static int ny_per_chunk;
   static int nz_per_chunk;
   // Indexed by wavefront number and the point number
-  static std::vector<std::vector<DomainPoint> > wavefront_map[8];
+  static std::vector<std::vector<Point<3> > > wavefront_map[8];
 public:
   static double dt; 
   static int cmom;
@@ -267,6 +326,12 @@ public:
 public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
+  public:
+    typedef Legion::Mapping::MapperRuntime MapperRuntime;
+    typedef Legion::Mapping::MapperContext MapperContext;
+    typedef Legion::Mapping::PhysicalInstance PhysicalInstance;
+    typedef Legion::VariantID VariantID;
+    typedef Legion::LogicalRegion LogicalRegion;
   public:
     SnapMapper(MapperRuntime *rt, Machine machine, Processor local,
                const char *mapper_name);
@@ -324,17 +389,17 @@ public:
     std::map<Processor,std::vector<Processor> > associated_procs;
 #endif
   protected:
-    std::map<Point<3>,Processor,Point<3>::STLComparator> global_cpu_mapping;
-    std::map<Point<3>,Processor,Point<3>::STLComparator> global_gpu_mapping;
+    std::map<Point<3>,Processor> global_cpu_mapping;
+    std::map<Point<3>,Processor> global_gpu_mapping;
   };
 };
 
-template<typename T, Snap::SnapTaskID TASK_ID> 
-class SnapTask : public IndexLauncher {
+template<typename T, Snap::SnapTaskID TASK_ID, int DIM=3> 
+class SnapTask : public IndexTaskLauncher {
 public:
-  SnapTask(const Snap &snap, const Rect<3> &launch_domain, const Predicate &pred)
-    : IndexLauncher(TASK_ID, Domain::from_rect<3>(launch_domain), 
-                    TaskArgument(), ArgumentMap(), pred) { }
+  SnapTask(const Snap &snap, const IndexSpace<DIM> &launch_domain, const Predicate &pred)
+    : IndexTaskLauncher(TASK_ID, launch_domain, 
+                        TaskArgument(), ArgumentMap(), pred) { }
 public:
   void dispatch(Context ctx, Runtime *runtime, bool block = false)
   { 
@@ -476,20 +541,21 @@ protected:
   }
 };
 
+template<int DIM>
 class SnapArray {
 public:
-  SnapArray(IndexSpace is, IndexPartition ip, FieldSpace fs, 
+  SnapArray(IndexSpace<DIM> is, IndexPartition<DIM> ip, FieldSpace fs, 
             Context ctx, Runtime *runtime, const char *name);
   ~SnapArray(void);
 private:
   SnapArray(const SnapArray &rhs);
   SnapArray& operator=(const SnapArray &rhs);
 public:
-  inline LogicalRegion get_region(void) const { return lr; }
-  inline LogicalPartition get_partition(void) const { return lp; }
+  inline LogicalRegion<DIM> get_region(void) const { return lr; }
+  inline LogicalPartition<DIM> get_partition(void) const { return lp; }
   inline const std::set<FieldID>& get_all_fields(void) const 
     { return all_fields; }
-  LogicalRegion get_subregion(const DomainPoint &color) const;
+  LogicalRegion<DIM> get_subregion(const Point<DIM> &color) const;
 public:
   void initialize(Predicate pred = Predicate::TRUE_PRED) const; 
   template<typename T>
@@ -565,11 +631,11 @@ protected:
   const Context ctx;
   Runtime *const runtime;
 protected:
-  LogicalRegion lr;
-  LogicalPartition lp;
+  LogicalRegion<DIM> lr;
+  LogicalPartition<DIM> lp;
   std::set<FieldID> all_fields;
-  Domain color_space;
-  mutable std::map<DomainPoint,LogicalRegion> subregions;
+  Rect<DIM> color_space;
+  mutable std::map<Point<DIM>,LogicalRegion<DIM> > subregions;
   void *fill_buffer;
   size_t field_size;
 };
@@ -578,12 +644,12 @@ class SnapSweepProjectionFunctor : public ProjectionFunctor {
 public:
   SnapSweepProjectionFunctor(void);
 public:
-  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
-                                LogicalRegion upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
-                                LogicalPartition upper_bound,
-                                const DomainPoint &point);
+  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
+                                Legion::LogicalRegion upper_bound,
+                                const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
+                                Legion::LogicalPartition upper_bound,
+                                const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 };
 
@@ -591,12 +657,12 @@ class FluxProjectionFunctor : public ProjectionFunctor {
 public:
   FluxProjectionFunctor(Snap::SnapProjectionID kind);
 public:
-  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
-                                LogicalRegion upper_bound,
-                                const DomainPoint &point);
-  virtual LogicalRegion project(const Mappable *mappable, unsigned index,
-                                LogicalPartition upper_bound,
-                                const DomainPoint &point);
+  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
+                                Legion::LogicalRegion upper_bound,
+                                const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
+                                Legion::LogicalPartition upper_bound,
+                                const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
 public:
   const Snap::SnapProjectionID projection_kind;

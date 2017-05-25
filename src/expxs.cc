@@ -20,14 +20,14 @@
 #include "expxs.h"
 #include "legion_stl.h"
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 using namespace LegionRuntime::Accessor;
 using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
-ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
-                           const SnapArray &mat, const SnapArray &xs, 
+ExpandCrossSection::ExpandCrossSection(const Snap &snap,const SnapArray<1> &sig,
+                           const SnapArray<3> &mat, const SnapArray<3> &xs, 
                            int start, int stop)
   : SnapTask<ExpandCrossSection, Snap::EXPAND_CROSS_SECTION_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), 
@@ -91,6 +91,7 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void ExpandCrossSection::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -128,7 +129,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
   }
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void ExpandCrossSection::fast_implementation(const Task *task,
                                            Context ctx, Runtime *runtime,
@@ -169,6 +172,7 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap, const SnapArray &sig,
   }
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
@@ -208,7 +212,7 @@ extern void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
 
 //------------------------------------------------------------------------------
 ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap, 
-  const SnapArray &slgg, const SnapArray &mat, const SnapArray &s_xs, 
+  const SnapArray<2> &slgg, const SnapArray<3> &mat, const SnapArray<3> &s_xs, 
   int start, int stop)
   : SnapTask<ExpandScatteringCrossSection, 
              Snap::EXPAND_SCATTERING_CROSS_SECTION_TASK_ID>(
@@ -273,6 +277,7 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void ExpandScatteringCrossSection::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -313,7 +318,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   }
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void ExpandScatteringCrossSection::fast_implementation(
     const Task *task, Context ctx, Runtime *runtime,
@@ -354,6 +361,7 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
   }
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern void run_expand_scattering_cross_section(
@@ -397,8 +405,8 @@ extern void run_expand_scattering_cross_section(
 
 //------------------------------------------------------------------------------
 CalculateGeometryParam::CalculateGeometryParam(const Snap &snap, 
-                                  const SnapArray &t_xs, const SnapArray &vdelt, 
-                                  const SnapArray &dinv, int start, int stop)
+                          const SnapArray<3> &t_xs, const SnapArray<1> &vdelt, 
+                          const SnapArray<3> &dinv, int start, int stop)
   : SnapTask<CalculateGeometryParam,
              Snap::CALCULATE_GEOMETRY_PARAM_TASK_ID>(
                  snap, snap.get_launch_bounds(), Predicate::TRUE_PRED), 
@@ -463,6 +471,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalculateGeometryParam::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -506,7 +515,9 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   free(temp);
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalculateGeometryParam::fast_implementation(
     const Task *task, Context ctx, Runtime *runtime,
@@ -552,6 +563,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   }
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern void run_geometry_param(const std::vector<double*> &xs_ptrs,

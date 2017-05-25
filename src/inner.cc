@@ -22,16 +22,16 @@
 #include "inner.h"
 #include "legion_stl.h"
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 using namespace LegionRuntime::Accessor;
 using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
-                               const SnapArray &s_xs, const SnapArray &flux0,
-                               const SnapArray &fluxm, const SnapArray &q2grp0,
-                               const SnapArray &q2grpm, const SnapArray &qtot)
+                       const SnapArray<3> &s_xs, const SnapArray<3> &flux0,
+                       const SnapArray<3> &fluxm, const SnapArray<3> &q2grp0,
+                       const SnapArray<3> &q2grpm, const SnapArray<3> &qtot)
   : SnapTask<CalcInnerSource, Snap::CALC_INNER_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
@@ -92,6 +92,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
               execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -157,7 +158,9 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   }
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::fast_implementation(
     const Task *task, Context ctx, Runtime *runtime,
@@ -240,6 +243,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   }
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
   extern void run_inner_source_single_moment(Rect<3>           subgrid_bounds,
@@ -317,8 +321,8 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 TestInnerConvergence::TestInnerConvergence(const Snap &snap, 
                                            const Predicate &pred,
-                                           const SnapArray &flux0,
-                                           const SnapArray &flux0pi,
+                                           const SnapArray<3> &flux0,
+                                           const SnapArray<3> &flux0pi,
                                            const Future &true_future,
                                            int group_start, int group_stop)
   : SnapTask<TestInnerConvergence, Snap::TEST_INNER_CONVERGENCE_TASK_ID>(
@@ -384,6 +388,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ bool TestInnerConvergence::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -431,7 +436,9 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   return false;
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ bool TestInnerConvergence::fast_implementation(
   const Task *task, Context ctx, Runtime *runtime,
@@ -486,6 +493,7 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   return false;
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern bool run_inner_convergence(Rect<3> subgrid_bounds,

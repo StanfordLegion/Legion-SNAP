@@ -19,12 +19,12 @@
 #include "snap.h"
 #include "init.h"
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 using namespace LegionRuntime::Accessor;
 
 //------------------------------------------------------------------------------
-InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
+InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
   : SnapTask<InitMaterial,Snap::INIT_MATERIAL_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
@@ -47,6 +47,7 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void InitMaterial::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -92,7 +93,7 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
     default:
       assert(false);
   }
-  Domain dom = runtime->get_index_space_domain(ctx, 
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
           task->regions[0].region.get_index_space());
   Rect<3> subgrid_bounds = dom.get_rect<3>();
   RegionAccessor<AccessorType::Generic,int> fa_mat = 
@@ -113,9 +114,10 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray &mat)
   }
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-InitSource::InitSource(const Snap &snap, const SnapArray &qi)
+InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
   : SnapTask<InitSource, Snap::INIT_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------
@@ -138,6 +140,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
                                            true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void InitSource::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -209,9 +212,10 @@ InitSource::InitSource(const Snap &snap, const SnapArray &qi)
   }
 #endif
 }
+#endif
 
 //------------------------------------------------------------------------------
-InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
+InitGPUSweep::InitGPUSweep(const Snap &snap, const IndexSpace<3> &launch)
   : SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID>(
       snap, launch, Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------

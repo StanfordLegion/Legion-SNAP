@@ -22,12 +22,10 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
 class InitMaterial : public SnapTask<InitMaterial,
                                      Snap::INIT_MATERIAL_TASK_ID> {
 public:
-  InitMaterial(const Snap &snap, const SnapArray &mat);
+  InitMaterial(const Snap &snap, const SnapArray<3> &mat);
 public:
   static void preregister_cpu_variants(void);
 public:
@@ -37,7 +35,7 @@ public:
 
 class InitSource : public SnapTask<InitSource, Snap::INIT_SOURCE_TASK_ID> {
 public:
-  InitSource(const Snap &snap, const SnapArray &qi);
+  InitSource(const Snap &snap, const SnapArray<3> &qi);
 public:
   static void preregister_cpu_variants(void);
 public:
@@ -47,7 +45,7 @@ public:
 
 class InitGPUSweep : public SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID> {
 public:
-  InitGPUSweep(const Snap &snap, const Rect<3> &launch_bounds); 
+  InitGPUSweep(const Snap &snap, const IndexSpace<3> &launch_bounds); 
 public:
   static void preregister_gpu_variants(void);
 public:

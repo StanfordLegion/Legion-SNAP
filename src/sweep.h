@@ -22,9 +22,7 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
-class MiniKBATask : public SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID> {
+class MiniKBATask : public SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID, 2> {
 public:
   static const int NON_GHOST_REQUIREMENTS = 3;
 public:
@@ -40,17 +38,17 @@ public:
   };
 public:
   MiniKBATask(const Snap &snap, const Predicate &pred, 
-              const SnapArray &flux, const SnapArray &fluxm,
-              const SnapArray &qtot, const SnapArray &vdelt, 
-              const SnapArray &dinv, const SnapArray &t_xs, 
-              const SnapArray &time_flux_in, 
-              const SnapArray &time_flux_out,
-              const SnapArray &qim, const SnapArray &flux_xy,
-              const SnapArray &flux_yz, const SnapArray &flux_xz,
+              const SnapArray<3> &flux, const SnapArray<3> &fluxm,
+              const SnapArray<3> &qtot, const SnapArray<1> &vdelt, 
+              const SnapArray<3> &dinv, const SnapArray<3> &t_xs, 
+              const SnapArray<3> &time_flux_in, 
+              const SnapArray<3> &time_flux_out,
+              const SnapArray<3> &qim, const SnapArray<2> &flux_xy,
+              const SnapArray<2> &flux_yz, const SnapArray<2> &flux_xz,
               int group_start, int group_stop, int corner, 
               const int ghost_offsets[3]);
 public:
-  void dispatch_wavefront(int wavefront, const Domain &launch_domain, 
+  void dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp, 
                           Context cxt, Runtime *runtime);
 public:
   MiniKBAArgs mini_kba_args;

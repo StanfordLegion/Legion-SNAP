@@ -22,15 +22,13 @@
 #include "snap.h"
 #include "legion.h"
 
-using namespace Legion;
-
 class CalcInnerSource : public SnapTask<CalcInnerSource, 
                                         Snap::CALC_INNER_SOURCE_TASK_ID> {
 public:
   CalcInnerSource(const Snap &snap, const Predicate &pred,
-                  const SnapArray &s_xs, const SnapArray &flux0,
-                  const SnapArray &fluxm, const SnapArray &q2grp0,
-                  const SnapArray &q2grpm, const SnapArray &qtot);
+                  const SnapArray<3> &s_xs, const SnapArray<3> &flux0,
+                  const SnapArray<3> &fluxm, const SnapArray<3> &q2grp0,
+                  const SnapArray<3> &q2grpm, const SnapArray<3> &qtot);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);
@@ -57,7 +55,7 @@ class TestInnerConvergence : public SnapTask<TestInnerConvergence,
                                              Snap::TEST_INNER_CONVERGENCE_TASK_ID> {
 public:
   TestInnerConvergence(const Snap &snap, const Predicate &pred,
-                       const SnapArray &flux0, const SnapArray &flux0pi,
+                       const SnapArray<3> &flux0, const SnapArray<3> &flux0pi,
                        const Future &true_future, int group_start, int group_stop);
 public:
   static void preregister_cpu_variants(void);

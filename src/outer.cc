@@ -22,17 +22,17 @@
 #include "outer.h"
 #include "legion_stl.h"
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 using namespace LegionRuntime::Accessor;
 using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
-                                 const SnapArray &qi, const SnapArray &slgg,
-                                 const SnapArray &mat, const SnapArray &q2rgp0, 
-                                 const SnapArray &q2grpm, 
-                                 const SnapArray &flux0, const SnapArray &fluxm)
+                         const SnapArray<3> &qi, const SnapArray<2> &slgg,
+                         const SnapArray<3> &mat, const SnapArray<3> &q2rgp0, 
+                         const SnapArray<3> &q2grpm, 
+                         const SnapArray<3> &flux0, const SnapArray<3> &fluxm)
   : SnapTask<CalcOuterSource, Snap::CALC_OUTER_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
@@ -108,6 +108,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
             execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -202,6 +203,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   }
 #endif
 }
+#endif
 
 static int gcd(int a, int b)
 {
@@ -210,6 +212,7 @@ static int gcd(int a, int b)
   return a;
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalcOuterSource::fast_implementation(
     const Task *task, Context ctx, Runtime *runtime,
@@ -341,6 +344,7 @@ static int gcd(int a, int b)
   }
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
   extern void run_flux0_outer_source(Rect<3> subgrid_bounds,
@@ -407,8 +411,8 @@ static int gcd(int a, int b)
 //------------------------------------------------------------------------------
 TestOuterConvergence::TestOuterConvergence(const Snap &snap, 
                                            const Predicate &pred,
-                                           const SnapArray &flux0,
-                                           const SnapArray &flux0po,
+                                           const SnapArray<3> &flux0,
+                                           const SnapArray<3> &flux0po,
                                            const Future &inner_converged,
                                            const Future &true_future,
                                            int group_start, int group_stop)
@@ -476,6 +480,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ bool TestOuterConvergence::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -531,7 +536,9 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
   return false;
 #endif
 }
+#endif
 
+#if 0
 //------------------------------------------------------------------------------
 /*static*/ bool TestOuterConvergence::fast_implementation(
   const Task *task, Context ctx, Runtime *runtime,
@@ -588,6 +595,7 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
   return false;
 #endif
 }
+#endif
 
 #ifdef USE_GPU_KERNELS
 extern bool run_outer_convergence(Rect<3> subgrid_bounds,
