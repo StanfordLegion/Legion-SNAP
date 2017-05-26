@@ -34,8 +34,6 @@
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #endif
 
-using namespace LegionRuntime::Accessor;
-
 Legion::Logger log_snap("snap");
 
 const char* Snap::task_names[LAST_TASK_ID] = { SNAP_TASK_NAMES };
@@ -578,7 +576,6 @@ void Snap::transport_solve(void)
   }
 }
 
-#if 0
 //------------------------------------------------------------------------------
 void Snap::initialize_scattering(const SnapArray<1> &sigt, 
                                  const SnapArray<1> &siga,
@@ -595,144 +592,133 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
   sigs_region.wait_until_valid(true/*ignore warnings*/);
   slgg_region.wait_until_valid(true/*ignore warnings*/);
 
-  const DomainPoint one = DomainPoint::from_point<1>(Point<1>(1));
-  const DomainPoint two = DomainPoint::from_point<1>(Point<1>(2));
-  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigt(num_groups);
-  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_siga(num_groups);
-  std::vector<RegionAccessor<AccessorType::Generic,double> > fa_sigs(num_groups);
+  std::vector<Accessor<double,1> > fa_sigt(num_groups);
+  std::vector<Accessor<double,1> > fa_siga(num_groups);
+  std::vector<Accessor<double,1> > fa_sigs(num_groups);
   for (int g = 0; g < num_groups; g++)
   {
-    fa_sigt[g] = sigt_region.get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
-    fa_siga[g] = siga_region.get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
-    fa_sigs[g] = sigs_region.get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    fa_sigt[g] = Accessor<double,1>(sigt_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_siga[g] = Accessor<double,1>(siga_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_sigs[g] = Accessor<double,1>(sigs_region, SNAP_ENERGY_GROUP_FIELD(g));
   }
 
-  fa_sigt[0].write(one, 1.0);
-  fa_siga[0].write(one, 0.5);
-  fa_sigs[0].write(one, 0.5);
+  fa_sigt[0][1] = 1.0; 
+  fa_siga[0][1] = 0.5;
+  fa_sigs[0][1] = 0.5;
   for (int g = 1; g < num_groups; g++)
   {
-    fa_sigt[g].write(one, 0.01  * fa_sigt[g-1].read(one));
-    fa_siga[g].write(one, 0.005 * fa_siga[g-1].read(one));
-    fa_sigs[g].write(one, 0.005 * fa_sigs[g-1].read(one));
+    fa_sigt[g][1] = 0.01 * fa_sigt[g-1][1];
+    fa_siga[g][1] = 0.005 * fa_siga[g-1][1];
+    fa_sigs[g][1] = 0.005 * fa_sigs[g-1][1];
   }
 
   if (material_layout != HOMOGENEOUS_LAYOUT) {
-    fa_sigt[0].write(two, 2.0);
-    fa_siga[0].write(two, 0.8);
-    fa_sigs[0].write(two, 1.2);
+    fa_sigt[0][2] = 2.0;
+    fa_siga[0][2] = 0.8;
+    fa_sigs[0][2] = 1.2;
     for (int g = 1; g < num_groups; g++)
     {
-      fa_sigt[g].write(two, 0.01  * fa_sigt[g-1].read(two));
-      fa_siga[g].write(two, 0.005 * fa_siga[g-1].read(two));
-      fa_sigs[g].write(two, 0.005 * fa_sigs[g-1].read(two));
+      fa_sigt[g][2] = 0.01 * fa_sigt[g-1][2];
+      fa_siga[g][2] = 0.005 * fa_siga[g-1][2];
+      fa_sigs[g][2] = 0.005 * fa_sigs[g-1][2];
     }
   }
 
-  std::vector<RegionAccessor<AccessorType::Generic,MomentQuad> > fa_slgg(num_groups); 
+  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups); 
   for (int g = 0; g < num_groups; g++)
-    fa_slgg[g] = slgg_region.get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(g)).typeify<MomentQuad>();
+    fa_slgg[g] = Accessor<MomentQuad,2>(slgg_region, 
+                          SNAP_ENERGY_GROUP_FIELD(g));
 
-  Point<2> p2 = Point<2>::ZEROES();
-  p2.x[0] = 1;
+  //Point<2> p2(1, 0);
   if (num_groups == 1) {
     MomentQuad local;
-    local[0] = fa_sigs[0].read(one);
-    fa_slgg[0].write(DomainPoint::from_point<2>(p2), local); 
+    local[0] = fa_sigs[0][1];
+    fa_slgg[0][1][0] = local;
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      p2.x[1] = 1; 
-      local[0] = fa_sigs[0].read(two);
-      fa_slgg[0].write(DomainPoint::from_point<2>(p2), local);
+      //p2[1] = 1; 
+      local[0] = fa_sigs[0][2];
+      fa_slgg[0][1][1] = local;
     }
   } else {
     MomentQuad local;
     for (int g = 0; g < num_groups; g++) {
-      p2.x[1] = g; 
-      const DomainPoint dp = DomainPoint::from_point<2>(p2);
-      local[0] = 0.2 * fa_sigs[g].read(one);
-      fa_slgg[g].write(dp, local);
+      //p2[1] = g; 
+      local[0] = 0.2 * fa_sigs[g][1];
+      fa_slgg[g][1][g] = local;
       if (g > 0) {
         const double t = 1.0 / double(g);
         for (int g2 = 0; g2 < g; g2++) {
-          local[0] = 0.1 * fa_sigs[g].read(one) * t;
-          fa_slgg[g2].write(dp, local);
+          local[0] = 0.1 * fa_sigs[g][1] * t;
+          fa_slgg[g2][1][g] = local;
         }
       } else {
-        local[0] = 0.3 * fa_sigs[g].read(one);
-        fa_slgg[g].write(dp, local); 
+        local[0] = 0.3 * fa_sigs[g][1];
+        fa_slgg[g][1][g] = local;
       }
 
       if (g < (num_groups-1)) {
         const double t = 1.0 / double(num_groups-(g+1));
         for (int g2 = g+1; g2 < num_groups; g2++) {
-          local[0] = 0.7 * fa_sigs[g].read(one) * t;
-          fa_slgg[g2].write(dp, local);
+          local[0] = 0.7 * fa_sigs[g][1] * t;
+          fa_slgg[g2][1][g] = local;
         }
       } else {
-        local[0] = 0.9 * fa_sigs[g].read(one);
-        fa_slgg[g].write(dp, local);
+        local[0] = 0.9 * fa_sigs[g][1];
+        fa_slgg[g][1][g] = local;
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      p2.x[0] = 2;
+      //p2[0] = 2;
       for (int g = 0; g < num_groups; g++) {
-        p2.x[1] = g; 
-        const DomainPoint dp = DomainPoint::from_point<2>(p2);
-        local[0] = 0.5 * fa_sigs[g].read(two);
-        fa_slgg[g].write(dp, local);
+        //p2[1] = g; 
+        local[0] = 0.5 * fa_sigs[g][2];
+        fa_slgg[g][2][g] = local;
         if (g > 0) {
           const double t = 1.0 / double(g);
           for (int g2 = 0; g2 < g; g2++) {
-            local[0] = 0.1 * fa_sigs[g].read(two) * t;
-            fa_slgg[g2].write(dp, local);
+            local[0] = 0.1 * fa_sigs[g][2] * t;
+            fa_slgg[g2][2][g] = local;
           }
         } else {
-          local[0] = 0.6 * fa_sigs[g].read(two);
-          fa_slgg[g].write(dp, local); 
+          local[0] = 0.6 * fa_sigs[g][2];
+          fa_slgg[g][2][g] = local;
         }
 
         if (g < (num_groups-1)) {
           const double t = 1.0 / double(num_groups-(g+1));
           for (int g2 = g+1; g2 < num_groups; g2++) {
-            local[0] = 0.4 * fa_sigs[g].read(two) * t;
-            fa_slgg[g2].write(dp, local);
+            local[0] = 0.4 * fa_sigs[g][2] * t;
+            fa_slgg[g2][2][g] = local;
           }
         } else {
-          local[0] = 0.9 * fa_sigs[g].read(two);
-          fa_slgg[g].write(dp, local);
+          local[0] = 0.9 * fa_sigs[g][2];
+          fa_slgg[g][2][g] = local;
         }
       }
     }
   }
   if (num_moments > 1) 
   {
-    p2 = Point<2>::ZEROES();
-    p2.x[0] = 1;
+    //p2 = Point<2>(1, 0);
     for (int m = 1; m < num_moments; m++) {
       for (int g = 0; g < num_groups; g++) {
-        p2.x[1] = g;
-        DomainPoint dp = DomainPoint::from_point<2>(p2);
+        //p2[1] = g;
         for (int g2 = 0; g2 < num_groups; g2++) {
-          MomentQuad quad = fa_slgg[g2].read(dp);
+          MomentQuad quad = fa_slgg[g2][1][g];
           quad[m] = ((m == 1) ? 0.1 : 0.5) * quad[m-1];
-          fa_slgg[g2].write(dp, quad);
+          fa_slgg[g2][1][g] = quad;
         }
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      p2.x[0] = 2;
+      //p2[0] = 2;
       for (int m = 1; m < num_moments; m++) {
         for (int g = 0; g < num_groups; g++) {
-          p2.x[1] = g;
-          DomainPoint dp = DomainPoint::from_point<2>(p2);
+          //p2[1] = g;
           for (int g2 = 0; g2 < num_groups; g2++) {
-            MomentQuad quad = fa_slgg[g2].read(dp);
+            MomentQuad quad = fa_slgg[g2][2][g];
             quad[m] = ((m == 1) ? 0.8 : 0.6) * quad[m-1];
-            fa_slgg[g2].write(dp, quad);
+            fa_slgg[g2][2][g] = quad;
           }
         }
       }
@@ -754,24 +740,21 @@ void Snap::initialize_velocity(const SnapArray<1> &vel,
   PhysicalRegion vdelt_region = vdelt.map();
   vel_region.wait_until_valid(true/*ignore warnings*/);
   vdelt_region.wait_until_valid(true/*ignore warnings*/);
-  const DomainPoint dp = DomainPoint::from_point<1>(Point<1>(0));
+  const Point<1> dp(0);
   for (int g = 0; g < num_groups; g++) 
   {
-    RegionAccessor<AccessorType::Generic,double> fa_vel = 
-      vel_region.get_field_accessor(SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_vdelt = 
-      vdelt_region.get_field_accessor(SNAP_ENERGY_GROUP_FIELD(g)).typeify<double>();
+    Accessor<double,1> fa_vel(vel_region, SNAP_ENERGY_GROUP_FIELD(g));
+    Accessor<double,1> fa_vdelt(vdelt_region, SNAP_ENERGY_GROUP_FIELD(g));
     const double v = double(Snap::num_groups - g);
-    fa_vel.write(dp, v);
+    fa_vel[dp] = v;
     if (Snap::time_dependent)
-      fa_vdelt.write(dp, 2.0 / (Snap::dt * v));
+      fa_vdelt[dp] = 2.0 / (Snap::dt * v);
     else
-      fa_vdelt.write(dp, 0.0);
+      fa_vdelt[dp] = 0.0;
   }
   vel.unmap(vel_region);
   vdelt.unmap(vdelt_region);
 }
-#endif
 
 //------------------------------------------------------------------------------
 void Snap::save_fluxes(const Predicate &pred, 
@@ -1166,45 +1149,44 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   return true;
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void Snap::compute_wavefronts(void)
 //------------------------------------------------------------------------------
 {
-  const int chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
+  const long long zeroes[3] = { 0, 0, 0 };
+  const long long chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
   // Compute the mapping from corners to wavefronts
   for (int corner = 0; corner < num_corners; corner++)
   {
     Point<3> strides[3] = 
-      { Point<3>::ZEROES(), Point<3>::ZEROES(), Point<3>::ZEROES() };
+      { Point<3>(zeroes), Point<3>(zeroes), Point<3>(zeroes) };
     Point<3> start;
     for (int i = 0; i < num_dims; i++)
     {
-      start.x[i] = ((corner & (0x1 << i)) ? 0 : chunks[i]-1);
-      strides[i].x[i] = ((corner & (0x1 << i)) ? 1 : -1);
+      start[i] = ((corner & (0x1 << i)) ? 0 : chunks[i]-1);
+      strides[i][i] = ((corner & (0x1 << i)) ? 1 : -1);
     }
-    std::set<DomainPoint> current_points;
-    current_points.insert(DomainPoint::from_point<3>(Point<3>(start)));
+    std::set<Point<3> > current_points;
+    current_points.insert(Point<3>(start));
     // Do a little BFS to handle weird rectangle shapes correctly
     unsigned wavefront_number = 0;
     while (!current_points.empty())
     {
-      wavefront_map[corner].push_back(std::vector<DomainPoint>());
-      std::vector<DomainPoint> &wavefront_points = 
+      wavefront_map[corner].push_back(std::vector<Point<3> >());
+      std::vector<Point<3> > &wavefront_points = 
                           wavefront_map[corner][wavefront_number];
-      std::set<DomainPoint> next_points;
-      for (std::set<DomainPoint>::const_iterator it = current_points.begin();
+      std::set<Point<3> > next_points;
+      for (std::set<Point<3> >::const_iterator it = current_points.begin();
             it != current_points.end(); it++)
       {
         // Save the point in this wavefront
         wavefront_points.push_back(*it);
-        Point<3> point = it->get_point<3>();
         for (int i = 0; i < num_dims; i++)
         {
-          Point<3> next = point + strides[i];
+          Point<3> next = *it + strides[i];
           if (contains_point(next, 0, nx_chunks-1, 0, 
                              ny_chunks-1, 0, nz_chunks-1))
-            next_points.insert(DomainPoint::from_point<3>(next));
+            next_points.insert(Point<3>(next));
         }
       }
       current_points = next_points;
@@ -1212,7 +1194,6 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     }
   }
 }
-#endif
 
 //------------------------------------------------------------------------------
 /*static*/ void Snap::compute_derived_globals(void)

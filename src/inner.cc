@@ -24,7 +24,6 @@
 
 extern Legion::Logger log_snap;
 
-using namespace LegionRuntime::Accessor;
 using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
@@ -62,16 +61,9 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   for (unsigned idx = 0; idx < 6; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
-#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
   register_cpu_variant<cpu_implementation>(execution_constraints,
                                            layout_constraints,
                                            true/*leaf*/);
-#else
-  register_cpu_variant<
-    raw_rect_task_wrapper<MomentQuad,3,double,3,double,3,MomentQuad,3,
-                       MomentTriple,3,MomentTriple,3,fast_implementation> >(
-              execution_constraints, layout_constraints, true/*leaf*/);
-#endif
 }
 
 //------------------------------------------------------------------------------
@@ -92,7 +84,6 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
               execution_constraints, layout_constraints, true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void CalcInnerSource::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -101,9 +92,8 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 #ifndef NO_COMPUTE
   log_snap.info("Running Calc Inner Source");
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const bool multi_moment = (Snap::num_moments > 1);
   const unsigned num_groups = task->regions[0].privilege_fields.size();
   assert(num_groups == task->regions[1].privilege_fields.size());
@@ -112,138 +102,44 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_sxs = 
-      regions[0].get_field_accessor(*it).typeify<MomentQuad>();
-    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
-      regions[1].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_q2grp0 = 
-      regions[2].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
-      regions[3].get_field_accessor(*it).typeify<MomentQuad>();
+    Accessor<MomentQuad,3> fa_sxs(regions[0], *it);
+    Accessor<double,3> fa_flux0(regions[1], *it);
+    Accessor<double,3> fa_q2grp0(regions[2], *it);
+    Accessor<MomentQuad,3> fa_qtot(regions[3], *it);
     if (multi_moment) {
-      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[4].get_field_accessor(*it).typeify<MomentTriple>();
-      RegionAccessor<AccessorType::Generic,MomentTriple> fa_q2grpm = 
-        regions[5].get_field_accessor(*it).typeify<MomentTriple>();
-      for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+      Accessor<MomentTriple,3> fa_fluxm(regions[4], *it);
+      Accessor<MomentTriple,3> fa_q2grpm(regions[5], *it);
+      for (DomainIterator<3> itr(dom); itr(); itr++)
       {
-        DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-        MomentQuad sxs_quad = fa_sxs.read(dp);
-        const double q0 = fa_q2grp0.read(dp);
-        const double flux0 = fa_flux0.read(dp);
+        MomentQuad sxs_quad = fa_sxs[itr];
+        const double q0 = fa_q2grp0[itr];
+        const double flux0 = fa_flux0[itr];
         MomentQuad quad;
         quad[0] = q0 + flux0 * sxs_quad[0];
-        MomentTriple qom = fa_q2grpm.read(dp);
-        MomentTriple fm = fa_fluxm.read(dp);
+        MomentTriple qom = fa_q2grpm[itr];
+        MomentTriple fm = fa_fluxm[itr];
         int moment = 0;
         for (int l = 1; l < Snap::num_moments; l++) {
           for (int i = 0; i < Snap::lma[l]; i++)
             quad[moment+i+1] = qom[moment+i] + fm[moment+i] * sxs_quad[l];
           moment += Snap::lma[l];
         }
-        fa_qtot.write(dp, quad);
+        fa_qtot[itr] = quad;
       }
     } else {
-      for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+      for (DomainIterator<3> itr(dom); itr(); itr++)
       {
-        DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-        MomentQuad sxs_quad = fa_sxs.read(dp);
-        const double q0 = fa_q2grp0.read(dp);
-        const double flux0 = fa_flux0.read(dp);
+        MomentQuad sxs_quad = fa_sxs[itr];
+        const double q0 = fa_q2grp0[itr];
+        const double flux0 = fa_flux0[itr];
         MomentQuad quad;
         quad[0] = q0 + flux0 * sxs_quad[0];
-        fa_qtot.write(dp, quad);
+        fa_qtot[itr] = quad;
       }
     }
   }
 #endif
 }
-#endif
-
-#if 0
-//------------------------------------------------------------------------------
-/*static*/ void CalcInnerSource::fast_implementation(
-    const Task *task, Context ctx, Runtime *runtime,
-    const std::vector<MomentQuad*> &sxs_ptrs, const ByteOffset sxs_offsets[3],
-    const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-    const std::vector<double*> &q2grp0_ptrs, const ByteOffset q2grp0_offsets[3],
-    const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-    const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-    const std::vector<MomentTriple*> &q2grpm_ptrs, const ByteOffset q2grpm_offsets[3])
-//------------------------------------------------------------------------------
-{
-#ifndef NO_COMPUTE
-  log_snap.info("Running Fast Calc Inner Source");
-
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
-  const bool multi_moment = (Snap::num_moments > 1);
-  const unsigned num_groups = task->regions[0].privilege_fields.size();
-  assert(num_groups == task->regions[1].privilege_fields.size());
-  assert(num_groups == task->regions[2].privilege_fields.size());
-
-  const int max_x = subgrid_bounds.hi[0] - subgrid_bounds.lo[0] + 1;
-  const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
-  const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
-
-  for (unsigned group = 0; group < num_groups; group++)
-  {
-    const MomentQuad *const sxs_ptr = sxs_ptrs[group];
-    const double *const flux0_ptr = flux0_ptrs[group];
-    const double *const q2grp0_ptr = q2grp0_ptrs[group];
-    MomentQuad *const qtot_ptr = qtot_ptrs[group];
-    if (multi_moment) {
-      const MomentTriple *const fluxm_ptr = fluxm_ptrs[group];
-      const MomentTriple *const q2grpm_ptr = q2grpm_ptrs[group];
-      for (int z = 0; z < max_z; z++) {
-        for (int y = 0; y < max_y; y++) {
-          for (int x = 0; x < max_x; x++) {
-            MomentQuad sxs_quad = *(sxs_ptr + x * sxs_offsets[0] + 
-                y * sxs_offsets[1] + z * sxs_offsets[2]);
-            const double q0 = *(q2grp0_ptr + x * q2grp0_offsets[0] +
-                y * q2grp0_offsets[1] + z * q2grp0_offsets[2]);
-            const double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
-                y * flux0_offsets[1] + z * flux0_offsets[2]);
-            MomentQuad quad;
-            quad[0] = q0 + flux0 * sxs_quad[0]; 
-            MomentTriple qom = *(q2grpm_ptr + x * q2grpm_offsets[0] + 
-                y * q2grpm_offsets[1] + z * q2grpm_offsets[2]);
-            MomentTriple fluxm = *(fluxm_ptr + x * fluxm_offsets[0] +
-                y * fluxm_offsets[1] + z * fluxm_offsets[2]);
-            int moment = 0;
-            for (int l = 1; l < Snap::num_moments; l++) {
-              for (int i = 0; i < Snap::lma[l]; i++)
-                quad[moment+i+1] = qom[moment+i] + fluxm[moment+i] * sxs_quad[l];
-              moment += Snap::lma[l];
-            }
-            *(qtot_ptr + x * qtot_offsets[0] + y * qtot_offsets[1] + 
-                z * qtot_offsets[2]) = quad;
-          }
-        }
-      }
-    } else {
-      for (int z = 0; z < max_z; z++) {
-        for (int y = 0; y < max_y; y++) {
-          for (int x = 0; x < max_x; x++) {
-            MomentQuad sxs_quad = *(sxs_ptr + x * sxs_offsets[0] + 
-                y * sxs_offsets[1] + z * sxs_offsets[2]);
-            const double q0 = *(q2grp0_ptr + x * q2grp0_offsets[0] +
-                y * q2grp0_offsets[1] + z * q2grp0_offsets[2]);
-            const double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
-                y * flux0_offsets[1] + z * flux0_offsets[2]);
-            MomentQuad quad;
-            quad[0] = q0 + flux0 * sxs_quad[0];
-            *(qtot_ptr + x * qtot_offsets[0] + y * qtot_offsets[1] + 
-                z * qtot_offsets[2]) = quad;
-          }
-        }
-      }
-    }
-  }
-#endif
-}
-#endif
 
 #ifdef USE_GPU_KERNELS
   extern void run_inner_source_single_moment(Rect<3>           subgrid_bounds,
@@ -357,15 +253,9 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   for (unsigned idx = 0; idx < 2; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
-#if defined(BOUNDS_CHECKS) || defined(PRIVILEGE_CHECKS)
   register_cpu_variant<bool, cpu_implementation>(execution_constraints,
                                                  layout_constraints,
                                                  true/*leaf*/);
-#else
-  register_cpu_variant<bool,
-    raw_rect_task_wrapper<bool, double, 3, double, 3, fast_implementation> >(
-        execution_constraints, layout_constraints, true/*leaf*/);
-#endif
 }
 
 //------------------------------------------------------------------------------
@@ -388,7 +278,6 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
         execution_constraints, layout_constraints, true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ bool TestInnerConvergence::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -400,9 +289,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
          task->regions[1].region.get_index_space());
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const double tolr = 1.0e-12;
   const double epsi = Snap::convergence_eps;
   // Iterate over all the energy groups
@@ -412,20 +300,17 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_flux0 = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_flux0pi = 
-      regions[1].get_field_accessor(*it).typeify<double>();
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+    Accessor<double,3> fa_flux0(regions[0], *it);
+    Accessor<double,3> fa_flux0pi(regions[1], *it);
+    for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-      double flux0pi = fa_flux0pi.read(dp);
+      double flux0pi = fa_flux0pi[itr];
       double df = 1.0;
       if (fabs(flux0pi) < tolr) {
         flux0pi = 1.0;
         df = 0.0;
       }
-      double flux0 = fa_flux0.read(dp);
+      double flux0 = fa_flux0[itr];
       df = fabs( (flux0 / flux0pi) - df );
       if (df > epsi)
         return false;
@@ -436,64 +321,6 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   return false;
 #endif
 }
-#endif
-
-#if 0
-//------------------------------------------------------------------------------
-/*static*/ bool TestInnerConvergence::fast_implementation(
-  const Task *task, Context ctx, Runtime *runtime,
-  const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-  const std::vector<double*> &flux0pi_ptrs, const ByteOffset flux0pi_offsets[3])
-//------------------------------------------------------------------------------
-{
-#ifndef NO_COMPUTE
-  log_snap.info("Running Fast Test Inner Convergence");
-
-  // Get the index space domain for iteration
-  assert(task->regions[0].region.get_index_space() == 
-         task->regions[1].region.get_index_space());
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
-
-  const int max_x = subgrid_bounds.hi[0] - subgrid_bounds.lo[0] + 1;
-  const int max_y = subgrid_bounds.hi[1] - subgrid_bounds.lo[1] + 1;
-  const int max_z = subgrid_bounds.hi[2] - subgrid_bounds.lo[2] + 1;
-
-  const double tolr = 1.0e-12;
-  const double epsi = Snap::convergence_eps;
-  // Iterate over all the energy groups
-  assert(task->regions[0].privilege_fields.size() == 
-         task->regions[1].privilege_fields.size());
-  for (unsigned group = 0; group < flux0_ptrs.size(); group++)
-  {
-    double *flux0_ptr = flux0_ptrs[group];
-    double *flux0pi_ptr = flux0pi_ptrs[group];
-    for (int z = 0; z < max_z; z++) {
-      for (int y = 0; y < max_y; y++) {
-        for (int x = 0; x < max_x; x++) {
-          double flux0pi = *(flux0pi_ptr + x * flux0pi_offsets[0] + 
-              y * flux0pi_offsets[1] + z * flux0pi_offsets[2]);
-          double df = 1.0;
-          if (fabs(flux0pi) < tolr) {
-            flux0pi = 1.0;
-            df = 0.0;
-          }
-          double flux0 = *(flux0_ptr + x * flux0_offsets[0] + 
-              y * flux0_offsets[1] + z * flux0_offsets[2]);
-          df = fabs( (flux0 / flux0pi) - df );
-          if (df > epsi)
-            return false;
-        }
-      }
-    }
-  }
-  return true;
-#else
-  return false;
-#endif
-}
-#endif
 
 #ifdef USE_GPU_KERNELS
 extern bool run_inner_convergence(Rect<3> subgrid_bounds,

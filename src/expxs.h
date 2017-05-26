@@ -37,10 +37,6 @@ public:
 public:
   static void cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static void fast_implementation(const Task *task, Context ctx, Runtime *runtime,
-      const std::vector<double*> &sig_ptrs, const ByteOffset sig_offsets[1],
-      const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
-      const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3]);
   static void gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
       const std::vector<double*> &sig_ptrs, const ByteOffset sig_offsets[1],
       const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
@@ -62,10 +58,6 @@ public:
 public:
   static void cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static void fast_implementation(const Task *task, Context ctx, Runtime *runtime,
-      const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
-      const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
-      const std::vector<MomentQuad*> &xs_ptrs, const ByteOffset xs_offsets[3]);
   static void gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
       const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
       const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
@@ -87,10 +79,6 @@ public:
 public:
   static void cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static void fast_implementation(const Task *task, Context ctx, Runtime *runtime,
-      const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3],
-      const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1],
-      const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3]);
   static void gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
       const std::vector<double*> &xs_ptrs, const ByteOffset xs_offsets[3],
       const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1],

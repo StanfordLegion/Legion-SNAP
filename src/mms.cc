@@ -81,7 +81,6 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitFlux::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -90,9 +89,8 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
 #ifndef NO_COMPUTE
   log_snap.info("Running MMS Init Flux");
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   double *tx = (double*)malloc(Snap::nx_per_chunk * sizeof(double));
   double *ty = (double*)malloc(Snap::ny_per_chunk * sizeof(double));
@@ -107,13 +105,13 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
   const double dx = Snap::lx / double(Snap::nx);
   const double dy = Snap::ly / double(Snap::ny);
   const double dz = Snap::lz / double(Snap::nz);
-  ib[0] = subgrid_bounds.lo[0] * dx;
+  ib[0] = dom.bounds.lo[0] * dx;
   for (int i = 1; i <= Snap::nx_per_chunk; i++)
     ib[i] = ib[i-1] + dx;
-  jb[0] = subgrid_bounds.lo[1] * dy;
+  jb[0] = dom.bounds.lo[1] * dy;
   for (int j = 1; j <= Snap::ny_per_chunk; j++)
     jb[j] = jb[j-1] + dx;
-  kb[0] = subgrid_bounds.lo[2] * dz;
+  kb[0] = dom.bounds.lo[2] * dz;
   for (int k = 1; k <= Snap::nz_per_chunk; k++)
     kb[k] = kb[k-1] + dx;
 
@@ -138,17 +136,17 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {    
-      int i = itr.p[0] - subgrid_bounds.lo[0];
+    Accessor<double,3> fa_flux(regions[0], *it);
+    for (DomainIterator<3> itr(dom); itr(); itr++) {    
+      const Point<3> p = itr;
+      int i = p[0] - dom.bounds.lo[0];
       assert(i < Snap::nx_per_chunk);
-      int j = itr.p[1] - subgrid_bounds.lo[1];
+      int j = p[1] - dom.bounds.lo[1];
       assert(j < Snap::ny_per_chunk);
-      int k = itr.p[2] - subgrid_bounds.lo[2];
+      int k = p[2] - dom.bounds.lo[2];
       assert(k < Snap::nz_per_chunk);
       double value = (double(g) * tx[i] * ty[j] * tz[k]);
-      fa_flux.write(DomainPoint::from_point<3>(itr.p), value);
+      fa_flux[itr] = value;
     }
   }
 
@@ -165,17 +163,14 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-      regions[1].get_field_accessor(*it).typeify<MomentTriple>();
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
-      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-      double flux = fa_flux.read(dp); 
+    Accessor<double,3> fa_flux(regions[0], *it);
+    Accessor<MomentTriple,3> fa_fluxm(regions[1], *it);
+    for (DomainIterator<3> itr(dom); itr(); itr++) {
+      double flux = fa_flux[itr];
       MomentTriple result;
       for (int l = 0; l < 3; l++)
         result[l] = p[l] * flux;
-      fa_fluxm.write(dp, result);
+      fa_fluxm[itr] = result;
     }
   }
 
@@ -184,7 +179,6 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
   free(tz);
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
@@ -215,7 +209,6 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitSource::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -230,9 +223,8 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
   const double js = (0x2 & corner) ? 1.0 : -1.0;
   const double ks = (0x4 & corner) ? 1.0 : -1.0;
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   const double a = PI / Snap::lx;
   const double b = PI / Snap::ly;
@@ -245,13 +237,13 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
   double *jb = (double*)malloc((Snap::ny_per_chunk+1) * sizeof(double));
   double *kb = (double*)malloc((Snap::nz_per_chunk+1) * sizeof(double));
 
-  ib[0] = subgrid_bounds.lo[0] * dx;
+  ib[0] = dom.bounds.lo[0] * dx;
   for (int i = 1; i <= Snap::nx_per_chunk; i++)
     ib[i] = ib[i-1] + dx;
-  jb[0] = subgrid_bounds.lo[1] * dy;
+  jb[0] = dom.bounds.lo[1] * dy;
   for (int j = 1; j <= Snap::ny_per_chunk; j++)
     jb[j] = jb[j-1] + dx;
-  kb[0] = subgrid_bounds.lo[2] * dz;
+  kb[0] = dom.bounds.lo[2] * dz;
   for (int k = 1; k <= Snap::nz_per_chunk; k++)
     kb[k] = kb[k-1] + dx; 
 
@@ -290,45 +282,40 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
   const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
   double *angle_buffer = (double*)malloc(angle_buffer_size);
 
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[2].get_field_accessor(Snap::FID_SINGLE).typeify<int>(); 
+  Accessor<int,3> fa_mat(regions[2], Snap::FID_SINGLE);
 
   unsigned g_idx = 0;
-  std::vector<RegionAccessor<AccessorType::Generic,double> > 
+  std::vector<Accessor<double,3> > 
     fa_fluxes(task->regions[0].privilege_fields.size());
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g_idx++)
-    fa_fluxes[g_idx] = regions[0].get_field_accessor(*it).typeify<double>();
+    fa_fluxes[g_idx] = Accessor<double,3>(regions[0], *it);
   g_idx = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g_idx++)
   {
-    RegionAccessor<AccessorType::Generic,double> &fa_flux = fa_fluxes[g_idx]; 
-    RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-      regions[1].get_field_accessor(*it).typeify<MomentTriple>();
-    RegionAccessor<AccessorType::Generic,double> fa_sigt = 
-      regions[3].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_slgg = 
-      regions[4].get_field_accessor(*it).typeify<MomentQuad>();
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[5].get_field_accessor(*it);
+    Accessor<double,3> &fa_flux = fa_fluxes[g_idx]; 
+    Accessor<MomentTriple,3> fa_fluxm(regions[1], *it);
+    Accessor<double,1> fa_sigt(regions[3], *it);
+    Accessor<MomentQuad,2> fa_slgg(regions[4], *it);
+    Accessor<double,3> fa_qim(regions[5], *it);
 
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
-      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-      const int i = itr.p[0] - subgrid_bounds.lo[0];
-      const int j = itr.p[1] - subgrid_bounds.lo[1];
-      const int k = itr.p[2] - subgrid_bounds.lo[2];
+    for (DomainIterator<3> itr(dom); itr(); itr++) {
+      Point<3> p = itr;
+      const int i = p[0] - dom.bounds.lo[0];
+      const int j = p[1] - dom.bounds.lo[1];
+      const int k = p[2] - dom.bounds.lo[2];
 
-      const int mat = fa_mat.read(dp);
-      const double sigt = fa_sigt.read(DomainPoint::from_point<1>(Point<1>(mat)));
-      const double ref_flux = fa_flux.read(dp);
+      const int mat = fa_mat[itr];
+      const double sigt = fa_sigt[mat];
+      const double ref_flux = fa_flux[itr];
       const double flux_update = sigt * ref_flux;
 
-      const MomentTriple ref_fluxm = fa_fluxm.read(dp);
+      const MomentTriple ref_fluxm = fa_fluxm[itr];
 
-      fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);      
+      memcpy(angle_buffer, fa_qim.ptr(itr), angle_buffer_size);
       for (int ang = 0; ang < Snap::num_angles; ang++) {
         angle_buffer[ang] += (double(g_idx+1) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
         angle_buffer[ang] += flux_update;
@@ -340,11 +327,9 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
         for (std::set<FieldID>::const_iterator gp = 
               task->regions[0].privilege_fields.begin(); gp !=
               task->regions[0].privilege_fields.end(); gp++, gp_idx++) {
-          RegionAccessor<AccessorType::Generic,double> &fa_flux_gp = fa_fluxes[gp_idx];
-          const double flux_gp = fa_flux_gp.read(dp);
-          const coord_t slgg_point[2] = { mat, gp_idx };
-          const MomentQuad quad = 
-            fa_slgg.read(DomainPoint::from_point<2>(Point<2>(slgg_point)));
+          Accessor<double,3> &fa_flux_gp = fa_fluxes[gp_idx];
+          const double flux_gp = fa_flux_gp[itr];
+          const MomentQuad quad = fa_slgg[mat][gp_idx];
           angle_buffer[ang] -= (quad[0] * flux_gp);
           int lm = 1;
           for (int l = 1; l < Snap::num_moments; l++) {
@@ -358,7 +343,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
           }
         }
       }
-      fa_qim.write_untyped(dp, angle_buffer, angle_buffer_size);
+      memcpy(fa_qim.ptr(itr), angle_buffer, angle_buffer_size);
     }
   }
 
@@ -374,7 +359,6 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
   free(angle_buffer);
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap, 
@@ -401,7 +385,6 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap,
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSInitTimeDependent::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -410,9 +393,8 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap,
 #ifndef NO_COMPUTE
   log_snap.info("Running MMS Init Time Dependent");
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[1].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[1].region.get_index_space()));
 
   const double t_scale = Snap::total_sim_time - 0.5 * Snap::dt;
 
@@ -420,28 +402,22 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_v = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[1].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_qi = 
-      regions[2].get_field_accessor(*it).typeify<double>();
+    Accessor<double,1> fa_v(regions[0], *it);
+    Accessor<double,3> fa_flux(regions[1], *it);
+    Accessor<double,3> fa_qi(regions[2], *it);
 
-    const double vg = fa_v.read(DomainPoint::from_point<1>(Point<1>::ZEROES()));
+    const double vg = fa_v[0];
 
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
-      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-     
-      const double ref_flux = fa_flux.read(dp);
+    for (DomainIterator<3> itr(dom); itr(); itr++) {
+      const double ref_flux = fa_flux[itr];
       // compute the source
-      fa_qi.write(dp, ref_flux / vg);
+      fa_qi[itr] = ref_flux / vg;
       // Then scale the flux 
-      fa_flux.write(dp, ref_flux * t_scale);
+      fa_flux[itr] = ref_flux * t_scale;
     }
   }
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
@@ -464,7 +440,6 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void MMSScale::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -476,9 +451,8 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
   assert(task->arglen == sizeof(double));
   const double scale_factor = *((double*)task->args);
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
   double *angle_buffer = (double*)malloc(angle_buffer_size);
@@ -487,21 +461,18 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic> fa_qim = 
-      regions[0].get_field_accessor(*it);
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++)
+    Accessor<double,3> fa_qim(regions[0], *it);
+    for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-      fa_qim.read_untyped(dp, angle_buffer, angle_buffer_size);
+      memcpy(angle_buffer, fa_qim.ptr(itr), angle_buffer_size);
       for (int ang = 0; ang < Snap::num_angles; ang++)
         angle_buffer[ang] *= scale_factor;
-      fa_qim.write_untyped(dp, angle_buffer, angle_buffer_size);
+      memcpy(fa_qim.ptr(itr), angle_buffer, angle_buffer_size);
     }
   }
   free(angle_buffer);
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux, 
@@ -525,7 +496,6 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
                                                         true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ MomentTriple MMSCompare::cpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -539,9 +509,8 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
   double max = -INFINITY;
   double sum = 0.0;
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   const double tolr = 1.0e-12;
 
@@ -549,16 +518,11 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    RegionAccessor<AccessorType::Generic,double> fa_ref_flux = 
-      regions[1].get_field_accessor(*it).typeify<double>();
-
-    for (GenericPointInRectIterator<3> itr(subgrid_bounds); itr; itr++) {
-      const DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-
-      const double flux = fa_flux.read(dp);
-      double ref_flux = fa_ref_flux.read(dp);
+    Accessor<double,3> fa_flux(regions[0], *it);
+    Accessor<double,3> fa_ref_flux(regions[1], *it);
+    for (DomainIterator<3> itr(dom); itr(); itr++) {
+      const double flux = fa_flux[itr];
+      double ref_flux = fa_ref_flux[itr];
 
       double df = 1.0;
       if (ref_flux < tolr) {
@@ -581,7 +545,6 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
 #endif
   return result;
 }
-#endif
 
 const MomentTriple MMSReduction::identity = MomentTriple(-INFINITY, INFINITY, 0.0);
 
