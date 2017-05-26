@@ -711,16 +711,5 @@ public:
   template<bool EXCLUSIVE> static void fold(RHS &rhs1, RHS rhs2);
 };
 
-template<int DIM>
-inline bool offsets_match(const LegionRuntime::Accessor::ByteOffset x[DIM], 
-                          const LegionRuntime::Accessor::ByteOffset y[DIM])
-{
-  for (int i = 0; i < DIM; i++) {
-    if (x[i].offset != y[i].offset)
-      return false;
-  }
-  return true;
-}
-
 #endif // __SNAP_H__
 
