@@ -30,8 +30,6 @@
 
 extern Legion::Logger log_snap;
 
-using namespace LegionRuntime::Accessor;
-
 template<bool COS>
 void mms_trigint(const int lc, const double d, const double del, 
                  const double *cb, double *fn);
