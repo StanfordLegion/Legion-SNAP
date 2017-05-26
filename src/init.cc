@@ -99,7 +99,7 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
   if (local_bounds.volume() == 0)
     return;
   for (RectIterator<3> itr(local_bounds); itr(); itr++)
-    fa_mat[itr] = 2;
+    fa_mat[*itr] = 2;
 #endif
 }
 
@@ -185,7 +185,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
   {
     Accessor<double,3> fa_qi(regions[0], *it);
     for (RectIterator<3> itr(local_bounds); itr(); itr++)
-      fa_qi[itr] = 1.0;
+      fa_qi[*itr] = 1.0;
   }
 #endif
 }

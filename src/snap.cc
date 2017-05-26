@@ -231,8 +231,8 @@ void Snap::setup(void)
       const size_t wavefront_points = it->size();
       assert(wavefront_points > 0);
       wavefront_domains[corner].push_back(runtime->create_index_space(ctx,
-            Rect<2>(Point<2>(wavefront_index,0), 
-                    Point<2>(wavefront_index,wavefront_points-1))));
+            Rect<2>(Point<2>(0,wavefront_index), 
+                    Point<2>(wavefront_points-1,wavefront_index))));
     }
   }
 }
@@ -629,20 +629,17 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
     fa_slgg[g] = Accessor<MomentQuad,2>(slgg_region, 
                           SNAP_ENERGY_GROUP_FIELD(g));
 
-  //Point<2> p2(1, 0);
   if (num_groups == 1) {
     MomentQuad local;
     local[0] = fa_sigs[0][1];
     fa_slgg[0][1][0] = local;
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      //p2[1] = 1; 
       local[0] = fa_sigs[0][2];
       fa_slgg[0][1][1] = local;
     }
   } else {
     MomentQuad local;
     for (int g = 0; g < num_groups; g++) {
-      //p2[1] = g; 
       local[0] = 0.2 * fa_sigs[g][1];
       fa_slgg[g][1][g] = local;
       if (g > 0) {
@@ -668,9 +665,7 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      //p2[0] = 2;
       for (int g = 0; g < num_groups; g++) {
-        //p2[1] = g; 
         local[0] = 0.5 * fa_sigs[g][2];
         fa_slgg[g][2][g] = local;
         if (g > 0) {
@@ -699,10 +694,8 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
   }
   if (num_moments > 1) 
   {
-    //p2 = Point<2>(1, 0);
     for (int m = 1; m < num_moments; m++) {
       for (int g = 0; g < num_groups; g++) {
-        //p2[1] = g;
         for (int g2 = 0; g2 < num_groups; g2++) {
           MomentQuad quad = fa_slgg[g2][1][g];
           quad[m] = ((m == 1) ? 0.1 : 0.5) * quad[m-1];
@@ -711,10 +704,8 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
       }
     }
     if (material_layout != HOMOGENEOUS_LAYOUT) {
-      //p2[0] = 2;
       for (int m = 1; m < num_moments; m++) {
         for (int g = 0; g < num_groups; g++) {
-          //p2[1] = g;
           for (int g2 = 0; g2 < num_groups; g2++) {
             MomentQuad quad = fa_slgg[g2][2][g];
             quad[m] = ((m == 1) ? 0.8 : 0.6) * quad[m-1];

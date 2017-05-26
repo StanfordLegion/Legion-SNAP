@@ -111,30 +111,30 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
       Accessor<MomentTriple,3> fa_q2grpm(regions[5], *it);
       for (DomainIterator<3> itr(dom); itr(); itr++)
       {
-        MomentQuad sxs_quad = fa_sxs[itr];
-        const double q0 = fa_q2grp0[itr];
-        const double flux0 = fa_flux0[itr];
+        MomentQuad sxs_quad = fa_sxs[*itr];
+        const double q0 = fa_q2grp0[*itr];
+        const double flux0 = fa_flux0[*itr];
         MomentQuad quad;
         quad[0] = q0 + flux0 * sxs_quad[0];
-        MomentTriple qom = fa_q2grpm[itr];
-        MomentTriple fm = fa_fluxm[itr];
+        MomentTriple qom = fa_q2grpm[*itr];
+        MomentTriple fm = fa_fluxm[*itr];
         int moment = 0;
         for (int l = 1; l < Snap::num_moments; l++) {
           for (int i = 0; i < Snap::lma[l]; i++)
             quad[moment+i+1] = qom[moment+i] + fm[moment+i] * sxs_quad[l];
           moment += Snap::lma[l];
         }
-        fa_qtot[itr] = quad;
+        fa_qtot[*itr] = quad;
       }
     } else {
       for (DomainIterator<3> itr(dom); itr(); itr++)
       {
-        MomentQuad sxs_quad = fa_sxs[itr];
-        const double q0 = fa_q2grp0[itr];
-        const double flux0 = fa_flux0[itr];
+        MomentQuad sxs_quad = fa_sxs[*itr];
+        const double q0 = fa_q2grp0[*itr];
+        const double flux0 = fa_flux0[*itr];
         MomentQuad quad;
         quad[0] = q0 + flux0 * sxs_quad[0];
-        fa_qtot[itr] = quad;
+        fa_qtot[*itr] = quad;
       }
     }
   }
@@ -304,13 +304,13 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
     Accessor<double,3> fa_flux0pi(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      double flux0pi = fa_flux0pi[itr];
+      double flux0pi = fa_flux0pi[*itr];
       double df = 1.0;
       if (fabs(flux0pi) < tolr) {
         flux0pi = 1.0;
         df = 0.0;
       }
-      double flux0 = fa_flux0[itr];
+      double flux0 = fa_flux0[*itr];
       df = fabs( (flux0 / flux0pi) - df );
       if (df > epsi)
         return false;

@@ -19,7 +19,6 @@
 #include "snap.h"
 #include "sweep.h"
 
-#if 0
 //------------------------------------------------------------------------------
 Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine, 
                              Processor local, const char *mapper_name)
@@ -55,8 +54,7 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
   }
   // Compute the local CPU and GPU mappings
   // TODO: make these topology aware
-  const int upper_bounds[3] = { nx_chunks, ny_chunks, nz_chunks };
-  const Rect<3> bounds(Point<3>::ZEROES(), Point<3>(upper_bounds));
+  const Rect<3> bounds(Point<3>(0,0,0), Point<3>(nx_chunks, ny_chunks, nz_chunks));
   {
     // Round robin these across nodes, not individual processors so we
     // evenly distribute blocks of cells across the machine, then let 
@@ -69,13 +67,14 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
       if (node_cpus.find(space) == node_cpus.end())
         node_cpus[space] = *it;
     }
-    for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
+    for (RectIterator<3> pir(bounds); pir(); pir++) {
+      const Point<3> &p = *pir;
       const int index = 
-        (pir.p.x[2] * ny_chunks + pir.p.x[1]) * nx_chunks + pir.p.x[0];
+        (p[2] * ny_chunks + p[1]) * nx_chunks + p[0];
       std::map<AddressSpace,Processor>::const_iterator finder = 
         node_cpus.find(index % node_cpus.size());
       assert(finder != node_cpus.end());
-      global_cpu_mapping[pir.p] = finder->second;
+      global_cpu_mapping[p] = finder->second;
     }
   }
   {
@@ -88,15 +87,15 @@ Snap::SnapMapper::SnapMapper(MapperRuntime *rt, Machine machine,
       for (Machine::ProcessorQuery::iterator it = all_procs.begin();
             it != all_procs.end(); it++, idx++)
         all_gpus[idx] = *it;
-      for (GenericPointInRectIterator<3> pir(bounds); pir; pir++) {
+      for (RectIterator<3> pir(bounds); pir(); pir++) {
+        const Point<3> &p = *pir;
         const int index = 
-          (pir.p.x[2] * ny_chunks + pir.p.x[1]) * nx_chunks + pir.p.x[0];
-        global_gpu_mapping[pir.p] = all_gpus[index % all_gpus.size()];
+          (p[2] * ny_chunks + p[1]) * nx_chunks + p[0];
+        global_gpu_mapping[p] = all_gpus[index % all_gpus.size()];
       }
     }
   }
 }
-#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
@@ -167,7 +166,6 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
 #endif
 }
 
-#if 0
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                 const Copy &copy,
@@ -187,7 +185,7 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       // Didn't find it, so we have to make it
       // First figure out which memory it is going into
       assert(copy.index_point.get_dim() == 3);
-      Point<3> point = copy.index_point.get_point<3>();
+      Point<3> point = copy.index_point;
       assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
       Processor cpu_proc = global_cpu_mapping[point];
       // Find the target memory with affinity to the proper node
@@ -237,7 +235,7 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       // Didn't find it so we have to make it
       // First figure out which memory it is going into
       assert(copy.index_point.get_dim() == 3);
-      Point<3> point = copy.index_point.get_point<3>();
+      Point<3> point = copy.index_point;
       assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
       Processor cpu_proc = global_cpu_mapping[point];
       // Find the target memory with affinity to the proper node
@@ -285,7 +283,6 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
   runtime->acquire_instances(ctx, output.src_instances);
   runtime->acquire_instances(ctx, output.dst_instances);
 }
-#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::select_task_options(const MapperContext ctx,
@@ -303,7 +300,6 @@ void Snap::SnapMapper::select_task_options(const MapperContext ctx,
 #endif
 }
 
-#if 0
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::slice_task(const MapperContext ctx,
                                   const Task &task, 
@@ -319,16 +315,16 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     // Figure out 3-D point from corner, and wavefront
     const MiniKBATask::MiniKBAArgs *args = 
       (const MiniKBATask::MiniKBAArgs*)task.args;  
-    const std::vector<DomainPoint> &wavefront_points = 
+    const std::vector<Point<3> > &wavefront_points = 
       wavefront_map[args->corner][args->wavefront];
     const bool use_gpu = !local_gpus.empty() &&
       (gpu_variants.find(MINI_KBA_TASK_ID) != gpu_variants.end());
-    Rect<1> all_points = input.domain.get_rect<1>();
-    for (GenericPointInRectIterator<1> pir(all_points); pir; pir++) {
+    Rect<2> all_points = input.domain;
+    for (RectIterator<2> pir(all_points); pir(); pir++) {
       // Get the physical space point
-      Point<3> point = wavefront_points[pir.p[0]].get_point<3>();
+      Point<3> point = wavefront_points[(*pir)[0]];
       TaskSlice slice;
-      slice.domain = Domain::from_rect<1>(Rect<1>(pir.p, pir.p));
+      slice.domain = Domain<2>(Rect<2>(*pir, *pir));
       slice.proc = use_gpu ? global_gpu_mapping[point] : global_cpu_mapping[point];
       slice.recurse = false;
       slice.stealable = false;
@@ -339,7 +335,7 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     DefaultMapper::slice_task(ctx, task, input, output);
   } else {
     // Iterate over the points and assign them to the best target processors
-    Rect<3> all_points = input.domain.get_rect<3>();
+    Rect<3> all_points = input.domain;
     // We still keep convergence tests on the CPU if we're doing reductions
 #ifndef SNAP_USE_RELAXED_COHERENCE
     const bool use_gpu = !local_gpus.empty() &&
@@ -350,17 +346,16 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     const bool use_gpu = !local_gpus.empty() &&
       (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
 #endif
-    for (GenericPointInRectIterator<3> pir(all_points); pir; pir++) {
+    for (RectIterator<3> pir(all_points); pir(); pir++) {
       TaskSlice slice;
-      slice.domain = Domain::from_rect<3>(Rect<3>(pir.p, pir.p));
-      slice.proc = use_gpu ? global_gpu_mapping[pir.p] : global_cpu_mapping[pir.p];
+      slice.domain = Domain<3>(Rect<3>(*pir, *pir));
+      slice.proc = use_gpu ? global_gpu_mapping[*pir]:global_cpu_mapping[*pir];
       slice.recurse = false;
       slice.stealable = false;
       output.slices.push_back(slice);
     }
   }
 }
-#endif
 
 //------------------------------------------------------------------------------
 void Snap::SnapMapper::speculate(const MapperContext ctx,
