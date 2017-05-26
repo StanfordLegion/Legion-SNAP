@@ -1437,15 +1437,18 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   MMSScale::preregister_cpu_variants();
   MMSCompare::preregister_cpu_variants();
   ConvergenceMonad::preregister_cpu_variants();
-  // Register projection functors
-  Runtime::preregister_projection_functor(SWEEP_PROJECTION, 
-                        new SnapSweepProjectionFunctor());
-  Runtime::preregister_projection_functor(XY_PROJECTION,
-                        new FluxProjectionFunctor(XY_PROJECTION));
-  Runtime::preregister_projection_functor(YZ_PROJECTION,
-                        new FluxProjectionFunctor(YZ_PROJECTION));
-  Runtime::preregister_projection_functor(XZ_PROJECTION,
-                        new FluxProjectionFunctor(XZ_PROJECTION));
+  // Register projection functors for each corner
+  for (unsigned corner = 0; corner < 8; corner++)
+  {
+    Runtime::preregister_projection_functor(SNAP_SWEEP_PROJECTION(corner), 
+              new SnapSweepProjectionFunctor(wavefront_map[corner]));
+    Runtime::preregister_projection_functor(SNAP_XY_PROJECTION(corner),
+              new FluxProjectionFunctor(XY_PROJECTION, wavefront_map[corner]));
+    Runtime::preregister_projection_functor(SNAP_YZ_PROJECTION(corner),
+              new FluxProjectionFunctor(YZ_PROJECTION, wavefront_map[corner]));
+    Runtime::preregister_projection_functor(SNAP_XZ_PROJECTION(corner),
+              new FluxProjectionFunctor(XZ_PROJECTION, wavefront_map[corner]));
+  }
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
   Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP);
@@ -1655,8 +1658,9 @@ void SnapArray<DIM>::unmap(const PhysicalRegion &region) const
 }
 
 //------------------------------------------------------------------------------
-SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(void)
-  : ProjectionFunctor()
+SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(
+                               const std::vector<std::vector<Point<3> > > &map)
+  : ProjectionFunctor(), wavefront_map(map)
 //------------------------------------------------------------------------------
 {
 }
@@ -1673,7 +1677,6 @@ Legion::LogicalRegion
   return Legion::LogicalRegion::NO_REGION;
 }
 
-#if 0
 //------------------------------------------------------------------------------
 Legion::LogicalRegion 
   SnapSweepProjectionFunctor::project(const Mappable *mappable,
@@ -1684,20 +1687,38 @@ Legion::LogicalRegion
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  assert(point.get_dim() == 1);
-  Point<1> p = point.get_point<1>();
-  // Figure out which wavefront and corner we are in
-  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
-  unsigned corner = ((const MiniKBATask::MiniKBAArgs*)task->args)->corner;
-  // Not valid, need to go get the result
-  return runtime->get_logical_subregion_by_color(upper_bound,
-                                Snap::wavefront_map[corner][wavefront][p[0]]);
+  return project(upper_bound, point); 
 }
-#endif
 
 //------------------------------------------------------------------------------
-FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k)
-  : ProjectionFunctor(), projection_kind(k)
+Legion::LogicalRegion
+  SnapSweepProjectionFunctor::project(Legion::LogicalRegion upper_bound,
+                                      const Legion::DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return Legion::LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+Legion::LogicalRegion
+  SnapSweepProjectionFunctor::project(Legion::LogicalPartition upper_bound,
+                                      const Legion::DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  Point<2> p = point;
+  // Figure out which wavefront we are in
+  const unsigned wavefront = p[1];
+  // Not valid, need to go get the result
+  return runtime->get_logical_subregion_by_color(
+          LogicalPartition<3>(upper_bound), wavefront_map[wavefront][p[0]]);
+}
+
+//------------------------------------------------------------------------------
+FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k,
+                                const std::vector<std::vector<Point<3> > > &map)
+  : ProjectionFunctor(), projection_kind(k), wavefront_map(map)
 //------------------------------------------------------------------------------
 {
 }
@@ -1713,7 +1734,6 @@ Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappble,
   return Legion::LogicalRegion::NO_REGION;
 }
 
-#if 0
 //------------------------------------------------------------------------------
 Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
                          unsigned index, Legion::LogicalPartition upper_bound, 
@@ -1723,45 +1743,60 @@ Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  assert(point.get_dim() == 1);
-  Point<1> p = point.get_point<1>();
-  // Figure out which wavefront and corner we are in
-  unsigned wavefront = ((const MiniKBATask::MiniKBAArgs*)task->args)->wavefront;
-  unsigned corner = ((const MiniKBATask::MiniKBAArgs*)task->args)->corner;
-  // Not in the cache, let's go find it
-  Point<3> spatial_point = 
-    Snap::wavefront_map[corner][wavefront][p[0]].get_point<3>();
+  return project(upper_bound, point);  
+}
+
+//------------------------------------------------------------------------------
+Legion::LogicalRegion
+  FluxProjectionFunctor::project(Legion::LogicalRegion upper_bound,
+                                 const Legion::DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  // should never be called
+  assert(false);
+  return Legion::LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+Legion::LogicalRegion
+  FluxProjectionFunctor::project(Legion::LogicalPartition upper_bound,
+                                 const Legion::DomainPoint &point)
+//------------------------------------------------------------------------------
+{
+  Point<2> p = point;
+  // Figure out which wavefront we are in
+  const unsigned wavefront = p[1];
+  Point<3> spatial_point = wavefront_map[wavefront][p[0]]; 
   // Get the right sub-partition by projection down to the proper color
   Point<2> color;
   switch (projection_kind)
   {
     case Snap::XY_PROJECTION:
       {
-        color.x[0] = spatial_point.x[0];
-        color.x[1] = spatial_point.x[1];
-        return runtime->get_logical_subregion_by_color(upper_bound,
-                                  DomainPoint::from_point<2>(color));
+        color[0] = spatial_point[0];
+        color[1] = spatial_point[1];
+        return runtime->get_logical_subregion_by_color(
+                LogicalPartition<2>(upper_bound), color);
       }
     case Snap::YZ_PROJECTION:
       {
-        color.x[0] = spatial_point.x[1];
-        color.x[1] = spatial_point.x[2];
-        return runtime->get_logical_subregion_by_color(upper_bound,
-                                  DomainPoint::from_point<2>(color));
+        color[0] = spatial_point[1];
+        color[1] = spatial_point[2];
+        return runtime->get_logical_subregion_by_color(
+                LogicalPartition<2>(upper_bound), color);
       }
     case Snap::XZ_PROJECTION:
       {
-        color.x[0] = spatial_point.x[0];
-        color.x[1] = spatial_point.x[2];
-        return runtime->get_logical_subregion_by_color(upper_bound,
-                                  DomainPoint::from_point<2>(color));
+        color[0] = spatial_point[0];
+        color[1] = spatial_point[2];
+        return runtime->get_logical_subregion_by_color(
+                LogicalPartition<2>(upper_bound), color);
       }
     default:
       assert(false);
   }
   return Legion::LogicalRegion::NO_REGION;
 }
-#endif
 
 //------------------------------------------------------------------------------
 template<>

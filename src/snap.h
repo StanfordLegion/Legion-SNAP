@@ -197,11 +197,22 @@ public:
   enum SnapPartitionID {
     DISJOINT_PARTITION = 0,
   };
+#define SNAP_SWEEP_PROJECTION(corner)     \
+  ((Snap::SnapProjectionID)(Snap::SWEEP_PROJECTION + (corner)))
+#define SNAP_XY_PROJECTION(corner)        \
+  ((Snap::SnapProjectionID)(Snap::XY_PROJECTION + (corner)))
+#define SNAP_YZ_PROJECTION(corner)        \
+  ((Snap::SnapProjectionID)(Snap::YZ_PROJECTION + (corner)))
+#define SNAP_XZ_PROJECTION(corner)        \
+  ((Snap::SnapProjectionID)(Snap::XZ_PROJECTION + (corner)))
   enum SnapProjectionID {
     SWEEP_PROJECTION = 1,
-    XY_PROJECTION = 2,
-    YZ_PROJECTION = 3,
-    XZ_PROJECTION = 4,
+    // ...
+    XY_PROJECTION = SWEEP_PROJECTION + 8,
+    // ...
+    YZ_PROJECTION = XY_PROJECTION + 8,
+    // ...
+    XZ_PROJECTION = YZ_PROJECTION + 8,
   };
 public:
   Snap(Context c, Runtime *rt)
@@ -650,7 +661,8 @@ protected:
 
 class SnapSweepProjectionFunctor : public ProjectionFunctor {
 public:
-  SnapSweepProjectionFunctor(void);
+  SnapSweepProjectionFunctor(
+      const std::vector<std::vector<Point<3> > > &wavefront_map);
 public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalRegion upper_bound,
@@ -658,12 +670,20 @@ public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
+                                const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
+                                const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
+  virtual bool is_functional(void) const { return true; }
+public:
+  const std::vector<std::vector<Point<3> > > &wavefront_map;
 };
 
 class FluxProjectionFunctor : public ProjectionFunctor {
 public:
-  FluxProjectionFunctor(Snap::SnapProjectionID kind);
+  FluxProjectionFunctor(Snap::SnapProjectionID kind,
+      const std::vector<std::vector<Point<3> > > &wavefront_map);
 public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalRegion upper_bound,
@@ -671,9 +691,15 @@ public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
+                                const Legion::DomainPoint &point);
+  virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
+                                const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
+  virtual bool is_functional(void) const { return true; }
 public:
   const Snap::SnapProjectionID projection_kind;
+  const std::vector<std::vector<Point<3> > > &wavefront_map;
 };
 
 class AndReduction {
