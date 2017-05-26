@@ -136,7 +136,7 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
   {
     Accessor<double,3> fa_flux(regions[0], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {    
-      const Point<3> p = itr;
+      const Point<3> &p = *itr;
       int i = p[0] - dom.bounds.lo[0];
       assert(i < Snap::nx_per_chunk);
       int j = p[1] - dom.bounds.lo[1];
@@ -144,7 +144,7 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
       int k = p[2] - dom.bounds.lo[2];
       assert(k < Snap::nz_per_chunk);
       double value = (double(g) * tx[i] * ty[j] * tz[k]);
-      fa_flux[itr] = value;
+      fa_flux[*itr] = value;
     }
   }
 
@@ -164,11 +164,11 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
     Accessor<double,3> fa_flux(regions[0], *it);
     Accessor<MomentTriple,3> fa_fluxm(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {
-      double flux = fa_flux[itr];
+      double flux = fa_flux[*itr];
       MomentTriple result;
       for (int l = 0; l < 3; l++)
         result[l] = p[l] * flux;
-      fa_fluxm[itr] = result;
+      fa_fluxm[*itr] = result;
     }
   }
 
@@ -301,19 +301,19 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
     Accessor<double,3> fa_qim(regions[5], *it);
 
     for (DomainIterator<3> itr(dom); itr(); itr++) {
-      Point<3> p = itr;
+      const Point<3> &p = *itr;
       const int i = p[0] - dom.bounds.lo[0];
       const int j = p[1] - dom.bounds.lo[1];
       const int k = p[2] - dom.bounds.lo[2];
 
-      const int mat = fa_mat[itr];
+      const int mat = fa_mat[*itr];
       const double sigt = fa_sigt[mat];
-      const double ref_flux = fa_flux[itr];
+      const double ref_flux = fa_flux[*itr];
       const double flux_update = sigt * ref_flux;
 
-      const MomentTriple ref_fluxm = fa_fluxm[itr];
+      const MomentTriple ref_fluxm = fa_fluxm[*itr];
 
-      memcpy(angle_buffer, fa_qim.ptr(itr), angle_buffer_size);
+      memcpy(angle_buffer, fa_qim.ptr(*itr), angle_buffer_size);
       for (int ang = 0; ang < Snap::num_angles; ang++) {
         angle_buffer[ang] += (double(g_idx+1) * is * Snap::mu[ang] * sx[i] * cy[j] * cz[k]);
         angle_buffer[ang] += flux_update;
@@ -326,7 +326,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
               task->regions[0].privilege_fields.begin(); gp !=
               task->regions[0].privilege_fields.end(); gp++, gp_idx++) {
           Accessor<double,3> &fa_flux_gp = fa_fluxes[gp_idx];
-          const double flux_gp = fa_flux_gp[itr];
+          const double flux_gp = fa_flux_gp[*itr];
           const MomentQuad quad = fa_slgg[mat][gp_idx];
           angle_buffer[ang] -= (quad[0] * flux_gp);
           int lm = 1;
@@ -341,7 +341,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
           }
         }
       }
-      memcpy(fa_qim.ptr(itr), angle_buffer, angle_buffer_size);
+      memcpy(fa_qim.ptr(*itr), angle_buffer, angle_buffer_size);
     }
   }
 
@@ -407,11 +407,11 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap,
     const double vg = fa_v[0];
 
     for (DomainIterator<3> itr(dom); itr(); itr++) {
-      const double ref_flux = fa_flux[itr];
+      const double ref_flux = fa_flux[*itr];
       // compute the source
-      fa_qi[itr] = ref_flux / vg;
+      fa_qi[*itr] = ref_flux / vg;
       // Then scale the flux 
-      fa_flux[itr] = ref_flux * t_scale;
+      fa_flux[*itr] = ref_flux * t_scale;
     }
   }
 #endif
@@ -462,10 +462,10 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
     Accessor<double,3> fa_qim(regions[0], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      memcpy(angle_buffer, fa_qim.ptr(itr), angle_buffer_size);
+      memcpy(angle_buffer, fa_qim.ptr(*itr), angle_buffer_size);
       for (int ang = 0; ang < Snap::num_angles; ang++)
         angle_buffer[ang] *= scale_factor;
-      memcpy(fa_qim.ptr(itr), angle_buffer, angle_buffer_size);
+      memcpy(fa_qim.ptr(*itr), angle_buffer, angle_buffer_size);
     }
   }
   free(angle_buffer);
@@ -519,8 +519,8 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
     Accessor<double,3> fa_flux(regions[0], *it);
     Accessor<double,3> fa_ref_flux(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {
-      const double flux = fa_flux[itr];
-      double ref_flux = fa_ref_flux[itr];
+      const double flux = fa_flux[*itr];
+      double ref_flux = fa_ref_flux[*itr];
 
       double df = 1.0;
       if (ref_flux < tolr) {

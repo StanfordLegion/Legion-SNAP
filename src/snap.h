@@ -339,6 +339,7 @@ public:
     typedef Legion::Mapping::PhysicalInstance PhysicalInstance;
     typedef Legion::VariantID VariantID;
     typedef Legion::LogicalRegion LogicalRegion;
+    typedef Legion::AddressSpace AddressSpace;
   public:
     SnapMapper(MapperRuntime *rt, Machine machine, Processor local,
                const char *mapper_name);

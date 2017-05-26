@@ -110,9 +110,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap,const SnapArray<1> &sig,
           IndexSpace<3>(task->regions[2].region.get_index_space()));
   for (DomainIterator<3> itr(dom); itr(); itr++)
   {
-    int mat = fa_mat[itr];
+    int mat = fa_mat[*itr];
     for (int idx = 0; idx < num_groups; idx++)
-      fa_xs[idx][itr] = fa_sig[idx][mat];
+      fa_xs[idx][*itr] = fa_sig[idx][mat];
   }
 #endif
 }
@@ -240,9 +240,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
           IndexSpace<3>(task->regions[2].region.get_index_space()));
   for (DomainIterator<3> itr(dom); itr(); itr++)
   {
-    int mat = fa_mat[itr];
+    int mat = fa_mat[*itr];
     for (int idx = 0; idx < num_groups; idx++)
-      fa_xs[idx][itr] = fa_slgg[idx][mat][group_start+idx];
+      fa_xs[idx][*itr] = fa_slgg[idx][mat][group_start+idx];
   }
 #endif
 }
@@ -374,11 +374,11 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
       Accessor<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      const double xs = fa_xs[itr];
+      const double xs = fa_xs[*itr];
       for (int ang = 0; ang < Snap::num_angles; ang++)
         temp[ang] = 1.0 / (xs + vdelt + Snap::hi * Snap::mu[ang] + 
                            Snap::hj * Snap::eta[ang] + Snap::hk * Snap::xi[ang]);
-      memcpy(fa_dinv.ptr(itr), temp, buffer_size);
+      memcpy(fa_dinv.ptr(*itr), temp, buffer_size);
     }
   }
 

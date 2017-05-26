@@ -170,7 +170,7 @@ static int gcd(int a, int b)
             for (int g2 = 0; g2 < num_groups; g2++) {
               if (g1 == g2)
                 continue;
-              MomentQuad cs = fa_slgg[g1][Point<2>(mat,g2)];
+              MomentQuad cs = fa_slgg[g1][mat][g2];
               qo0 += cs[0] * flux_strip[g2 * strip_size + i];
             }
             fa_qo0[g1][x+i][y][z] = qo0;
@@ -201,7 +201,7 @@ static int gcd(int a, int b)
                   continue;
                 int moment = 0;
                 MomentTriple csm;
-                MomentQuad scat = fa_slgg[g1][Point<2>(mat,g2)];
+                MomentQuad scat = fa_slgg[g1][mat][g2];
                 for (int l = 1; l < Snap::num_moments; l++) {
                   for (int j = 0; j < Snap::lma[l]; j++)
                     csm[moment+j] = scat[l];
@@ -381,13 +381,13 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
     Accessor<double,3> fa_flux0po(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
-      double flux0po = fa_flux0po[itr];
+      double flux0po = fa_flux0po[*itr];
       double df = 1.0;
       if (fabs(flux0po) < tolr) {
         flux0po = 1.0;
         df = 0.0;
       }
-      double flux0 = fa_flux0[itr];
+      double flux0 = fa_flux0[*itr];
       df = fabs( (flux0 / flux0po) - df );
       // Skip anything less than -INF
       if (df < -INFINITY)
