@@ -20,6 +20,7 @@
 #define __SNAP_H__
 
 #include "legion.h"
+#include "legion_stl.h"
 #include "default_mapper.h"
 #include "snap_types.h"
 
@@ -54,6 +55,12 @@ template<int DIM>
 using LogicalPartition = Legion::LogicalPartitionT<DIM,long long>;
 template<int DIM>
 using Domain = Legion::DomainT<DIM, long long>;
+template<typename FT, int N, typename T = long long>
+using Accessor = Legion::STL::ArrayAccessor<Legion::AffineAccessor<FT,N,T>,FT,N,T>;
+template<int DIM, typename T = long long>
+using DomainIterator = Legion::PointInDomainIterator<DIM,T>;
+template<int DIM, typename T = long long>
+using RectIterator = Legion::PointInRectIterator<DIM,T>;
 typedef Legion::Runtime Runtime;
 typedef Legion::Context Context;
 typedef Legion::PhysicalRegion PhysicalRegion;

@@ -19,7 +19,7 @@
 #include "snap.h"
 #include "convergence.h"
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
 //------------------------------------------------------------------------------
 ConvergenceMonad::ConvergenceMonad(Context c, Runtime *rt)

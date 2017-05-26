@@ -21,8 +21,6 @@
 
 extern Legion::Logger log_snap;
 
-using namespace LegionRuntime::Accessor;
-
 //------------------------------------------------------------------------------
 InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
   : SnapTask<InitMaterial,Snap::INIT_MATERIAL_TASK_ID>(
@@ -47,7 +45,6 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void InitMaterial::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -94,27 +91,17 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
       assert(false);
   }
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
-  RegionAccessor<AccessorType::Generic,int> fa_mat = 
-    regions[0].get_field_accessor(Snap::FID_SINGLE).typeify<int>();
-  Rect<3> mat_bounds;
-  mat_bounds.lo.x[0] = i1-1;
-  mat_bounds.lo.x[1] = j1-1;
-  mat_bounds.lo.x[2] = k1-1;
-  mat_bounds.hi.x[0] = i2-1;
-  mat_bounds.hi.x[1] = j2-1;
-  mat_bounds.hi.x[2] = k2-1;
-  Rect<3> local_bounds = subgrid_bounds.intersection(mat_bounds);
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
+  Accessor<int,3> fa_mat(regions[0], Snap::FID_SINGLE);
+  Rect<3> mat_bounds(Point<3>(i1-1, j1-1, k1-1),
+                     Point<3>(i2-1, j2-1, k2-1));;
+  Rect<3> local_bounds = dom.bounds.intersection(mat_bounds);
   if (local_bounds.volume() == 0)
     return;
-  for (GenericPointInRectIterator<3> itr(local_bounds); itr; itr++) {
-    DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-    fa_mat.write(dp, 2);
-  }
+  for (RectIterator<3> itr(local_bounds); itr(); itr++)
+    fa_mat[itr] = 2;
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
@@ -140,7 +127,6 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
                                            true/*leaf*/);
 }
 
-#if 0
 //------------------------------------------------------------------------------
 /*static*/ void InitSource::cpu_implementation(const Task *task,
     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
@@ -186,33 +172,23 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
     default: // nothing else should be called
       assert(false);
   }
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
-  Rect<3> source_bounds;
-  source_bounds.lo.x[0] = i1-1;
-  source_bounds.lo.x[1] = j1-1;
-  source_bounds.lo.x[2] = k1-1;
-  source_bounds.hi.x[0] = i2-1;
-  source_bounds.hi.x[1] = j2-1;
-  source_bounds.hi.x[2] = k2-1;
-  Rect<3> local_bounds = subgrid_bounds.intersection(source_bounds);
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
+  Rect<3> source_bounds(Point<3>(i1-1, j1-1, k1-1),
+                        Point<3>(i2-1, j2-1, k2-1));;
+  Rect<3> local_bounds = dom.bounds.intersection(source_bounds);
   if (local_bounds.volume() == 0)
     return;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    RegionAccessor<AccessorType::Generic,double> fa_qi = 
-      regions[0].get_field_accessor(*it).typeify<double>();
-    for (GenericPointInRectIterator<3> itr(local_bounds); itr; itr++) {
-      DomainPoint dp = DomainPoint::from_point<3>(itr.p);
-      fa_qi.write(dp, 1.0);
-    }
+    Accessor<double,3> fa_qi(regions[0], *it);
+    for (RectIterator<3> itr(local_bounds); itr(); itr++)
+      fa_qi[itr] = 1.0;
   }
 #endif
 }
-#endif
 
 //------------------------------------------------------------------------------
 InitGPUSweep::InitGPUSweep(const Snap &snap, const IndexSpace<3> &launch)

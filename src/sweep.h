@@ -58,32 +58,10 @@ public:
 public:
   static void cpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static void sse_implementation(const Task *task, Context ctx, Runtime *runtime,
-     const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-     const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],
-     const std::vector<double*> &qim_ptrs, const ByteOffset qim_offsets[3],
-     const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-     const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3],
-     const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
-     const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
-     const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
-     const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
-     const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-     const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
-     const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1]);
-  static void avx_implementation(const Task *task, Context ctx, Runtime *runtime,
-     const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-     const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],
-     const std::vector<double*> &qim_ptrs, const ByteOffset qim_offsets[3],
-     const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-     const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3],
-     const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
-     const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
-     const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
-     const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
-     const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-     const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
-     const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1]);
+  static void sse_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+  static void avx_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
   static void gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
      const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
      const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],

@@ -23,9 +23,8 @@
 #include <stdlib.h>
 #include <x86intrin.h>
 
-extern LegionRuntime::Logger::Category log_snap;
+extern Legion::Logger log_snap;
 
-using namespace LegionRuntime::Accessor;
 using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
@@ -208,17 +207,13 @@ void MiniKBATask::dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp,
                                            true/*leaf*/);
 #else
 #ifdef __AVX__
-  register_cpu_variant<
-    raw_rect_task_wrapper<MomentQuad, 3, double, 3, double, 3, MomentTriple, 3,
-                       double, 3, double, 3, double, 3, double, 3, double, 2,
-                       double, 2, double, 2, double, 1, avx_implementation> >(
-              execution_constraints, layout_constraints, true/*leaf*/);
+  register_cpu_variant<avx_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 #else
-  register_cpu_variant<
-    raw_rect_task_wrapper<MomentQuad, 3, double, 3, double, 3, MomentTriple, 3,
-                       double, 3, double, 3, double, 3, double, 3, double, 2,
-                       double, 2, double, 2, double, 1, sse_implementation> >(
-              execution_constraints, layout_constraints, true/*leaf*/);
+  register_cpu_variant<sse_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 #endif
 #endif
 }
@@ -260,28 +255,27 @@ void MiniKBATask::dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp,
               execution_constraints, layout_constraints, true/*leaf*/);
 }
 
-#if 0
 static inline Point<2> ghostx_point(const Point<3> &local_point)
 {
   Point<2> ghost;
-  ghost.x[0] = local_point.x[1]; // y
-  ghost.x[1] = local_point.x[2]; // z
+  ghost[0] = local_point[1]; // y
+  ghost[1] = local_point[2]; // z
   return ghost;
 }
 
 static inline Point<2> ghosty_point(const Point<3> &local_point)
 {
   Point<2> ghost;
-  ghost.x[0] = local_point.x[0]; // x
-  ghost.x[1] = local_point.x[2]; // z
+  ghost[0] = local_point[0]; // x
+  ghost[1] = local_point[2]; // z
   return ghost;
 }
 
 static inline Point<2> ghostz_point(const Point<3> &local_point)
 {
   Point<2> ghost;
-  ghost.x[0] = local_point.x[0]; // x
-  ghost.x[1] = local_point.x[1]; // y
+  ghost[0] = local_point[0]; // x
+  ghost[1] = local_point[1]; // y
   return ghost;
 }
 
@@ -299,19 +293,17 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
   // This implementation of the sweep assumes three dimensions
   assert(Snap::num_dims == 3);
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   // Figure out the origin point based on which corner we are
   const bool stride_x_positive = ((args->corner & 0x1) != 0);
   const bool stride_y_positive = ((args->corner & 0x2) != 0);
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
-  const coord_t origin_ints[3] = { 
-    (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]),
-    (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]),
-    (stride_z_positive ? subgrid_bounds.lo[2] : subgrid_bounds.hi[2]) };
-  const Point<3> origin(origin_ints);
+  const Point<3> origin( 
+    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]),
+    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]),
+    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]));
 
   // Local arrays
   const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
@@ -345,9 +337,9 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
   // prefetchers and likely result in overall better performance
   // because the very small 2x2x2 size will be too small to warm up
   // the prefetchers and they will be confused by the access pattern
-  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1; 
-  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
-  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
+  const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
+  const int z_range = (dom.bounds.hi[2] - dom.bounds.lo[2]) + 1;
   double *yflux_pencil = (double*)malloc(x_range * angle_buffer_size);
   double *zflux_plane  = (double*)malloc(y_range * x_range * angle_buffer_size);
 
@@ -356,52 +348,30 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
   // is super annoying so just do all the inlining for the compiler
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
-    RegionAccessor<AccessorType::Generic,MomentQuad> fa_qtot = 
-      regions[0].get_field_accessor(
-          SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentQuad>();
-    RegionAccessor<AccessorType::Generic,double> fa_flux = 
-      regions[1].get_field_accessor(
-          SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
-
-    // Reduction accessors don't support structured points yet
-    ByteOffset flux_offsets[3], fluxm_offsets[3];
-    Rect<3> temp_bounds; 
-    double *const flux = 
-      fa_flux.raw_rect_ptr<3>(subgrid_bounds, temp_bounds, flux_offsets);
-    assert(temp_bounds == subgrid_bounds);
-    MomentTriple *fluxm = NULL;
-    RegionAccessor<AccessorType::Generic> fa_qim;
+    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_qim;
+    Accessor<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = regions[2].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-      RegionAccessor<AccessorType::Generic,MomentTriple> fa_fluxm = 
-        regions[3].get_field_accessor(
-            SNAP_ENERGY_GROUP_FIELD(group)).typeify<MomentTriple>();
-      fluxm = fa_fluxm.raw_rect_ptr<3>(subgrid_bounds, temp_bounds, fluxm_offsets);
-      assert(temp_bounds == subgrid_bounds);
+      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    // No types here since the size of these fields are dependent
-    // on the number of angles
-    RegionAccessor<AccessorType::Generic> fa_dinv = 
-      regions[4].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_in = 
-      regions[5].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic> fa_time_flux_out = 
-      regions[6].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group));
-    RegionAccessor<AccessorType::Generic,double> fa_t_xs = 
-      regions[7].get_field_accessor(SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>();
+    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    RegionAccessor<AccessorType::Generic> fa_ghostz = 
-      regions[8].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    RegionAccessor<AccessorType::Generic> fa_ghostx = 
-      regions[9].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    RegionAccessor<AccessorType::Generic> fa_ghosty = 
-      regions[10].get_field_accessor(SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghostz(regions[8], 
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghostx(regions[9],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghosty(regions[10],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = regions[11].get_field_accessor(
-        SNAP_ENERGY_GROUP_FIELD(group)).typeify<double>().read(
-        DomainPoint::from_point<1>(Point<1>::ZEROES()));
+    const double vdelt = Accessor<double,1>(regions[11],
+                          SNAP_ENERGY_GROUP_FIELD(group))[0];
     
     // Now we do the sweeps over the points
     for (int z = 0; z < z_range; z++) {
@@ -410,21 +380,20 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // Figure out the local point that we are working on    
           Point<3> local_point = origin;
           if (stride_x_positive)
-            local_point.x[0] += x;
+            local_point[0] += x;
           else
-            local_point.x[0] -= x;
+            local_point[0] -= x;
           if (stride_y_positive)
-            local_point.x[1] += y;
+            local_point[1] += y;
           else
-            local_point.x[1] -= y;
+            local_point[1] -= y;
           if (stride_z_positive)
-            local_point.x[2] += z;
+            local_point[2] += z;
           else
-            local_point.x[2] -= z;
+            local_point[2] -= z;
 
           // Compute the angular source
-          const DomainPoint dp = DomainPoint::from_point<3>(local_point);
-          const MomentQuad quad = fa_qtot.read(dp);
+          const MomentQuad quad = fa_qtot[local_point];
           for (int ang = 0; ang < Snap::num_angles; ang++)
             psi[ang] = quad[0];
           if (Snap::num_moments > 1) {
@@ -441,8 +410,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            fa_qim.read_untyped(DomainPoint::from_point<3>(local_point),
-                                temp_array, angle_buffer_size);
+            memcpy(temp_array, fa_qim.ptr(local_point), angle_buffer_size);
             for (int ang = 0; ang < Snap::num_angles; ang++)
               psi[ang] += temp_array[ang];
           }
@@ -454,8 +422,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (x == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostx_point(local_point);
-            fa_ghostx.read_untyped(DomainPoint::from_point<2>(ghost_point),   
-                                   psii, angle_buffer_size);
+            memcpy(psii, fa_ghostx.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < Snap::num_angles; ang++)
             pc[ang] += psii[ang] * Snap::mu[ang] * Snap::hi;
@@ -463,8 +430,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (y == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghosty_point(local_point);
-            fa_ghosty.read_untyped(DomainPoint::from_point<2>(ghost_point), 
-                                   psij, angle_buffer_size);
+            memcpy(psij, fa_ghosty.ptr(ghost_point), angle_buffer_size);
           } else {
             // Local array
             const int offset = x * Snap::num_angles;
@@ -476,8 +442,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (z == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostz_point(local_point);
-            fa_ghostz.read_untyped(DomainPoint::from_point<2>(ghost_point), 
-                                   psik, angle_buffer_size);
+            memcpy(psik, fa_ghostz.ptr(ghost_point), angle_buffer_size);
           } else {
             // Local array
             const int offset = (y * x_range + x) * Snap::num_angles;
@@ -489,14 +454,12 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // See if we're doing anything time dependent
           if (vdelt != 0.0) 
           {
-            fa_time_flux_in.read_untyped(DomainPoint::from_point<3>(local_point),
-                                         time_flux_in, angle_buffer_size);
+            memcpy(time_flux_in, fa_time_flux_in.ptr(local_point), angle_buffer_size);
             for (int ang = 0; ang < Snap::num_angles; ang++)
               pc[ang] += vdelt * time_flux_in[ang];
           }
           // Multiple by the precomputed denominator inverse
-          fa_dinv.read_untyped(DomainPoint::from_point<3>(local_point),
-                               temp_array, angle_buffer_size);
+          memcpy(temp_array, fa_dinv.ptr(local_point), angle_buffer_size);
           for (int ang = 0; ang < Snap::num_angles; ang++)
             pc[ang] *= temp_array[ang];
 
@@ -511,7 +474,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
               hv_z[ang] = 1.0;
             for (int ang = 0; ang < Snap::num_angles; ang++)
               hv_t[ang] = 1.0;
-            const double t_xs = fa_t_xs.read(DomainPoint::from_point<3>(local_point));
+            const double t_xs = fa_t_xs[local_point];
             while (true) {
               unsigned negative_fluxes = 0;
               // Figure out how many negative fluxes we have
@@ -592,8 +555,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             {
               for (int ang = 0; ang < Snap::num_angles; ang++)
                 time_flux_out[ang] = fx_hv_t[ang] * hv_t[ang];
-              fa_time_flux_out.write_untyped(DomainPoint::from_point<3>(local_point),
-                                             time_flux_out, angle_buffer_size);
+              memcpy(fa_time_flux_out.ptr(local_point), time_flux_out, angle_buffer_size);
             }
           } else {
             // NO FIXUP
@@ -608,8 +570,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
               // Write out the outgoing temporal flux
               for (int ang = 0; ang < Snap::num_angles; ang++)
                 time_flux_out[ang] = 2.0 * pc[ang] - time_flux_in[ang];
-              fa_time_flux_out.write_untyped(DomainPoint::from_point<3>(local_point),
-                                             time_flux_out, angle_buffer_size);
+              memcpy(fa_time_flux_out.ptr(local_point), time_flux_out, angle_buffer_size);
             }
           }
 
@@ -618,15 +579,13 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (x == (Snap::nx_per_chunk-1)) {
             Point<2> ghost_point = ghostx_point(local_point);
             // We write out on our own region
-            fa_ghostx.write_untyped(DomainPoint::from_point<2>(ghost_point),
-                                    psii, angle_buffer_size);
+            memcpy(fa_ghostx.ptr(ghost_point), psii, angle_buffer_size);
           } // Else nothing: psii just gets caried over to next iteration
           // Y ghost
           if (y == (Snap::ny_per_chunk-1)) {
             Point<2> ghost_point = ghosty_point(local_point);
             // Write out on our own region
-            fa_ghosty.write_untyped(DomainPoint::from_point<2>(ghost_point),
-                                    psij, angle_buffer_size);
+            memcpy(fa_ghosty.ptr(ghost_point), psij, angle_buffer_size);
           } else {
             // Write to the pencil 
             const int offset = x * Snap::num_angles;
@@ -636,8 +595,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (z == (Snap::nz_per_chunk-1)) {
             Point<2> ghost_point = ghostz_point(local_point);
             // Write out on our own region
-            fa_ghostz.write_untyped(DomainPoint::from_point<2>(ghost_point),
-                                    psik, angle_buffer_size);
+            memcpy(fa_ghostz.ptr(ghost_point), psik, angle_buffer_size);
           } else {
             // Write to the plane
             const int offset = (y * x_range + x) * Snap::num_angles;
@@ -650,15 +608,10 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             psi[ang] = Snap::w[ang] * pc[ang]; 
             total += psi[ang];
           }
-          double *local_flux = flux;
-          // Have to convert to local coordinates for raw pointer
-          const Point<3> local_flux_point = local_point - subgrid_bounds.lo;
-          for (int i = 0; i < 3; i++)
-            local_flux += local_flux_point[i] * flux_offsets[i];
 #ifndef SNAP_USE_RELAXED_COHERENCE
-          SumReduction::fold<true/*exclusive*/>(*local_flux, total);
+          SumReduction::fold<true/*exclusive*/>(fa_flux[local_point], total);
 #else
-          SumReduction::apply<false/*exclusive*/>(*local_flux, total);
+          SumReduction::apply<false/*exclusive*/>(fa_flux[local_point], total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -671,13 +624,10 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
               }
               triple[l-1] = total;
             }
-            MomentTriple *local_fluxm = fluxm;
-            for (int i = 0; i < 3; i++)
-              local_fluxm += local_flux_point[i] * fluxm_offsets[i];
 #ifndef SNAP_USE_RELAXED_COHERENCE
-            TripleReduction::fold<true/*exclusive*/>(*local_fluxm, triple);
+            TripleReduction::fold<true/*exclusive*/>(fa_fluxm[local_point], triple);
 #else
-            TripleReduction::apply<false/*exclusive*/>(*local_fluxm, triple);
+            TripleReduction::apply<false/*exclusive*/>(fa_fluxm[local_point], triple);
 #endif
           }
         }
@@ -706,38 +656,9 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
 #endif
 }
 
-inline ByteOffset operator*(const ByteOffset offsets[2], const Point<2> &point)
-{
-  return (offsets[0] * point.x[0] + offsets[1] * point.x[1]);
-}
-
-inline ByteOffset operator*(const ByteOffset offsets[3], const Point<3> &point)
-{
-  return (offsets[0] * point.x[0] + offsets[1] * point.x[1] + offsets[2] * point.x[2]);
-}
-
-template<int DIM>
-inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
-                                  const Point<DIM> &point)
-{
-  return (__m128d*)(ptr + (offsets * point));
-}
-
 //------------------------------------------------------------------------------
-/*static*/ void MiniKBATask::sse_implementation(
-  const Task *task, Context ctx, Runtime *runtime,
-  const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-  const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],
-  const std::vector<double*> &qim_ptrs, const ByteOffset qim_offsets[3],
-  const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-  const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3],
-  const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
-  const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
-  const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
-  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
-  const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
-  const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-  const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
+/*static*/ void MiniKBATask::sse_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -749,20 +670,18 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
   // This implementation of the sweep assumes three dimensions
   assert(Snap::num_dims == 3); 
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   // Figure out the origin point based on which corner we are
   const bool stride_x_positive = ((args->corner & 0x1) != 0);
   const bool stride_y_positive = ((args->corner & 0x2) != 0);
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
-  const coord_t origin_ints[3] = { 
-    (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]) - subgrid_bounds.lo[0],
-    (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]) - subgrid_bounds.lo[1],
-    (stride_z_positive ? subgrid_bounds.lo[2] : subgrid_bounds.hi[2]) - subgrid_bounds.lo[2]};
-  const Point<3> origin(origin_ints);
+  const Point<3> origin(
+   (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
+   (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
+   (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
 
   // Local arrays
   assert((Snap::num_angles % 2) == 0);
@@ -783,32 +702,38 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
   const __m128d tolr = _mm_set1_pd(1.0e-12);
 
   // See note in the CPU implementation about why we do things this way
-  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1; 
-  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
-  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
+  const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
+  const int z_range = (dom.bounds.hi[2] - dom.bounds.lo[2]) + 1;
   __m128d *yflux_pencil = (__m128d*)malloc(x_range * angle_buffer_size);
   __m128d *zflux_plane  = (__m128d*)malloc(y_range * x_range * angle_buffer_size);
 
-  for (unsigned group = 0; group < flux_ptrs.size(); group++) {
-    const MomentQuad *const qtot_ptr = qtot_ptrs[group];
-    double *const flux = flux_ptrs[group];
-
-    void *const qim_ptr = qim_ptrs[group];
-    MomentTriple *const fluxm = fluxm_ptrs[group];
- 
-    // No types here since the size of these fields are dependent
-    // on the number of angles
-    void *const dinv_ptr = dinv_ptrs[group];
-    void *const time_flux_in_ptr = time_flux_in_ptrs[group]; 
-    void *const time_flux_out_ptr = time_flux_out_ptrs[group]; 
-    const double *const t_xs_ptr = t_xs_ptrs[group];
+  for (int group = args->group_start; group <= args->group_stop; group++) {
+    // Get all the accessors for this energy group
+    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_qim;
+    Accessor<MomentTriple,3> fa_fluxm;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+    }
+    
+    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    void *const ghostx_ptr = ghost_x_ptrs[group];
-    void *const ghosty_ptr = ghost_y_ptrs[group];
-    void *const ghostz_ptr = ghost_z_ptrs[group];
+    Accessor<double,2> fa_ghostz(regions[8], 
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghostx(regions[9],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghosty(regions[10],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = *(vdelt_ptrs[group]);
+    const double vdelt = Accessor<double,1>(regions[11],
+                          SNAP_ENERGY_GROUP_FIELD(group))[0];
 
     for (int z = 0; z < z_range; z++) {
       for (int y = 0; y < y_range; y++) {
@@ -816,20 +741,20 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           // Figure out the local point that we are working on    
           Point<3> local_point = origin;
           if (stride_x_positive)
-            local_point.x[0] += x;
+            local_point[0] += x;
           else
-            local_point.x[0] -= x;
+            local_point[0] -= x;
           if (stride_y_positive)
-            local_point.x[1] += y;
+            local_point[1] += y;
           else
-            local_point.x[1] -= y;
+            local_point[1] -= y;
           if (stride_z_positive)
-            local_point.x[2] += z;
+            local_point[2] += z;
           else
-            local_point.x[2] -= z;
+            local_point[2] -= z;
 
           // Compute the angular source
-          MomentQuad quad = *(qtot_ptr + qtot_offsets * local_point);
+          MomentQuad quad = fa_qtot[local_point];
           for (int ang = 0; ang < num_vec_angles; ang++)
             psi[ang] = _mm_set1_pd(quad[0]);
           if (Snap::num_moments > 1) {
@@ -849,8 +774,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m128d *__restrict__ qim = 
-              (__m128d*)(qim_ptr + qim_offsets * local_point);
+            __m128d *__restrict__ qim = (__m128d*)fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm_add_pd(psi[ang], qim[ang]);
           }
@@ -862,8 +786,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (x == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostx_point(local_point);
-            memcpy(psii, get_sse_angle_ptr<2>(ghostx_ptr, ghostx_offsets,
-                                              ghost_point), angle_buffer_size);
+            memcpy(psii, fa_ghostx.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psii[ang], 
@@ -874,8 +797,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (y == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghosty_point(local_point);
-            memcpy(psij, get_sse_angle_ptr<2>(ghosty_ptr, ghosty_offsets, 
-                                              ghost_point), angle_buffer_size);
+            memcpy(psij, fa_ghosty.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psij already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psij[ang],
@@ -886,16 +808,14 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (z == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostz_point(local_point);
-            memcpy(psik, get_sse_angle_ptr<2>(ghostz_ptr, ghostz_offsets, 
-                                              ghost_point), angle_buffer_size);
+            memcpy(psik, fa_ghostz.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psik already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_add_pd(pc[ang], _mm_mul_pd( _mm_mul_pd(psik[ang],
                     _mm_set_pd(Snap::xi[2*ang+1], Snap::xi[2*ang])),
                     _mm_set1_pd(Snap::hk)));
           // See if we're doing anything time dependent
-          __m128d *__restrict__ time_flux_in = get_sse_angle_ptr<3>(time_flux_in_ptr,
-                                                  time_flux_in_offsets, local_point);
+          __m128d *__restrict__ time_flux_in = (__m128d*)fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -903,8 +823,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
                     _mm_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m128d *__restrict__ dinv = 
-            get_sse_angle_ptr<3>(dinv_ptr, dinv_offsets, local_point);
+          __m128d *__restrict__ dinv = (__m128d*)fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
           if (Snap::flux_fixup) {
@@ -919,7 +838,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
             for (int ang = 0; ang < num_vec_angles; ang++)
               hv_t[ang] = _mm_set1_pd(1.0);
 
-            const double t_xs = *(t_xs_ptr + t_xs_offsets * local_point);
+            const double t_xs = fa_t_xs[local_point];
             while (true) {
               unsigned negative_fluxes = 0;
               // Figure out how many negative fluxes we have
@@ -1047,8 +966,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
             {
               // Write out the outgoing temporal flux 
               __m128d *__restrict__ time_flux_out = 
-                get_sse_angle_ptr<3>(time_flux_out_ptr, 
-                                     time_flux_out_offsets, local_point);
+                (__m128d*)fa_time_flux_out.ptr(local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1065,8 +983,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
             {
               // Write out the outgoing temporal flux 
               __m128d *__restrict__ time_flux_out = 
-                get_sse_angle_ptr<3>(time_flux_out_ptr, 
-                                     time_flux_out_offsets, local_point);
+                (__m128d*)fa_time_flux_out.ptr(local_point); 
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), time_flux_in[ang]));
@@ -1076,8 +993,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
             Point<2> ghost_point = ghostx_point(local_point);
-            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghostx_ptr, 
-                                              ghostx_offsets, ghost_point);
+            __m128d *__restrict__ target = (__m128d*)fa_ghostx.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1086,8 +1002,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
             Point<2> ghost_point = ghosty_point(local_point);
-            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghosty_ptr, 
-                                                ghosty_offsets, ghost_point);
+            __m128d *__restrict__ target = (__m128d*)fa_ghosty.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1095,8 +1010,7 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
             Point<2> ghost_point = ghostz_point(local_point);
-            __m128d *__restrict__ target = get_sse_angle_ptr<2>(ghostz_ptr, 
-                                              ghostz_offsets, ghost_point);
+            __m128d *__restrict__ target = (__m128d*)fa_ghostz.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1110,9 +1024,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
           }
           double total = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
 #ifndef SNAP_USE_RELAXED_COHERENCE
-          SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
+          SumReduction::fold<true>(fa_flux[local_point], total);
 #else
-          SumReduction::apply<false>(*(flux + flux_offsets * local_point), total);
+          SumReduction::apply<false>(fa_flux[local_point], total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -1126,9 +1040,9 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
               triple[l-1] = _mm_cvtsd_f64(_mm_hadd_pd(vec_total, vec_total));
             }
 #ifndef SNAP_USE_RELAXED_COHERENCE
-            TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::fold<true>(fa_fluxm[local_point], triple);
 #else
-            TripleReduction::apply<false>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::apply<false>(fa_fluxm[local_point], triple);
 #endif
           }
         }
@@ -1153,37 +1067,18 @@ inline __m128d* get_sse_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
 }
 
 #ifdef __AVX__
-template<int DIM>
-inline __m256d* get_avx_angle_ptr(void *ptr, const ByteOffset offsets[DIM],
-                                  const Point<DIM> &point)
-{
-  return (__m256d*)(ptr + (offsets * point));
-}
-
-static inline void ignore_return(int arg) { }
+static inline void ignore_result(int arg) { }
 
 inline __m256d* malloc_avx_aligned(size_t size)
 {
   __m256d *result;
-  ignore_return(posix_memalign((void**)&result, 32, size));
+  ignore_result(posix_memalign((void**)&result, 32, size));
   return result;
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void MiniKBATask::avx_implementation(
-  const Task *task, Context ctx, Runtime *runtime,
-  const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-  const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],
-  const std::vector<double*> &qim_ptrs, const ByteOffset qim_offsets[3],
-  const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-  const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3],
-  const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
-  const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
-  const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
-  const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
-  const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
-  const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
-  const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
+/*static*/ void MiniKBATask::avx_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -1195,20 +1090,18 @@ inline __m256d* malloc_avx_aligned(size_t size)
   // This implementation of the sweep assumes three dimensions
   assert(Snap::num_dims == 3);
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
   // Figure out the origin point based on which corner we are
   const bool stride_x_positive = ((args->corner & 0x1) != 0);
   const bool stride_y_positive = ((args->corner & 0x2) != 0);
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
-  const coord_t origin_ints[3] = { 
-    (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]) - subgrid_bounds.lo[0],
-    (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]) - subgrid_bounds.lo[1],
-    (stride_z_positive ? subgrid_bounds.lo[2] : subgrid_bounds.hi[2]) - subgrid_bounds.lo[2]};
-  const Point<3> origin(origin_ints);
+  const Point<3> origin( 
+    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
+    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
+    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
 
   // Local arrays
   assert((Snap::num_angles % 4) == 0);
@@ -1228,33 +1121,39 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
   const __m256d tolr = _mm256_set1_pd(1.0e-12);
 
-  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1; 
-  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
-  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
+  const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
+  const int z_range = (dom.bounds.hi[2] - dom.bounds.lo[2]) + 1;
   // See note in the CPU implementation about why we do things this way
   __m256d *yflux_pencil = malloc_avx_aligned(x_range * angle_buffer_size);
   __m256d *zflux_plane  = malloc_avx_aligned(y_range * x_range * angle_buffer_size); 
 
-  for (unsigned group = 0; group < flux_ptrs.size(); group++) {
-    const MomentQuad *const qtot_ptr = qtot_ptrs[group];
-    double *const flux = flux_ptrs[group];
-
-    void *const qim_ptr = qim_ptrs[group];
-    MomentTriple *const fluxm = fluxm_ptrs[group];
- 
-    // No types here since the size of these fields are dependent
-    // on the number of angles
-    void *const dinv_ptr = dinv_ptrs[group];
-    void *const time_flux_in_ptr = time_flux_in_ptrs[group]; 
-    void *const time_flux_out_ptr = time_flux_out_ptrs[group]; 
-    const double *const t_xs_ptr = t_xs_ptrs[group];
+  for (int group = args->group_start; group <= args->group_stop; group++) {
+    // Get all the accessors for this energy group
+    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_qim;
+    Accessor<MomentTriple,3> fa_fluxm;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+    }
+    
+    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    void *const ghostx_ptr = ghost_x_ptrs[group];
-    void *const ghosty_ptr = ghost_y_ptrs[group];
-    void *const ghostz_ptr = ghost_z_ptrs[group];
+    Accessor<double,2> fa_ghostz(regions[8], 
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghostx(regions[9],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghosty(regions[10],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = *(vdelt_ptrs[group]);
+    const double vdelt = Accessor<double,1>(regions[11],
+                          SNAP_ENERGY_GROUP_FIELD(group))[0];
 
     for (int z = 0; z < z_range; z++) {
       for (int y = 0; y < y_range; y++) {
@@ -1262,20 +1161,20 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Figure out the local point that we are working on    
           Point<3> local_point = origin;
           if (stride_x_positive)
-            local_point.x[0] += x;
+            local_point[0] += x;
           else
-            local_point.x[0] -= x;
+            local_point[0] -= x;
           if (stride_y_positive)
-            local_point.x[1] += y;
+            local_point[1] += y;
           else
-            local_point.x[1] -= y;
+            local_point[1] -= y;
           if (stride_z_positive)
-            local_point.x[2] += z;
+            local_point[2] += z;
           else
-            local_point.x[2] -= z;
+            local_point[2] -= z;
 
           // Compute the angular source
-          MomentQuad quad = *(qtot_ptr + qtot_offsets * local_point);
+          MomentQuad quad = fa_qtot[local_point];
           for (int ang = 0; ang < num_vec_angles; ang++)
             psi[ang] = _mm256_set1_pd(quad[0]);
           if (Snap::num_moments > 1) {
@@ -1297,7 +1196,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m256d *__restrict__ qim = (__m256d*)(qim_ptr + qim_offsets * local_point);
+            __m256d *__restrict__ qim = (__m256d*)fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm256_add_pd(psi[ang], qim[ang]);
           }
@@ -1309,8 +1208,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (x == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostx_point(local_point);
-            memcpy(psii, get_avx_angle_ptr<2>(ghostx_ptr, ghostx_offsets,
-                                              ghost_point), angle_buffer_size);
+            memcpy(psii, fa_ghostx.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psii already contains next flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psii[ang], 
@@ -1322,8 +1220,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (y == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghosty_point(local_point);
-            memcpy(psij, get_avx_angle_ptr<2>(ghosty_ptr, ghosty_offsets, 
-                                              ghost_point), angle_buffer_size);
+            memcpy(psij, fa_ghosty.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psij already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psij[ang],
@@ -1335,8 +1232,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (z == 0) {
             // Ghost cell array
             Point<2> ghost_point = ghostz_point(local_point);
-            memcpy(psik, get_avx_angle_ptr<2>(ghostz_ptr, ghostz_offsets, 
-                                              ghost_point), angle_buffer_size);
+            memcpy(psik, fa_ghostz.ptr(ghost_point), angle_buffer_size);
           } // Else nothing: psik already points at the flux
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_add_pd(pc[ang], _mm256_mul_pd( _mm256_mul_pd(psik[ang],
@@ -1345,8 +1241,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(Snap::hk)));
 
           // See if we're doing anything time dependent
-          __m256d *__restrict__ time_flux_in = get_avx_angle_ptr<3>(time_flux_in_ptr,
-                                           time_flux_in_offsets, local_point);
+          __m256d *__restrict__ time_flux_in = (__m256d*)fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -1354,8 +1249,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m256d *__restrict__ dinv = 
-            get_avx_angle_ptr<3>(dinv_ptr, dinv_offsets, local_point);
+          __m256d *__restrict__ dinv = (__m256d*)fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_mul_pd(pc[ang], dinv[ang]);
 
@@ -1370,7 +1264,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
               hv_z[ang] = _mm256_set1_pd(1.0);
             for (int ang = 0; ang < num_vec_angles; ang++)
               hv_t[ang] = _mm256_set1_pd(1.0);
-            const double t_xs = *(t_xs_ptr + t_xs_offsets * local_point);
+            const double t_xs = fa_t_xs[local_point];
             while (true) {
               unsigned negative_fluxes = 0;
               // Figure out how many negative fluxes we have
@@ -1559,8 +1453,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
             {
               // Write out the outgoing temporal flux 
               __m256d *__restrict__ time_flux_out = 
-                get_avx_angle_ptr<3>(time_flux_out_ptr, 
-                                     time_flux_out_offsets, local_point);
+                (__m256d*)fa_time_flux_out.ptr(local_point); 
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1580,8 +1473,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
             {
               // Write out the outgoing temporal flux 
               __m256d *__restrict__ time_flux_out = 
-                get_avx_angle_ptr<3>(time_flux_out_ptr, 
-                                     time_flux_out_offsets, local_point);
+                (__m256d*)fa_time_flux_out.ptr(local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_sub_pd( _mm256_mul_pd( _mm256_set1_pd(2.0), 
@@ -1593,8 +1485,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
             Point<2> ghost_point = ghostx_point(local_point);
-            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghostx_ptr, 
-                                              ghostx_offsets, ghost_point);
+            __m256d *__restrict__ target = (__m256d*)fa_ghostx.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1603,8 +1494,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
             Point<2> ghost_point = ghosty_point(local_point);
-            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghosty_ptr, 
-                                              ghosty_offsets, ghost_point);
+            __m256d *__restrict__ target = (__m256d*)fa_ghosty.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1612,8 +1502,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
             Point<2> ghost_point = ghostz_point(local_point);
-            __m256d *__restrict__ target = get_avx_angle_ptr<2>(ghostz_ptr, 
-                                              ghostz_offsets, ghost_point);
+            __m256d *__restrict__ target = (__m256d*)fa_ghostz.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1630,9 +1519,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
           double total = _mm_cvtsd_f64(_mm256_extractf128_pd(vec_total, 0)) + 
                          _mm_cvtsd_f64(_mm256_extractf128_pd(vec_total, 1));
 #ifndef SNAP_USE_RELAXED_COHERENCE
-          SumReduction::fold<true>(*(flux + flux_offsets * local_point), total);
+          SumReduction::fold<true>(fa_flux[local_point], total);
 #else
-          SumReduction::apply<false>(*(flux + flux_offsets * local_point), total);
+          SumReduction::apply<false>(fa_flux[local_point], total);
 #endif
           if (Snap::num_moments > 1) {
             MomentTriple triple;
@@ -1649,9 +1538,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
                               _mm256_hadd_pd(vec_total, vec_total), 0));
             }
 #ifndef SNAP_USE_RELAXED_COHERENCE
-            TripleReduction::fold<true>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::fold<true>(fa_fluxm[local_point], triple);
 #else
-            TripleReduction::apply<false>(*(fluxm + fluxm_offsets * local_point), triple);
+            TripleReduction::apply<false>(fa_fluxm[local_point], triple);
 #endif
           }
         }
@@ -1675,7 +1564,6 @@ inline __m256d* malloc_avx_aligned(size_t size)
 #endif
 }
 #endif // __AVX__
-#endif
 
 #ifdef USE_GPU_KERNELS
 extern void run_gpu_sweep(const Point<3> origin, 
