@@ -674,9 +674,9 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
   const Point<3> origin(
-   (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
-   (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
-   (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
+   (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]),
+   (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]),
+   (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]));
 
   // Local arrays
   assert((Snap::num_angles % 2) == 0);
@@ -707,24 +707,24 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
     // Get all the accessors for this energy group
     Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
     Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_qim;
+    Accessor<__m128d,3> fa_qim;
     Accessor<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = Accessor<__m128d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
       fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m128d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m128d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m128d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
     Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<double,2> fa_ghostz(regions[8], 
+    Accessor<__m128d,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghostx(regions[9],
+    Accessor<__m128d,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghosty(regions[10],
+    Accessor<__m128d,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
     const double vdelt = Accessor<double,1>(regions[11],
@@ -769,7 +769,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m128d *__restrict__ qim = (__m128d*)fa_qim.ptr(local_point);
+            __m128d *__restrict__ qim = fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm_add_pd(psi[ang], qim[ang]);
           }
@@ -810,7 +810,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
                     _mm_set_pd(Snap::xi[2*ang+1], Snap::xi[2*ang])),
                     _mm_set1_pd(Snap::hk)));
           // See if we're doing anything time dependent
-          __m128d *__restrict__ time_flux_in = (__m128d*)fa_time_flux_in.ptr(local_point);
+          __m128d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -818,7 +818,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
                     _mm_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m128d *__restrict__ dinv = (__m128d*)fa_dinv.ptr(local_point); 
+          __m128d *__restrict__ dinv = fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
           if (Snap::flux_fixup) {
@@ -960,8 +960,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             if (vdelt != 0.0)
             {
               // Write out the outgoing temporal flux 
-              __m128d *__restrict__ time_flux_out = 
-                (__m128d*)fa_time_flux_out.ptr(local_point);
+              __m128d *__restrict__ time_flux_out = fa_time_flux_out.ptr(local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -977,8 +976,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
             if (vdelt != 0.0) 
             {
               // Write out the outgoing temporal flux 
-              __m128d *__restrict__ time_flux_out = 
-                (__m128d*)fa_time_flux_out.ptr(local_point); 
+              __m128d *__restrict__ time_flux_out = fa_time_flux_out.ptr(local_point); 
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm_stream_pd((double*)(time_flux_out+ang), 
                     _mm_sub_pd( _mm_mul_pd( _mm_set1_pd(2.0), pc[ang]), time_flux_in[ang]));
@@ -988,7 +986,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
             Point<2> ghost_point = ghostx_point(local_point);
-            __m128d *__restrict__ target = (__m128d*)fa_ghostx.ptr(ghost_point);
+            __m128d *__restrict__ target = fa_ghostx.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -997,7 +995,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
             Point<2> ghost_point = ghosty_point(local_point);
-            __m128d *__restrict__ target = (__m128d*)fa_ghosty.ptr(ghost_point);
+            __m128d *__restrict__ target = fa_ghosty.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1005,7 +1003,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
             Point<2> ghost_point = ghostz_point(local_point);
-            __m128d *__restrict__ target = (__m128d*)fa_ghostz.ptr(ghost_point);
+            __m128d *__restrict__ target = fa_ghostz.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1094,9 +1092,9 @@ inline __m256d* malloc_avx_aligned(size_t size)
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
   const Point<3> origin( 
-    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
-    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
-    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
+    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]),
+    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]),
+    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]));
 
   // Local arrays
   assert((Snap::num_angles % 4) == 0);
@@ -1127,24 +1125,24 @@ inline __m256d* malloc_avx_aligned(size_t size)
     // Get all the accessors for this energy group
     Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
     Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_qim;
+    Accessor<__m256d,3> fa_qim;
     Accessor<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = Accessor<__m256d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
       fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m256d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m256d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<__m256d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
     Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<double,2> fa_ghostz(regions[8], 
+    Accessor<__m256d,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghostx(regions[9],
+    Accessor<__m256d,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghosty(regions[10],
+    Accessor<__m256d,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
     const double vdelt = Accessor<double,1>(regions[11],
@@ -1191,7 +1189,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m256d *__restrict__ qim = (__m256d*)fa_qim.ptr(local_point);
+            __m256d *__restrict__ qim = fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm256_add_pd(psi[ang], qim[ang]);
           }
@@ -1236,7 +1234,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(Snap::hk)));
 
           // See if we're doing anything time dependent
-          __m256d *__restrict__ time_flux_in = (__m256d*)fa_time_flux_in.ptr(local_point);
+          __m256d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -1244,7 +1242,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m256d *__restrict__ dinv = (__m256d*)fa_dinv.ptr(local_point); 
+          __m256d *__restrict__ dinv = fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_mul_pd(pc[ang], dinv[ang]);
 
@@ -1447,8 +1445,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
             if (vdelt != 0.0)
             {
               // Write out the outgoing temporal flux 
-              __m256d *__restrict__ time_flux_out = 
-                (__m256d*)fa_time_flux_out.ptr(local_point); 
+              __m256d *__restrict__ time_flux_out = fa_time_flux_out.ptr(local_point); 
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_mul_pd(fx_hv_t[ang], hv_t[ang]));
@@ -1467,8 +1464,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
             if (vdelt != 0.0) 
             {
               // Write out the outgoing temporal flux 
-              __m256d *__restrict__ time_flux_out = 
-                (__m256d*)fa_time_flux_out.ptr(local_point);
+              __m256d *__restrict__ time_flux_out = fa_time_flux_out.ptr(local_point);
               for (int ang = 0; ang < num_vec_angles; ang++)
                 _mm256_stream_pd((double*)(time_flux_out+ang), 
                     _mm256_sub_pd( _mm256_mul_pd( _mm256_set1_pd(2.0), 
@@ -1480,7 +1476,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (x == (Snap::nx_per_chunk-1)) {
             // We write out on our own region
             Point<2> ghost_point = ghostx_point(local_point);
-            __m256d *__restrict__ target = (__m256d*)fa_ghostx.ptr(ghost_point);
+            __m256d *__restrict__ target = fa_ghostx.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psii[ang]);
           } 
@@ -1489,7 +1485,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           if (y == (Snap::ny_per_chunk-1)) {
             // Write out on our own region
             Point<2> ghost_point = ghosty_point(local_point);
-            __m256d *__restrict__ target = (__m256d*)fa_ghosty.ptr(ghost_point);
+            __m256d *__restrict__ target = fa_ghosty.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psij[ang]);
           } 
@@ -1497,7 +1493,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // Z ghost
           if (z == (Snap::nz_per_chunk-1)) {
             Point<2> ghost_point = ghostz_point(local_point);
-            __m256d *__restrict__ target = (__m256d*)fa_ghostz.ptr(ghost_point);
+            __m256d *__restrict__ target = fa_ghostz.ptr(ghost_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               _mm256_stream_pd((double*)(target+ang), psik[ang]);
           } 
@@ -1609,9 +1605,9 @@ extern void run_gpu_sweep(const Point<3> origin,
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
   const Point<3> origin( 
-    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
-    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
-    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
+    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]),
+    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]),
+    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]));
 
   const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
   const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
