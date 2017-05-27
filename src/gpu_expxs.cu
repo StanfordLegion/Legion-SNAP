@@ -15,47 +15,38 @@
  * limitations under the License.
  */
 
-#include "snap_types.h"
-#include "accessor.h"
+#include "snap.h"
 #include "snap_cuda_help.h"
-
-using namespace LegionRuntime::Arrays;
-using namespace LegionRuntime::Accessor;
 
 template<int GROUPS>
 __global__
-void gpu_expand_cross_section(const PointerBuffer<GROUPS,double> sig_ptrs,
-                              const int    *mat_ptr,
-                                    PointerBuffer<GROUPS,double> xs_ptrs,
-                              const ByteOffsetArray<1> sig_offsets,
-                              const ByteOffsetArray<3> mat_offsets,
-                              const ByteOffsetArray<3> xs_offsets)
+void gpu_expand_cross_section(const Point<3> origin,
+                              const AccessorArray<GROUPS,
+                                      Accessor<double,1>,1> fa_sig,
+                              const Accessor<int,3> fa_mat,
+                                    AccessorArray<GROUPS,
+                                      Accessor<double,3>,3> fa_xs)
 {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
   const int z = blockIdx.z * blockDim.z + threadIdx.z;
+  const Point<3> p = origin + Point<3>(x,y,z);
 
-  const int mat = *(mat_ptr + x * mat_offsets[0] + 
-                              y * mat_offsets[1] + 
-                              z * mat_offsets[2]) - 1/*IS starts at 1*/;
+  const int mat = fa_mat[p];
   #pragma unroll
   for (int g = 0; g < GROUPS; g++) {
-    const double *sig_ptr = sig_ptrs[g] + mat * sig_offsets[0];
+    const double *sig_ptr = fa_sig[g].ptr(mat);
     double val;
     asm volatile("ld.global.cs.f64 %0, [%1];" : "=d"(val) : "l"(sig_ptr) : "memory");
-    double *xs_ptr = xs_ptrs[g] + x * xs_offsets[0] +
-                                  y * xs_offsets[1] + z * xs_offsets[2];
+    double *xs_ptr = fa_xs[g].ptr(p);
     asm volatile("st.global.cs.f64 [%0], %1;" : : "l"(xs_ptr), "d"(val) : "memory");
   }
 }
 
 __host__
-void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
-                              const int *mat_ptr,
-                              const std::vector<double*> &xs_ptrs,
-                              const ByteOffset sig_offsets[1],
-                              const ByteOffset mat_offsets[3],
-                              const ByteOffset xs_offsets[3],
+void run_expand_cross_section(const std::vector<Accessor<double,1> > &fa_sig,
+                              const Accessor<int,3> &fa_mat,
+                              const std::vector<Accessor<double,3> > &fa_xs,
                               const Rect<3> &subgrid_bounds)
 {
   // Figure out the dimensions to launch
@@ -67,228 +58,206 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
   dim3 grid(x_range/block.x, y_range/block.y, z_range/block.z);
 
   // Switch on the number of groups
-  assert(sig_ptrs.size() == xs_ptrs.size());
+  assert(fa_sig.size() == fa_xs.size());
   // TODO: replace this template foolishness with Terra
-  switch (sig_ptrs.size())
+  switch (fa_sig.size())
   {
     case 1:
       {
-        gpu_expand_cross_section<1><<<grid, block>>>(
-                                       PointerBuffer<1,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<1,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<1><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<1,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<1,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 2:
       {
-        gpu_expand_cross_section<2><<<grid, block>>>(
-                                       PointerBuffer<2,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<2,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<2><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<2,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<2,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 3:
       {
-        gpu_expand_cross_section<3><<<grid, block>>>(
-                                       PointerBuffer<3,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<3,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<3><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<3,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<3,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 4:
       {
-        gpu_expand_cross_section<4><<<grid, block>>>(
-                                       PointerBuffer<4,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<4,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<4><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<4,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<4,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 5:
       {
-        gpu_expand_cross_section<5><<<grid, block>>>(
-                                       PointerBuffer<5,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<5,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<5><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<5,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<5,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 6:
       {
-        gpu_expand_cross_section<6><<<grid, block>>>(
-                                       PointerBuffer<6,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<6,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<6><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<6,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<6,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 7:
       {
-        gpu_expand_cross_section<7><<<grid, block>>>(
-                                       PointerBuffer<7,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<7,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<7><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<7,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<7,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 8:
       {
-        gpu_expand_cross_section<8><<<grid, block>>>(
-                                       PointerBuffer<8,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<8,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<8><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<8,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<8,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 9:
       {
-        gpu_expand_cross_section<9><<<grid, block>>>(
-                                       PointerBuffer<9,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<9,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<9><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<9,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<9,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 10:
       {
-        gpu_expand_cross_section<10><<<grid, block>>>(
-                                       PointerBuffer<10,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<10,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<10><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<10,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<10,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 11:
       {
-        gpu_expand_cross_section<11><<<grid, block>>>(
-                                       PointerBuffer<11,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<11,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<11><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<11,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<11,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 12:
       {
-        gpu_expand_cross_section<12><<<grid, block>>>(
-                                       PointerBuffer<12,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<12,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<12><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<12,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<12,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 13:
       {
-        gpu_expand_cross_section<13><<<grid, block>>>(
-                                       PointerBuffer<13,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<13,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<13><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<13,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<13,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 14:
       {
-        gpu_expand_cross_section<14><<<grid, block>>>(
-                                       PointerBuffer<14,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<14,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<14><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<14,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<14,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 15:
       {
-        gpu_expand_cross_section<15><<<grid, block>>>(
-                                       PointerBuffer<15,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<15,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<15><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<15,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<15,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 16:
       {
-        gpu_expand_cross_section<16><<<grid, block>>>(
-                                       PointerBuffer<16,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<16,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<16><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<16,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<16,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 24:
       {
-        gpu_expand_cross_section<24><<<grid, block>>>(
-                                       PointerBuffer<24,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<24,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<24><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<24,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<24,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 32:
       {
-        gpu_expand_cross_section<32><<<grid, block>>>(
-                                       PointerBuffer<32,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<32,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<32><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<32,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<32,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 40:
       {
-        gpu_expand_cross_section<40><<<grid, block>>>(
-                                       PointerBuffer<40,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<40,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<40><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<40,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<40,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 48:
       {
-        gpu_expand_cross_section<48><<<grid, block>>>(
-                                       PointerBuffer<48,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<48,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<48><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<48,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<48,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 56:
       {
-        gpu_expand_cross_section<56><<<grid, block>>>(
-                                       PointerBuffer<56,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<56,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<56><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<56,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<56,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     case 64:
       {
-        gpu_expand_cross_section<64><<<grid, block>>>(
-                                       PointerBuffer<64,double>(sig_ptrs), mat_ptr,
-                                       PointerBuffer<64,double>(xs_ptrs), 
-                                       ByteOffsetArray<1>(sig_offsets),
-                                       ByteOffsetArray<3>(mat_offsets),
-                                       ByteOffsetArray<3>(xs_offsets));
+        gpu_expand_cross_section<64><<<grid, block>>>(subgrid_bounds.lo,
+                                       AccessorArray<64,
+                                        Accessor<double,1>,1>(fa_sig), fa_mat,
+                                       AccessorArray<64,
+                                        Accessor<double,3>,3>(fa_xs));
         break;
       }
     default:
@@ -298,38 +267,30 @@ void run_expand_cross_section(const std::vector<double*> &sig_ptrs,
 
 template<int GROUPS>
 __global__
-void gpu_expand_scattering_cross_section(const PointerBuffer<GROUPS,MomentQuad> slgg_ptrs,
-                                         const int        *mat_ptr,
-                                               PointerBuffer<GROUPS,MomentQuad> xs_ptrs,
-                                         const ByteOffsetArray<2> slgg_offsets,
-                                         const ByteOffsetArray<3> mat_offsets,
-                                         const ByteOffsetArray<3> xs_offsets,
+void gpu_expand_scattering_cross_section(const Point<3> origin,
+                                         const AccessorArray<GROUPS,
+                                                Accessor<MomentQuad,2>,2> fa_slgg,
+                                         const Accessor<int,3> fa_mat,
+                                               AccessorArray<GROUPS,
+                                                Accessor<MomentQuad,3>,3> fa_xs,
                                          const int group_start)
 {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
   const int z = blockIdx.z * blockDim.z + threadIdx.z;
+  const Point<3> p = origin + Point<3>(x,y,z);
 
-  const int mat = *(mat_ptr + x * mat_offsets[0] + 
-                              y * mat_offsets[1] + 
-                              z * mat_offsets[2]) - 1/*IS starts at 1*/;
+  const int mat = fa_mat[p];
   #pragma unroll
-  for (int g = 0; g < GROUPS; g++) {
-    MomentQuad quad = *(slgg_ptrs[g] + mat * slgg_offsets[0] +
-                        (group_start + g) * slgg_offsets[1]);
-    *(xs_ptrs[g] + x * xs_offsets[0] + y * xs_offsets[1] +
-        z * xs_offsets[2]) = quad;
-  }
+  for (int g = 0; g < GROUPS; g++)
+    fa_xs[g][p] = fa_slgg[g][Point<2>(mat,group_start+g)];
 }
 
 __host__
 void run_expand_scattering_cross_section(
-                                      const std::vector<MomentQuad*> &slgg_ptrs,
-                                      const int *mat_ptr,
-                                      const std::vector<MomentQuad*> &xs_ptrs,
-                                      const ByteOffset slgg_offsets[2],
-                                      const ByteOffset mat_offsets[3],
-                                      const ByteOffset xs_offsets[3],
+                                      const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
+                                      const Accessor<int,3> &fa_mat,
+                                      const std::vector<Accessor<MomentQuad,3> > &fa_xs,
                                       const Rect<3> &subgrid_bounds,
                                       const int group_start)
 {
@@ -342,249 +303,227 @@ void run_expand_scattering_cross_section(
   dim3 grid(x_range/block.x, y_range/block.y, z_range/block.z);
 
   // Switch on the number of groups
-  assert(slgg_ptrs.size() == xs_ptrs.size());
+  assert(fa_slgg.size() == fa_xs.size());
   // TODO: replace this template foolishness with Terra
-  switch (slgg_ptrs.size())
+  switch (fa_slgg.size())
   {
     case 1:
       {
         gpu_expand_scattering_cross_section<1><<<grid,block>>>(
-                            PointerBuffer<1,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<1,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<1,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<1,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 2:
       {
         gpu_expand_scattering_cross_section<2><<<grid,block>>>(
-                            PointerBuffer<2,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<2,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<2,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<2,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 3:
       {
         gpu_expand_scattering_cross_section<3><<<grid,block>>>(
-                            PointerBuffer<3,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<3,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<3,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<3,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 4:
       {
         gpu_expand_scattering_cross_section<4><<<grid,block>>>(
-                            PointerBuffer<4,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<4,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<4,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<4,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 5:
       {
         gpu_expand_scattering_cross_section<5><<<grid,block>>>(
-                            PointerBuffer<5,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<5,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<5,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<5,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 6:
       {
         gpu_expand_scattering_cross_section<6><<<grid,block>>>(
-                            PointerBuffer<6,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<6,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<6,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<6,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 7:
       {
         gpu_expand_scattering_cross_section<7><<<grid,block>>>(
-                            PointerBuffer<7,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<7,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<7,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<7,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 8:
       {
         gpu_expand_scattering_cross_section<8><<<grid,block>>>(
-                            PointerBuffer<8,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<8,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<8,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<8,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 9:
       {
         gpu_expand_scattering_cross_section<9><<<grid,block>>>(
-                            PointerBuffer<9,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<9,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<9,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<9,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 10:
       {
         gpu_expand_scattering_cross_section<10><<<grid,block>>>(
-                            PointerBuffer<10,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<10,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<10,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<10,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 11:
       {
         gpu_expand_scattering_cross_section<11><<<grid,block>>>(
-                            PointerBuffer<11,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<11,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<11,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<11,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 12:
       {
         gpu_expand_scattering_cross_section<12><<<grid,block>>>(
-                            PointerBuffer<12,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<12,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<12,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<12,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 13:
       {
         gpu_expand_scattering_cross_section<13><<<grid,block>>>(
-                            PointerBuffer<13,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<13,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<13,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<13,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 14:
       {
         gpu_expand_scattering_cross_section<14><<<grid,block>>>(
-                            PointerBuffer<14,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<14,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<14,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<14,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 15:
       {
         gpu_expand_scattering_cross_section<15><<<grid,block>>>(
-                            PointerBuffer<15,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<15,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<15,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<15,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 16:
       {
         gpu_expand_scattering_cross_section<16><<<grid,block>>>(
-                            PointerBuffer<16,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<16,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<16,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<16,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 24:
       {
         gpu_expand_scattering_cross_section<24><<<grid,block>>>(
-                            PointerBuffer<24,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<24,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<24,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<24,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 32:
       {
         gpu_expand_scattering_cross_section<32><<<grid,block>>>(
-                            PointerBuffer<32,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<32,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<32,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<32,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 40:
       {
         gpu_expand_scattering_cross_section<40><<<grid,block>>>(
-                            PointerBuffer<40,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<40,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<40,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<40,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 48:
       {
         gpu_expand_scattering_cross_section<48><<<grid,block>>>(
-                            PointerBuffer<48,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<48,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<48,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<48,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 56:
       {
         gpu_expand_scattering_cross_section<56><<<grid,block>>>(
-                            PointerBuffer<56,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<56,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<56,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<56,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }
     case 64:
       {
         gpu_expand_scattering_cross_section<64><<<grid,block>>>(
-                            PointerBuffer<64,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<64,MomentQuad>(xs_ptrs), 
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(xs_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<64,Accessor<MomentQuad,2>,2>(fa_slgg),
+                            fa_mat,
+                            AccessorArray<64,Accessor<MomentQuad,3>,3>(fa_xs),
                             group_start);
         break;
       }

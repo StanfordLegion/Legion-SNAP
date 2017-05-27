@@ -20,11 +20,8 @@
 
 #include "snap.h"
 #include "outer.h"
-#include "legion_stl.h"
 
 extern Legion::Logger log_snap;
-
-using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
@@ -94,10 +91,9 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   for (unsigned idx = 0; idx < 7; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<
-    raw_rect_task_wrapper<double,3,double,3,MomentQuad,2,int,3,double,3,
-                       MomentTriple,3,MomentTriple,3,gpu_implementation> >(
-            execution_constraints, layout_constraints, true/*leaf*/);
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 static int gcd(int a, int b)
@@ -224,59 +220,64 @@ static int gcd(int a, int b)
 
 #ifdef USE_GPU_KERNELS
   extern void run_flux0_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<double*> &qi0_ptrs,
-                            const std::vector<double*> &flux0_ptrs,
-                            const std::vector<MomentQuad*> &slgg_ptrs,
-                            const std::vector<double*> &qo0_ptrs, 
-                            const int *mat_ptr, 
-                            const ByteOffset qi0_offsets[3], 
-                            const ByteOffset flux0_offsets[3],
-                            const ByteOffset slgg_offsets[2], 
-                            const ByteOffset qo0_offsets[3],
-                            const ByteOffset mat_offsets[3], const int num_groups);
+                            const std::vector<Accessor<double,3> > &fa_qi0,
+                            const std::vector<Accessor<double,3> > &fa_flux0,
+                            const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
+                            const std::vector<Accessor<double,3> > &fa_qo0,
+                            const Accessor<int,3> &fa_mat, const int num_groups);
   extern void run_fluxm_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<MomentTriple*> &fluxm_ptrs,
-                            const std::vector<MomentQuad*> &slgg_ptrs,
-                            const std::vector<MomentTriple*> &qom_ptrs, 
-                            const int *mat_ptr, 
-                            const ByteOffset fluxm_offsets[3], 
-                            const ByteOffset slgg_offsets[2],
-                            const ByteOffset mat_offsets[3], 
-                            const ByteOffset qom_offsets[3],
-                            const int num_groups, const int num_moments, const int lma[4]);
+                            const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
+                            const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
+                            const std::vector<Accessor<MomentTriple,3> > &fa_qom,
+                            const Accessor<int,3> &fa_mat, const int num_groups, 
+                            const int num_moments, const int lma[4]);
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void CalcOuterSource::gpu_implementation(
-    const Task *task, Context ctx, Runtime *runtime,
-    const std::vector<double*> &qi0_ptrs, const ByteOffset qi0_offsets[3],
-    const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-    const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
-    const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
-    const std::vector<double*> &qo0_ptrs, const ByteOffset qo0_offsets[3],
-    const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-    const std::vector<MomentTriple*> &qom_ptrs, const ByteOffset qom_offsets[3])
+/*static*/ void CalcOuterSource::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
   log_snap.info("Running GPU Calc Outer Source");
 #ifdef USE_GPU_KERNELS
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const bool multi_moment = (Snap::num_moments > 1);
   const int num_groups = task->regions[0].privilege_fields.size();
+  assert(num_groups == int(task->regions[1].privilege_fields.size()));
+  assert(num_groups == int(task->regions[4].privilege_fields.size()));
+  // Make the accessors for all the groups up front
+  std::vector<Accessor<double,3> > fa_qi0(num_groups);
+  std::vector<Accessor<double,3> > fa_flux0(num_groups);
+  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups);
+  std::vector<Accessor<double,3> > fa_qo0(num_groups);
+  std::vector<Accessor<MomentTriple,3> > fa_fluxm(multi_moment ? num_groups:0);
+  std::vector<Accessor<MomentTriple,3> > fa_qom(multi_moment ? num_groups : 0);
+  // Field spaces are all the same so this is safe
+  int g = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, g++)
+  {
+    fa_qi0[g] = Accessor<double,3>(regions[0], *it);
+    fa_flux0[g] = Accessor<double,3>(regions[1], *it);
+    fa_slgg[g] = Accessor<MomentQuad,2>(regions[2], *it);
+    fa_qo0[g] = Accessor<double,3>(regions[4], *it);
+    if (multi_moment)
+    {
+      fa_fluxm[g] = Accessor<MomentTriple,3>(regions[5], *it);
+      fa_qom[g] = Accessor<MomentTriple,3>(regions[6], *it);
+    }
+  }
+  Accessor<int,3> fa_mat(regions[3], Snap::FID_SINGLE);
 
-  const int *const mat_ptr = mat_ptrs[0];
-
-  run_flux0_outer_source(subgrid_bounds, qi0_ptrs, flux0_ptrs, slgg_ptrs, 
-                         qo0_ptrs, mat_ptr, qi0_offsets, flux0_offsets,
-                         slgg_offsets, qo0_offsets, mat_offsets, num_groups);
+  run_flux0_outer_source(dom.bounds, fa_qi0, fa_flux0, fa_slgg, 
+                         fa_qo0, fa_mat, num_groups);
 
   if (multi_moment) {
-    run_fluxm_outer_source(subgrid_bounds, fluxm_ptrs, slgg_ptrs, qom_ptrs,
-                           mat_ptr, fluxm_offsets, slgg_offsets, mat_offsets,
-                           qom_offsets, num_groups, Snap::num_moments, Snap::lma);
+    run_fluxm_outer_source(dom.bounds, fa_fluxm, fa_slgg, fa_qom,
+                           fa_mat, num_groups, Snap::num_moments, Snap::lma);
   }
 #else
   assert(false);
@@ -345,9 +346,9 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
   for (unsigned idx = 0; idx < 2; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<bool,
-    raw_rect_task_wrapper<bool, double, 3, double, 3, gpu_implementation> >(
-        execution_constraints, layout_constraints, true/*leaf*/);
+  register_gpu_variant<bool, gpu_implementation>(execution_constraints,
+                                                 layout_constraints,
+                                                 true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -404,29 +405,42 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 
 #ifdef USE_GPU_KERNELS
 extern bool run_outer_convergence(Rect<3> subgrid_bounds,
-                                  const std::vector<double*> flux0_ptrs,
-                                  const std::vector<double*> flux0po_ptrs,
-                                  const ByteOffset flux0_offsets[3], 
-                                  const ByteOffset flux0po_offsets[3],
+                                  const std::vector<Accessor<double,3> > &fa_flux0,
+                                  const std::vector<Accessor<double,3> > &fa_flux0po,
                                   const double epsi);
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ bool TestOuterConvergence::gpu_implementation(
-  const Task *task, Context ctx, Runtime *runtime,
-  const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-  const std::vector<double*> &flux0po_ptrs, const ByteOffset flux0po_offsets[3])
+/*static*/ bool TestOuterConvergence::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
   log_snap.info("Running GPU Test Outer Convergence");
 #ifdef USE_GPU_KERNELS
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  // If the inner loop didn't converge, then we can't either
+  assert(!task->futures.empty());
+  bool inner_converged = task->futures[0].get_result<bool>();
+  if (!inner_converged)
+    return false;
+  // Get the index space domain for iteration
+  assert(task->regions[0].region.get_index_space() == 
+         task->regions[1].region.get_index_space());
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const double epsi = 100.0 * Snap::convergence_eps;
-  return run_outer_convergence(subgrid_bounds, flux0_ptrs, flux0po_ptrs,
-                               flux0_offsets, flux0po_offsets, epsi);
+  std::vector<Accessor<double,3> > fa_flux0(
+                          task->regions[0].privilege_fields.size());
+  std::vector<Accessor<double,3> > fa_flux0po(fa_flux0.size());
+  unsigned idx = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, idx++)
+  {
+    fa_flux0[idx]   = Accessor<double,3>(regions[0], *it);
+    fa_flux0po[idx] = Accessor<double,3>(regions[1], *it);
+  }
+  return run_outer_convergence(dom.bounds, fa_flux0, fa_flux0po, epsi);
 #else
   assert(false);
 #endif

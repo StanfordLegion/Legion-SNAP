@@ -16,42 +16,34 @@
  * limitations under the License.
  */
 
-#include "snap_types.h"
-#include "accessor.h"
+#include "snap.h"
 #include "snap_cuda_help.h"
-
-#include <vector>
-
-using namespace LegionRuntime::Arrays;
-using namespace LegionRuntime::Accessor;
 
 template<int GROUPS, int STRIP_SIZE>
 __global__
-void gpu_flux0_outer_source(const PointerBuffer<GROUPS,double> qi0_ptrs,
-                            const PointerBuffer<GROUPS,double> flux0_ptrs,
-                            const PointerBuffer<GROUPS,MomentQuad> slgg_ptrs,
-                            const int *mat_ptr,
-                                  PointerBuffer<GROUPS,double> qo0_ptrs,
-                            const ByteOffsetArray<3> qi0_offsets,
-                            const ByteOffsetArray<3> flux0_offsets,
-                            const ByteOffsetArray<2> slgg_offsets,
-                            const ByteOffsetArray<3> mat_offsets,
-                            const ByteOffsetArray<3> qo0_offsets)
+void gpu_flux0_outer_source(const Point<3> origin,
+                            const AccessorArray<GROUPS,
+                                    Accessor<double,3>,3> fa_qi0,
+                            const AccessorArray<GROUPS,
+                                    Accessor<double,3>,3> fa_flux0,
+                            const AccessorArray<GROUPS,
+                                    Accessor<MomentQuad,2>,2> fa_slgg,
+                            const Accessor<int,3> fa_mat,
+                                  AccessorArray<GROUPS,
+                                    Accessor<double,3>,3> fa_qo0)
 {
   __shared__ double flux_buffer[GROUPS][STRIP_SIZE];
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
   const int z = blockIdx.z;
+  const Point<3> p = origin + Point<3>(x,y,z);
   const int group = threadIdx.z;
   const int strip_offset = threadIdx.y * blockDim.x + threadIdx.x;
   // First, update our pointers
-  const double *qi0_ptr = qi0_ptrs[group] + x * qi0_offsets[0] +
-    y * qi0_offsets[1] + z * qi0_offsets[2];
-  const double *flux0_ptr = flux0_ptrs[group] + x * flux0_offsets[0] +
-    y * flux0_offsets[1] + z * flux0_offsets[2];
-  mat_ptr += x * mat_offsets[0] + y * mat_offsets[1] + z * mat_offsets[2];
-  double *qo0_ptr = qo0_ptrs[group] + x * qo0_offsets[0] + 
-    y *qo0_offsets[1] + z * qo0_offsets[2];
+  const double *qi0_ptr = fa_qi0[group].ptr(p);
+  const double *flux0_ptr = fa_flux0[group].ptr(p);
+  const int *mat_ptr = fa_mat.ptr(p);
+  double *qo0_ptr = fa_qo0[group].ptr(p);
   // Do a little prefetching of other values we need too
   // Be intelligent about loads, we're trying to keep the slgg
   // matrix in L2 cache so make sure all other loads and stores 
@@ -65,12 +57,6 @@ void gpu_flux0_outer_source(const PointerBuffer<GROUPS,double> qi0_ptrs,
   asm volatile("ld.global.cs.f64 %0, [%1];" : "=d"(qo0) : "l"(qi0_ptr) : "memory");
   // Write the value into shared
   flux_buffer[group][strip_offset] = flux0;
-  // Can compute our slgg_ptr with the matrix result
-#ifdef LEGION_ISSUE_214_FIX
-  const MomentQuad *slgg_ptr = slgg_ptrs[group] + mat * slgg_offsets[0];
-#else
-  const MomentQuad *slgg_ptr = slgg_ptrs[group] + (mat-1) * slgg_offsets[0];
-#endif
   // Synchronize when all the writes into shared memory are done
   __syncthreads();
   // Do the math
@@ -78,7 +64,7 @@ void gpu_flux0_outer_source(const PointerBuffer<GROUPS,double> qi0_ptrs,
   for (int g = 0; g < GROUPS; g++) {
     if (g == group)
       continue;
-    const MomentQuad *local_slgg = slgg_ptr + g * slgg_offsets[1];
+    const MomentQuad *local_slgg = fa_slgg[group].ptr(Point<2>(mat,g));
     double cs;
     asm volatile("ld.global.ca.f64 %0, [%1];" : "=d"(cs) : "l"(local_slgg) : "memory");
     qo0 += cs * flux_buffer[g][strip_offset];
@@ -90,16 +76,11 @@ void gpu_flux0_outer_source(const PointerBuffer<GROUPS,double> qi0_ptrs,
 template<int GROUPS, int MAX_X, int MAX_Y>
 __host__
 void flux0_launch_helper(Rect<3> subgrid_bounds,
-                         const std::vector<double*> &qi0_ptrs,
-                         const std::vector<double*> &flux0_ptrs,
-                         const std::vector<MomentQuad*> &slgg_ptrs,
-                         const std::vector<double*> &qo0_ptrs, 
-                         const int *mat_ptr, 
-                         const ByteOffset qi0_offsets[3], 
-                         const ByteOffset flux0_offsets[3],
-                         const ByteOffset slgg_offsets[2], 
-                         const ByteOffset qo0_offsets[3],
-                         const ByteOffset mat_offsets[3])
+                         const std::vector<Accessor<double,3> > fa_qi0,
+                         const std::vector<Accessor<double,3> > fa_flux0,
+                         const std::vector<Accessor<MomentQuad,2> > fa_slgg,
+                         const Accessor<int,3> &fa_mat,
+                               std::vector<Accessor<double,3> > fa_qo0)
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
@@ -107,37 +88,33 @@ void flux0_launch_helper(Rect<3> subgrid_bounds,
   dim3 block(gcd(x_range,MAX_X), gcd(y_range,MAX_Y), GROUPS);
   dim3 grid(x_range/block.x, y_range/block.y, z_range);
   gpu_flux0_outer_source<GROUPS,MAX_X*MAX_Y><<<grid,block>>>(
-                              PointerBuffer<GROUPS,double>(qi0_ptrs),
-                              PointerBuffer<GROUPS,double>(flux0_ptrs),
-                              PointerBuffer<GROUPS,MomentQuad>(slgg_ptrs), mat_ptr,
-                              PointerBuffer<GROUPS,double>(qo0_ptrs),
-                              ByteOffsetArray<3>(qi0_offsets),
-                              ByteOffsetArray<3>(flux0_offsets),
-                              ByteOffsetArray<2>(slgg_offsets),
-                              ByteOffsetArray<3>(mat_offsets),
-                              ByteOffsetArray<3>(qo0_offsets));
+                              subgrid_bounds.lo,
+                              AccessorArray<GROUPS,
+                                Accessor<double,3>,3>(fa_qi0),
+                              AccessorArray<GROUPS,
+                                Accessor<double,3>,3>(fa_flux0),
+                              AccessorArray<GROUPS,
+                                Accessor<MomentQuad,2>,2>(fa_slgg),
+                              fa_mat,
+                              AccessorArray<GROUPS,
+                                Accessor<double,3>,3>(fa_qo0));
 }
 
 __host__
 void run_flux0_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<double*> &qi0_ptrs,
-                            const std::vector<double*> &flux0_ptrs,
-                            const std::vector<MomentQuad*> &slgg_ptrs,
-                            const std::vector<double*> &qo0_ptrs, 
-                            const int *mat_ptr, 
-                            const ByteOffset qi0_offsets[3], 
-                            const ByteOffset flux0_offsets[3],
-                            const ByteOffset slgg_offsets[2], 
-                            const ByteOffset qo0_offsets[3],
-                            const ByteOffset mat_offsets[3], const int num_groups)
+                         const std::vector<Accessor<double,3> > fa_qi0,
+                         const std::vector<Accessor<double,3> > fa_flux0,
+                         const std::vector<Accessor<MomentQuad,2> > fa_slgg,
+                         const Accessor<int,3> &fa_mat,
+                               std::vector<Accessor<double,3> > fa_qo0,
+                            const int num_groups)
 {
   // TODO: replace this template madness with Terra
 #define GROUP_CASE(g,x,y)                                                           \
   case g:                                                                           \
     {                                                                               \
-      flux0_launch_helper<g,x,y>(subgrid_bounds, qi0_ptrs, flux0_ptrs, slgg_ptrs,   \
-                               qo0_ptrs, mat_ptr, qi0_offsets, flux0_offsets,       \
-                               slgg_offsets, qo0_offsets, mat_offsets);             \
+      flux0_launch_helper<g,x,y>(subgrid_bounds, fa_qi0, fa_flux0, fa_slgg,         \
+                                 fa_mat, fa_qo0);                                   \
       break;                                                                        \
     }
   switch (num_groups)
@@ -248,14 +225,14 @@ void run_flux0_outer_source(Rect<3> subgrid_bounds,
 
 template<int GROUPS, int STRIP_SIZE>
 __global__
-void gpu_fluxm_outer_source(const PointerBuffer<GROUPS,MomentTriple> fluxm_ptrs,
-                            const PointerBuffer<GROUPS,MomentQuad> slgg_ptrs,
-                            const int           *mat_ptr,
-                                  PointerBuffer<GROUPS,MomentTriple> qom_ptrs,
-                            ByteOffsetArray<3> fluxm_offsets,
-                            ByteOffsetArray<2> slgg_offsets,
-                            ByteOffsetArray<3> mat_offsets,
-                            ByteOffsetArray<3> qom_offsets,
+void gpu_fluxm_outer_source(const Point<3> origin,
+                            const AccessorArray<GROUPS,
+                                    Accessor<MomentTriple,3>,3> fa_fluxm,
+                            const AccessorArray<GROUPS,
+                                    Accessor<MomentQuad,2>,2> fa_slgg,
+                            const Accessor<int,3> fa_mat,
+                                  AccessorArray<GROUPS,
+                                    Accessor<MomentTriple,3>,3> fa_qom,
                             const int           num_moments,
                             const ConstBuffer<4,int> lma)
 {
@@ -265,13 +242,12 @@ void gpu_fluxm_outer_source(const PointerBuffer<GROUPS,MomentTriple> fluxm_ptrs,
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y + blockDim.y + threadIdx.y;
   const int z = blockIdx.z;
+  const Point<3> p = origin + Point<3>(x,y,z);
   const int group = threadIdx.z;
   const int strip_offset = threadIdx.y * blockDim.x + threadIdx.x;
-  const MomentTriple *fluxm_ptr = fluxm_ptrs[group] + x * fluxm_offsets[0] +
-    y * fluxm_offsets[1] + z * fluxm_offsets[2];
-  mat_ptr += x * mat_offsets[0] + y * mat_offsets[1] + z * mat_offsets[2];
-  MomentTriple *qom_ptr = qom_ptrs[group] + x * qom_offsets[0] + 
-    y *qom_offsets[1] + z * qom_offsets[2];
+  const MomentTriple *fluxm_ptr = fa_fluxm[group].ptr(p);
+  const int *mat_ptr = fa_mat.ptr(p);
+  MomentTriple *qom_ptr = fa_qom[group].ptr(p);
   MomentTriple fluxm;
   asm volatile("ld.global.cs.v2.f64 {%0,%1}, [%2];" : "=d"(fluxm[0]), "=d"(fluxm[1]) 
                 : "l"(fluxm_ptr) : "memory");
@@ -283,8 +259,6 @@ void gpu_fluxm_outer_source(const PointerBuffer<GROUPS,MomentTriple> fluxm_ptrs,
   fluxm_buffer_0[group][strip_offset] = fluxm[0];
   fluxm_buffer_1[group][strip_offset] = fluxm[1];
   fluxm_buffer_2[group][strip_offset] = fluxm[2];
-  // Can compute our slgg_ptr with the matrix result
-  const MomentQuad *slgg_ptr = slgg_ptrs[group] + mat * slgg_offsets[0];
   // Synchronize to make sure all the writes to shared are done 
   __syncthreads();
   // Do the math
@@ -294,7 +268,7 @@ void gpu_fluxm_outer_source(const PointerBuffer<GROUPS,MomentTriple> fluxm_ptrs,
     if (g == group)
       continue;
     int moment = 0;
-    const MomentQuad *local_slgg = slgg_ptr + g * slgg_offsets[1];
+    const MomentQuad *local_slgg = fa_slgg[group].ptr(Point<2>(mat, g));
     MomentQuad scat;
     asm volatile("ld.global.ca.v2.f64 {%0,%1}, [%2];" : "=d"(scat[0]), "=d"(scat[1])
                   : "l"(local_slgg) : "memory");
@@ -322,14 +296,10 @@ void gpu_fluxm_outer_source(const PointerBuffer<GROUPS,MomentTriple> fluxm_ptrs,
 template<int GROUPS, int MAX_X, int MAX_Y>
 __host__
 void fluxm_launch_helper(Rect<3> subgrid_bounds,
-                         const std::vector<MomentTriple*> &fluxm_ptrs,
-                         const std::vector<MomentQuad*> &slgg_ptrs,
-                         const std::vector<MomentTriple*> &qom_ptrs, 
-                         const int *mat_ptr, 
-                         const ByteOffset fluxm_offsets[3], 
-                         const ByteOffset slgg_offsets[2],
-                         const ByteOffset mat_offsets[3], 
-                         const ByteOffset qom_offsets[3],
+                         const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
+                         const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
+                         const std::vector<Accessor<MomentTriple,3> > &fa_qom,
+                         const Accessor<int,3> &fa_mat,
                          const int num_groups, const int num_moments, const int lma[4])
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
@@ -338,35 +308,30 @@ void fluxm_launch_helper(Rect<3> subgrid_bounds,
   dim3 block(gcd(x_range,MAX_X), gcd(y_range,MAX_Y), GROUPS);
   dim3 grid(x_range/block.x, y_range/block.y, z_range);
   gpu_fluxm_outer_source<GROUPS,MAX_X*MAX_Y><<<grid,block>>>(
-                            PointerBuffer<GROUPS,MomentTriple>(fluxm_ptrs), 
-                            PointerBuffer<GROUPS,MomentQuad>(slgg_ptrs), mat_ptr,
-                            PointerBuffer<GROUPS,MomentTriple>(qom_ptrs),
-                            ByteOffsetArray<3>(fluxm_offsets),
-                            ByteOffsetArray<2>(slgg_offsets),
-                            ByteOffsetArray<3>(mat_offsets),
-                            ByteOffsetArray<3>(qom_offsets),
+                            subgrid_bounds.lo,
+                            AccessorArray<GROUPS,
+                              Accessor<MomentTriple,3>,3>(fa_fluxm),
+                            AccessorArray<GROUPS,
+                              Accessor<MomentQuad,2>,2>(fa_slgg), fa_mat,
+                            AccessorArray<GROUPS,
+                              Accessor<MomentTriple,3>,3>(fa_qom),
                             num_moments, ConstBuffer<4,int>(lma));
 }
 
 __host__
 void run_fluxm_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<MomentTriple*> &fluxm_ptrs,
-                            const std::vector<MomentQuad*> &slgg_ptrs,
-                            const std::vector<MomentTriple*> &qom_ptrs, 
-                            const int *mat_ptr, 
-                            const ByteOffset fluxm_offsets[3], 
-                            const ByteOffset slgg_offsets[2],
-                            const ByteOffset mat_offsets[3], 
-                            const ByteOffset qom_offsets[3],
-                            const int num_groups, const int num_moments, const int lma[4])
+                         const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
+                         const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
+                         const std::vector<Accessor<MomentTriple,3> > &fa_qom,
+                         const Accessor<int,3> &fa_mat,
+                         const int num_groups, const int num_moments, const int lma[4])
 {
   // TODO: replace this template madness with Terra
 #define GROUP_CASE(g,x,y)                                                         \
   case g:                                                                         \
     {                                                                             \
-      fluxm_launch_helper<g,x,y>(subgrid_bounds, fluxm_ptrs, slgg_ptrs, qom_ptrs, \
-                             mat_ptr, fluxm_offsets, slgg_offsets, mat_offsets,   \
-                             qom_offsets, num_groups, num_moments, lma);          \
+      fluxm_launch_helper<g,x,y>(subgrid_bounds, fa_fluxm, fa_slgg, fa_qom,       \
+                                 fa_mat,  num_groups, num_moments, lma);          \
       break;                                                                      \
     }
   switch (num_groups)
@@ -475,9 +440,9 @@ void run_fluxm_outer_source(Rect<3> subgrid_bounds,
 }
 
 __global__
-void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
-                           ByteOffsetArray<3> flux0_offsets,
-                           ByteOffsetArray<3> flux0po_offsets,
+void gpu_outer_convergence(const Point<3> origin,
+                           const Accessor<double,3> fa_flux0,
+                           const Accessor<double,3> fa_flux0po,
                            const double epsi, int *total_converged)
 {
   // We know there is never more than 32 warps in a CTA
@@ -486,9 +451,10 @@ void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
   const int z = blockIdx.z * blockDim.z + threadIdx.z;
+  const Point<3> p = origin + Point<3>(x,y,z);
 
-  flux0_ptr += x * flux0_offsets[0] + y * flux0_offsets[1] + z * flux0_offsets[2];
-  flux0po_ptr += x * flux0po_offsets[0] + y * flux0po_offsets[1] + z * flux0po_offsets[2];
+  const double *flux0_ptr = fa_flux0.ptr(p);
+  const double *flux0po_ptr = fa_flux0po.ptr(p);
 
   const double tolr = 1.0e-12;
   
@@ -532,10 +498,8 @@ void gpu_outer_convergence(const double *flux0_ptr, const double *flux0po_ptr,
 
 __host__
 bool run_outer_convergence(Rect<3> subgrid_bounds,
-                           const std::vector<double*> flux0_ptrs,
-                           const std::vector<double*> flux0po_ptrs,
-                           const ByteOffset flux0_offsets[3], 
-                           const ByteOffset flux0po_offsets[3],
+                           const std::vector<Accessor<double,3> > fa_flux0,
+                           const std::vector<Accessor<double,3> > fa_flux0po,
                            const double epsi)
 {
   int *converged_d;
@@ -549,11 +513,10 @@ bool run_outer_convergence(Rect<3> subgrid_bounds,
   dim3 block(gcd(x_range,32),gcd(y_range,4),gcd(z_range,4));
   dim3 grid(x_range/block.x, y_range/block.y, z_range/block.z);
 
-  assert(flux0_ptrs.size() == flux0po_ptrs.size());
-  for (unsigned idx = 0; idx < flux0_ptrs.size(); idx++) {
-    gpu_outer_convergence<<<grid,block>>>(flux0_ptrs[idx], flux0po_ptrs[idx],
-                                          ByteOffsetArray<3>(flux0_offsets),
-                                          ByteOffsetArray<3>(flux0po_offsets),
+  assert(fa_flux0.size() == fa_flux0po.size());
+  for (unsigned idx = 0; idx < fa_flux0.size(); idx++) {
+    gpu_outer_convergence<<<grid,block>>>(subgrid_bounds.lo,
+                                          fa_flux0[idx], fa_flux0po[idx],
                                           epsi, converged_d); 
   }
   // Copy back: CUDA hijack synchronizes for us
@@ -561,6 +524,6 @@ bool run_outer_convergence(Rect<3> subgrid_bounds,
   cudaMemcpy(&converged_h, converged_d, sizeof(int), cudaMemcpyDeviceToHost);
   cudaFree(converged_d);
   // We've converged if the total converged points are the number of tests
-  return (converged_h == int(x_range * y_range * z_range * flux0_ptrs.size()));
+  return (converged_h == int(x_range * y_range * z_range * fa_flux0.size()));
 }
 

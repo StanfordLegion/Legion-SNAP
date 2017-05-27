@@ -92,7 +92,6 @@ typedef Legion::TaskLayoutConstraintSet TaskLayoutConstraintSet;
 typedef Legion::TaskVariantRegistrar TaskVariantRegistrar;
 typedef Legion::ProcessorConstraint ProcessorConstraint;
 typedef Legion::ProjectionFunctor ProjectionFunctor;
-typedef Legion::ByteOffset ByteOffset;
 typedef Legion::FieldAllocator FieldAllocator;
 typedef Legion::PredicateLauncher PredicateLauncher;
 typedef Legion::LayoutConstraintRegistrar LayoutConstraintRegistrar;
@@ -418,6 +417,9 @@ class SnapTask : public IndexTaskLauncher {
 public:
   SnapTask(const Snap &snap, const IndexSpace<DIM> &launch_domain, const Predicate &pred)
     : IndexTaskLauncher(TASK_ID, launch_domain, 
+                        TaskArgument(), ArgumentMap(), pred) { }
+  SnapTask(const Snap &snap, const Rect<DIM> &launch_space, const Predicate &pred)
+    : IndexTaskLauncher(TASK_ID, launch_space, 
                         TaskArgument(), ArgumentMap(), pred) { }
 public:
   void dispatch(Context ctx, Runtime *runtime, bool block = false)

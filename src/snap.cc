@@ -372,11 +372,11 @@ void Snap::transport_solve(void)
 #ifdef USE_GPU_KERNELS
   {
     Future f_gpus = runtime->select_tunable_value(ctx, 
-        DefaultMapper::DEFAULT_TUNABLE_GLOBAL_GPUS);
+        Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_GLOBAL_GPUS);
     int num_gpus = f_gpus.get_result<int>(true/*silence warnings*/);
     assert(num_gpus > 0);
-    Rect<3> gpu_bounds(Point<3>::ZEROES(), Point<3>::ZEROES());
-    gpu_bounds.hi.x[0] = num_gpus - 1;
+    Rect<3> gpu_bounds(Point<3>(0,0,0), Point<3>(0,0,0));
+    gpu_bounds.hi[0] = num_gpus - 1;
     InitGPUSweep init_sweep(*this, gpu_bounds);
     init_sweep.dispatch(ctx, runtime, true/*block*/);
   }

@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-#include "accessor.h"
-
 #include <vector>
+#include <cassert>
 
 #ifndef __SNAP_CUDA_HELP_H__
 #define __SNAP_CUDA_HELP_H__
@@ -31,20 +30,43 @@ static int gcd(int a, int b)
   return a;
 }
 
-template<int GROUPS, typename T>
-struct PointerBuffer {
+template<int GROUPS, typename A, int N>
+struct AccessorArray {
 public:
   __host__
-  PointerBuffer(const std::vector<T*> &ptrs)
+  AccessorArray(const std::vector<A> &accs)
   {
+    assert(accs.size() == GROUPS);
     for (unsigned idx = 0; idx < GROUPS; idx++)
-      buffer[idx] = ptrs[idx];
+    {
+      bases[idx] = accs[idx].base;
+      if (idx == 0)
+        strides = accs[0].strides;
+      else
+        assert(strides == accs[idx].strides);
+    }
   }
 public:
-  __host__ __device__ 
-  inline T* operator[](unsigned idx) const { return buffer[idx]; }
-public:
-  T *buffer[GROUPS];
+  __host__ __device__
+  inline A operator[](unsigned idx) 
+  { 
+    A a;
+    a.base = bases[idx];
+    a.strides = strides;
+    return a; 
+  }
+  __host__ __device__
+  inline const A operator[](unsigned idx) const 
+  { 
+    A a;
+    a.base = bases[idx];
+    a.strides = strides;
+    return a; 
+  }
+protected:
+  intptr_t bases[GROUPS];
+  // Deduplicate offsets here
+  Point<N> strides;
 };
 
 template<int DIM, typename T>
@@ -69,23 +91,6 @@ public:
   inline const T& operator[](unsigned idx) const { return buffer[idx]; }
 public:
   T buffer[DIM];
-};
-
-template<int DIM>
-struct ByteOffsetArray {
-public:
-  __host__
-  ByteOffsetArray(const LegionRuntime::Accessor::ByteOffset offs[DIM]) 
-  {
-    for (int idx = 0; idx < DIM; idx++)
-      offsets[idx] = offs[idx];
-  }
-public:
-  __host__ __device__ 
-  inline const LegionRuntime::Accessor::ByteOffset& operator[](unsigned idx) const 
-    { return offsets[idx]; }
-public:
-  LegionRuntime::Accessor::ByteOffset offsets[DIM];
 };
 
 #endif

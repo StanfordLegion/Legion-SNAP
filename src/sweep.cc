@@ -18,14 +18,11 @@
 
 #include "snap.h"
 #include "sweep.h"
-#include "legion_stl.h"
 
 #include <stdlib.h>
 #include <x86intrin.h>
 
 extern Legion::Logger log_snap;
-
-using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
@@ -248,11 +245,9 @@ void MiniKBATask::dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp,
   for (unsigned idx = 4; idx < 12; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/,
                                              Snap::get_soa_layout());
-  register_gpu_variant<
-    raw_rect_task_wrapper<MomentQuad, 3, double, 3, double, 3, MomentTriple, 3,
-                       double, 3, double, 3, double, 3, double, 3, double, 2,
-                       double, 2, double, 2, double, 1, gpu_implementation> >(
-              execution_constraints, layout_constraints, true/*leaf*/);
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 static inline Point<2> ghostx_point(const Point<3> &local_point)
@@ -1567,28 +1562,17 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
 #ifdef USE_GPU_KERNELS
 extern void run_gpu_sweep(const Point<3> origin, 
-               const MomentQuad *qtot_ptr,
-                     double     *flux_ptr,
-                     MomentTriple *fluxm_ptr,
-               const double     *dinv_ptr,
-               const double     *time_flux_in_ptr,
-                     double     *time_flux_out_ptr,
-               const double     *t_xs_ptr,
-                     double     *ghostx_ptr,
-                     double     *ghosty_ptr,
-                     double     *ghostz_ptr,
-               const double     *qim_ptr,
-               const ByteOffset qtot_offsets[3],
-               const ByteOffset flux_offsets[3],
-               const ByteOffset fluxm_offsets[3],
-               const ByteOffset dinv_offsets[3],
-               const ByteOffset time_flux_in_offsets[3],
-               const ByteOffset time_flux_out_offsets[3],
-               const ByteOffset t_xs_offsets[3],
-               const ByteOffset ghostx_out_offsets[2],
-               const ByteOffset ghosty_out_offsets[2],
-               const ByteOffset ghostz_out_offsets[2],
-               const ByteOffset qim_offsets[3],
+               const Accessor<MomentQuad,3> &fa_qtot,
+                     Accessor<double,3> &fa_flux,
+                     Accessor<MomentTriple,3> &fa_fluxm,
+               const Accessor<double,3> &fa_dinv,
+               const Accessor<double,3> &fa_time_flux_in,
+                     Accessor<double,3> &fa_time_flux_out,
+               const Accessor<double,3> &fa_t_xs,
+                     Accessor<double,2> &fa_ghostx,
+                     Accessor<double,2> &fa_ghosty,
+                     Accessor<double,2> &fa_ghostz,
+               const Accessor<double,3> &fa_qim,
                const int x_range, const int y_range, 
                const int z_range, const int corner,
                const bool stride_x_positive,
@@ -1602,20 +1586,8 @@ extern void run_gpu_sweep(const Point<3> origin,
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void MiniKBATask::gpu_implementation(
- const Task *task, Context ctx, Runtime *runtime,
- const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
- const std::vector<double*> &flux_ptrs, const ByteOffset flux_offsets[3],
- const std::vector<double*> &qim_ptrs, const ByteOffset qim_offsets[3],
- const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
- const std::vector<double*> &dinv_ptrs, const ByteOffset dinv_offsets[3],
- const std::vector<double*> &time_flux_in_ptrs, const ByteOffset time_flux_in_offsets[3],
- const std::vector<double*> &time_flux_out_ptrs, const ByteOffset time_flux_out_offsets[3],
- const std::vector<double*> &t_xs_ptrs, const ByteOffset t_xs_offsets[3],
- const std::vector<double*> &ghost_z_ptrs, const ByteOffset ghostz_offsets[2],
- const std::vector<double*> &ghost_x_ptrs, const ByteOffset ghostx_offsets[2],
- const std::vector<double*> &ghost_y_ptrs, const ByteOffset ghosty_offsets[2],
- const std::vector<double*> &vdelt_ptrs, const ByteOffset vdelt_offsets[1])
+/*static*/ void MiniKBATask::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
@@ -1628,57 +1600,59 @@ extern void run_gpu_sweep(const Point<3> origin,
   // This implementation of the sweep assumes three dimensions
   assert(Snap::num_dims == 3);
 
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
 
     // Figure out the origin point based on which corner we are
   const bool stride_x_positive = ((args->corner & 0x1) != 0);
   const bool stride_y_positive = ((args->corner & 0x2) != 0);
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
-  const coord_t origin_ints[3] = { 
-    (stride_x_positive ? subgrid_bounds.lo[0] : subgrid_bounds.hi[0]) - subgrid_bounds.lo[0],
-    (stride_y_positive ? subgrid_bounds.lo[1] : subgrid_bounds.hi[1]) - subgrid_bounds.lo[1],
-    (stride_z_positive ? subgrid_bounds.lo[2] : subgrid_bounds.hi[2]) - subgrid_bounds.lo[2]};
-  const Point<3> origin(origin_ints);
+  const Point<3> origin( 
+    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]) - dom.bounds.lo[0],
+    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]) - dom.bounds.lo[1],
+    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]) - dom.bounds.lo[2]);
 
-  const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1; 
-  const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
-  const int z_range = (subgrid_bounds.hi[2] - subgrid_bounds.lo[2]) + 1;
+  const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
+  const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
+  const int z_range = (dom.bounds.hi[2] - dom.bounds.lo[2]) + 1;
 
   const bool mms_source = (Snap::source_layout == Snap::MMS_SOURCE);
 
-  for (int group = 0; group < flux_ptrs.size(); group++) {
-    const MomentQuad *const qtot_ptr = qtot_ptrs[group];
-    double *const flux_ptr = flux_ptrs[group];
-    MomentTriple *const fluxm_ptr = fluxm_ptrs[group];
-    double *const qim_ptr = qim_ptrs[group];
+  for (int group = args->group_start; group <= args->group_stop; group++) {
+    // Get all the accessors for this energy group
+    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_qim;
+    Accessor<MomentTriple,3> fa_fluxm;
+    if (Snap::source_layout == Snap::MMS_SOURCE) {
+      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+    }
     
-    // No types here since the size of these fields are dependent
-    // on the number of angles
-    double *const dinv_ptr = dinv_ptrs[group]; 
-    double *const time_flux_in_ptr = time_flux_in_ptrs[group]; 
-    double *const time_flux_out_ptr = time_flux_out_ptrs[group]; 
-    const double *const t_xs_ptr = t_xs_ptrs[group];
+    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    double *const ghostx_ptr = ghost_x_ptrs[group]; 
-    double *const ghosty_ptr = ghost_y_ptrs[group]; 
-    double *const ghostz_ptr = ghost_z_ptrs[group];
+    Accessor<double,2> fa_ghostz(regions[8], 
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghostx(regions[9],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
+    Accessor<double,2> fa_ghosty(regions[10],
+        SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = *(vdelt_ptrs[group]);
+    const double vdelt = Accessor<double,1>(regions[11],
+                          SNAP_ENERGY_GROUP_FIELD(group))[0];
 
-    run_gpu_sweep(origin, qtot_ptr, flux_ptr, fluxm_ptr, dinv_ptr, 
-        time_flux_in_ptr, time_flux_out_ptr, t_xs_ptr, ghostx_ptr,
-        ghosty_ptr, ghostz_ptr, qim_ptr, qtot_offsets, flux_offsets,
-        fluxm_offsets, dinv_offsets, time_flux_in_offsets, 
-        time_flux_out_offsets, t_xs_offsets, ghostx_offsets,
-        ghosty_offsets, ghostz_offsets, qim_offsets,
-        x_range, y_range, z_range, args->corner, stride_x_positive,
-        stride_y_positive, stride_z_positive, mms_source, 
-        Snap::num_moments, Snap::hi, Snap::hj, Snap::hk, vdelt,
-        Snap::num_angles, Snap::flux_fixup);
+    run_gpu_sweep(origin, fa_qtot, fa_flux, fa_fluxm, fa_dinv,
+                  fa_time_flux_in, fa_time_flux_out, fa_t_xs,
+                  fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
+                  x_range, y_range, z_range, args->corner, stride_x_positive,
+                  stride_y_positive, stride_z_positive, mms_source, 
+                  Snap::num_moments, Snap::hi, Snap::hj, Snap::hk, vdelt,
+                  Snap::num_angles, Snap::flux_fixup);
   }
 #else
   assert(false);

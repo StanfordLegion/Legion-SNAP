@@ -36,14 +36,8 @@ public:
 public:
   static void cpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static void gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
-     const std::vector<double*> &qi0_ptrs, const ByteOffset qi0_offsets[3],
-     const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-     const std::vector<MomentQuad*> &slgg_ptrs, const ByteOffset slgg_offsets[2],
-     const std::vector<int*> &mat_ptrs, const ByteOffset mat_offsets[3],
-     const std::vector<double*> &qo0_ptrs, const ByteOffset qo0_offsets[3],
-     const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-     const std::vector<MomentTriple*> &qom_ptrs, const ByteOffset qom_offsets[3]);
+  static void gpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
 class TestOuterConvergence : public SnapTask<TestOuterConvergence,
@@ -59,9 +53,8 @@ public:
 public:
   static bool cpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static bool gpu_implementation(const Task *task, Context ctx, Runtime *runtime,
-     const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-     const std::vector<double*> &flux0po_ptrs, const ByteOffset flux0po_offsets[3]);
+  static bool gpu_implementation(const Task *task,
+     const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
 #endif // __OUTER_H__
