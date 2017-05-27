@@ -191,7 +191,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
 }
 
 //------------------------------------------------------------------------------
-InitGPUSweep::InitGPUSweep(const Snap &snap, const IndexSpace<3> &launch)
+InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
   : SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID>(
       snap, launch, Predicate::TRUE_PRED)
 //------------------------------------------------------------------------------

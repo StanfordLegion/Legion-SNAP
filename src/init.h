@@ -45,7 +45,7 @@ public:
 
 class InitGPUSweep : public SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID> {
 public:
-  InitGPUSweep(const Snap &snap, const IndexSpace<3> &launch_bounds); 
+  InitGPUSweep(const Snap &snap, const Rect<3> &launch_bounds); 
 public:
   static void preregister_gpu_variants(void);
 public:

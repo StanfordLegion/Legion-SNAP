@@ -20,11 +20,8 @@
 
 #include "snap.h"
 #include "inner.h"
-#include "legion_stl.h"
 
 extern Legion::Logger log_snap;
-
-using namespace Legion::STL;
 
 //------------------------------------------------------------------------------
 CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
@@ -78,10 +75,9 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
   for (unsigned idx = 0; idx < 6; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<
-    raw_rect_task_wrapper<MomentQuad,3,double,3,double,3,MomentQuad,3,
-                       MomentTriple,3,MomentTriple,3,gpu_implementation> >(
-              execution_constraints, layout_constraints, true/*leaf*/);
+  register_gpu_variant<gpu_implementation>(execution_constraints,
+                                           layout_constraints,
+                                           true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -142,70 +138,52 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 }
 
 #ifdef USE_GPU_KERNELS
-  extern void run_inner_source_single_moment(Rect<3>           subgrid_bounds,
-                                             const MomentQuad  *sxs_ptr,
-                                             const double      *flux0_ptr,
-                                             const double      *q2grp0_ptr,
-                                                   MomentQuad  *qtot_ptr,
-                                             const ByteOffset        sxs_offsets[3],
-                                             const ByteOffset        flux0_offsets[3],
-                                             const ByteOffset        q2grp0_offsets[3],
-                                             const ByteOffset        qtot_offsets[3]);
-  extern void run_inner_source_multi_moment(Rect<3> subgrid_bounds,
-                                            const MomentQuad   *sxs_ptr,
-                                            const double       *flux0_ptr,
-                                            const double       *q2grp0_ptr,
-                                            const MomentTriple *fluxm_ptr,
-                                            const MomentTriple *q2grpm_ptr,
-                                                  MomentQuad   *qtot_ptr,
-                                            const ByteOffset         sxs_offsets[3],
-                                            const ByteOffset         flux0_offsets[3],
-                                            const ByteOffset         q2grp0_offsets[3],
-                                            const ByteOffset         fluxm_offsets[3],
-                                            const ByteOffset         q2grpm_offsets[3],
-                                            const ByteOffset         qtot_offsets[3],
+  extern void run_inner_source_single_moment(const Rect<3> subgrid_bounds,
+                                    const Accessor<MomentQuad,3> fa_sxs,
+                                    const Accessor<double,3> fa_flux0,
+                                    const Accessor<double,3> fa_q2grp0,
+                                          Accessor<MomentQuad,3> fa_qtot);
+  extern void run_inner_source_multi_moment(const Rect<3> subgrid_bounds,
+                                   const Accessor<MomentQuad,3> fa_sxs,
+                                   const Accessor<double,3> fa_flux0,
+                                   const Accessor<double,3> fa_q2grp0,
+                                   const Accessor<MomentTriple,3> fa_fluxm,
+                                   const Accessor<MomentTriple,3> fa_q2grpm,
+                                         Accessor<MomentQuad,3> fa_qtot,
                                             const int num_moments, const int lma[4]);
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ void CalcInnerSource::gpu_implementation(
-    const Task *task, Context ctx, Runtime *runtime,
-    const std::vector<MomentQuad*> &sxs_ptrs, const ByteOffset sxs_offsets[3],
-    const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-    const std::vector<double*> &q2grp0_ptrs, const ByteOffset q2grp0_offsets[3],
-    const std::vector<MomentQuad*> &qtot_ptrs, const ByteOffset qtot_offsets[3],
-    const std::vector<MomentTriple*> &fluxm_ptrs, const ByteOffset fluxm_offsets[3],
-    const std::vector<MomentTriple*> &q2grpm_ptrs, const ByteOffset q2grpm_offsets[3])
+/*static*/ void CalcInnerSource::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-#ifdef USE_GPU_KERNELS
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+#ifdef tSE_GPU_KERNELS
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const bool multi_moment = (Snap::num_moments > 1);
   const unsigned num_groups = task->regions[0].privilege_fields.size();
   assert(num_groups == task->regions[1].privilege_fields.size());
   assert(num_groups == task->regions[2].privilege_fields.size());
 
-  for (int group = 0; group < num_groups; group++)
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++)
   {
-    const MomentQuad *const sxs_ptr = sxs_ptrs[group];
-    const double *const flux0_ptr = flux0_ptrs[group];
-    const double *const q2grp0_ptr = q2grp0_ptrs[group];
-    MomentQuad *const qtot_ptr = qtot_ptrs[group];
+    Accessor<MomentQuad,3> fa_sxs(regions[0], *t);
+    Accessor<double,3> fa_flux0(regions[1], *it);
+    Accessor<double,3> fa_q2grp0(regions[2], *it);
+    Accessor<MomentQuad,3> fa_qtot(regions[3], *it);
     if (multi_moment) {
-      const MomentTriple *const fluxm_ptr = fluxm_ptrs[group];
-      const MomentTriple *const q2grpm_ptr = q2grpm_ptrs[group];
-      run_inner_source_multi_moment(subgrid_bounds, sxs_ptr, flux0_ptr, q2grp0_ptr,
-                                    fluxm_ptr, q2grpm_ptr, qtot_ptr, sxs_offsets,
-                                    flux0_offsets, q2grp0_offsets, fluxm_offsets,
-                                    q2grpm_offsets, qtot_offsets, 
+      Accessor<MomentTriple,3> fa_fluxm(regions[4], *it);
+      Accessor<MomentTriple,3> fa_q2grpm(regions[5], *it);
+      run_inner_source_multi_moment(dom.bounds, fa_sxs, fa_flux0, fa_q2grp0,
+                                    fa_fluxm, fa_q2grpm, fa_qtot_ptr,
                                     Snap::num_moments, Snap::lma);
     } else {
-      run_inner_source_single_moment(subgrid_bounds, sxs_ptr, flux0_ptr, q2grp0_ptr,
-                                     qtot_ptr, sxs_offsets, flux0_offsets, 
-                                     q2grp0_offsets, qtot_offsets);
+      run_inner_source_single_moment(dom.bounds, fa_sxs, fa_flux0, 
+                                     fa_q2grp0, fa_qtot); 
     }
   }
 #else
@@ -273,9 +251,9 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
   for (unsigned idx = 0; idx < 2; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<bool,
-    raw_rect_task_wrapper<bool, double, 3, double, 3, gpu_implementation> >(
-        execution_constraints, layout_constraints, true/*leaf*/);
+  register_gpu_variant<bool, gpu_implementation>(execution_constraints,
+                                                 layout_constraints,
+                                                 true/*leaf*/);
 }
 
 //------------------------------------------------------------------------------
@@ -323,30 +301,38 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 }
 
 #ifdef USE_GPU_KERNELS
-extern bool run_inner_convergence(Rect<3> subgrid_bounds,
-                                  const std::vector<double*> flux0_ptrs,
-                                  const std::vector<double*> flux0pi_ptrs,
-                                  const ByteOffset flux0_offsets[3], 
-                                  const ByteOffset flux0pi_offsets[3],
-                                  const double epsi);
+extern bool run_inner_convergence(const Rect<3> subgrid_bounds,
+                            const std::vector<Accessor<double,3> > &fa_flux0,
+                            const std::vector<Accessor<double,3> > &fa_flux0pi,
+                            const double epsi);
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ bool TestInnerConvergence::gpu_implementation(
-  const Task *task, Context ctx, Runtime *runtime,
-  const std::vector<double*> &flux0_ptrs, const ByteOffset flux0_offsets[3],
-  const std::vector<double*> &flux0pi_ptrs, const ByteOffset flux0pi_offsets[3])
+/*static*/ bool TestInnerConvergence::gpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
   log_snap.info("Running GPU Test Inner Convergence");
 #ifdef USE_GPU_KERNELS
-  Domain dom = runtime->get_index_space_domain(ctx, 
-          task->regions[0].region.get_index_space());
-  Rect<3> subgrid_bounds = dom.get_rect<3>();
+  Domain<3> dom = runtime->get_index_space_domain(ctx, 
+          IndexSpace<3>(task->regions[0].region.get_index_space()));
   const double epsi = Snap::convergence_eps;
-  return run_inner_convergence(subgrid_bounds, flux0_ptrs, flux0pi_ptrs,
-                               flux0_offsets, flux0pi_offsets, epsi);
+
+  assert(task->regions[0].privilege_fields.size() == 
+         task->regions[1].privilege_fields.size());
+  std::vector<Accessor<double,3> > fa_flux0(
+      task->regions[0].privilege_fields.size());
+  std::vector<Accessor<double,3> > fa_flux0pi(fa_flux0.size());
+  unsigned idx = 0;
+  for (std::set<FieldID>::const_iterator it = 
+        task->regions[0].privilege_fields.begin(); it !=
+        task->regions[0].privilege_fields.end(); it++, idx++)
+  {
+    fa_flux0[idx] = Accessor<double,3>(regions[0], *it);
+    fa_flux0pi[idx] = Accessor<double,3>(regions[1], *it);
+  }
+  return run_inner_convergence(dom.bounds, fa_flux0, fa_flux0pi, epsi);
 #else
   assert(false);
 #endif
