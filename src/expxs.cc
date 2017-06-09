@@ -116,9 +116,9 @@ ExpandCrossSection::ExpandCrossSection(const Snap &snap,const SnapArray<1> &sig,
 
 #ifdef USE_GPU_KERNELS
 extern void run_expand_cross_section(
-                              const std::vector<Accessor<double,1> > &sig_ptrs,
-                              const Accessor<int,3> &fa_mat,
-                              const std::vector<Accessor<double,3> > &fa_xs,
+                              const std::vector<AccessorRO<double,1> > &sig_ptrs,
+                              const AccessorRO<int,3> &fa_mat,
+                              const std::vector<AccessorWO<double,3> > &fa_xs,
                               const Rect<3> &subgrid_bounds);
 #endif
 
@@ -138,15 +138,15 @@ extern void run_expand_cross_section(
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
-  std::vector<Accessor<double,1> > fa_sig(num_groups);
+  std::vector<AccessorRO<double,1> > fa_sig(num_groups);
   for (int group = group_start; group <= group_stop; group++)
     fa_sig[group - group_start] = 
-      Accessor<double,1>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-  Accessor<int,3> fa_mat(regions[1], Snap::FID_SINGLE);
-  std::vector<Accessor<double,3> > fa_xs(num_groups);
+      AccessorRO<double,1>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+  AccessorRO<int,3> fa_mat(regions[1], Snap::FID_SINGLE);
+  std::vector<AccessorWO<double,3> > fa_xs(num_groups);
   for (int group = group_start; group <= group_stop; group++)
     fa_xs[group - group_start] = 
-      Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      AccessorWO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
 
   run_expand_cross_section(fa_sig, fa_mat, fa_xs, dom.bounds);
 #else
@@ -251,9 +251,9 @@ ExpandScatteringCrossSection::ExpandScatteringCrossSection(const Snap &snap,
 
 #ifdef USE_GPU_KERNELS
 extern void run_expand_scattering_cross_section(
-                          const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
-                          const Accessor<int,3> &fa_mat,
-                          const std::vector<Accessor<MomentQuad,3> > &fa_xs,
+                          const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                          const AccessorRO<int,3> &fa_mat,
+                          const std::vector<AccessorWO<MomentQuad,3> > &fa_xs,
                           const Rect<3> &subgrid_bounds,
                           const int group_start);
 #endif
@@ -274,15 +274,15 @@ extern void run_expand_scattering_cross_section(
   const int group_stop  = *(((int*)task->args) + 1);
   const int num_groups = (group_stop - group_start) + 1;
 
-  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups);
+  std::vector<AccessorRO<MomentQuad,2> > fa_slgg(num_groups);
   for (int group = group_start; group <= group_stop; group++)
     fa_slgg[group - group_start] = 
-      Accessor<MomentQuad,2>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-  Accessor<int,3> fa_mat(regions[1], Snap::FID_SINGLE);
-  std::vector<Accessor<MomentQuad,3> > fa_xs(num_groups);
+      AccessorRO<MomentQuad,2>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+  AccessorRO<int,3> fa_mat(regions[1], Snap::FID_SINGLE);
+  std::vector<AccessorWO<MomentQuad,3> > fa_xs(num_groups);
   for (int group = group_start; group <= group_stop; group++)
     fa_xs[group - group_start] = 
-      Accessor<MomentQuad,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      AccessorWO<MomentQuad,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
 
   run_expand_scattering_cross_section(fa_slgg, fa_mat, fa_xs,
                                       dom.bounds, group_start);
@@ -392,8 +392,8 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
 }
 
 #ifdef USE_GPU_KERNELS
-extern void run_geometry_param(const std::vector<Accessor<double,3> > &xs_ptrs,
-                               const std::vector<Accessor<double,3> > &dinv_ptrs,
+extern void run_geometry_param(const std::vector<AccessorRO<double,3> > &xs_ptrs,
+                               const std::vector<AccessorWO<double,3> > &dinv_ptrs,
                                const std::vector<double> &vdelts,
                                const double hi, const double hj, const double hk,
                                const Rect<3> &subgrid_bounds, const int num_angles);
@@ -416,17 +416,17 @@ extern void run_geometry_param(const std::vector<Accessor<double,3> > &xs_ptrs,
           IndexSpace<3>(task->regions[2].region.get_index_space()));
 
   std::vector<double> vdelts(num_groups);
-  std::vector<Accessor<double,3> > fa_xs(num_groups);
-  std::vector<Accessor<double,3> > fa_dinv(num_groups);
+  std::vector<AccessorRO<double,3> > fa_xs(num_groups);
+  std::vector<AccessorWO<double,3> > fa_dinv(num_groups);
   unsigned idx = 0;
   for (int group = group_start; group <= group_stop; group++, idx++)
   {
     fa_xs[idx] = 
-      Accessor<double,3>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+      AccessorRO<double,3>(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
     vdelts[idx] = 
-      Accessor<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
+      AccessorRO<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
     fa_dinv[idx] = 
-      Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      AccessorWO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
   }
   run_geometry_param(fa_xs, fa_dinv, vdelts, Snap::hi, Snap::hj, Snap::hk, 
                      dom.bounds, Snap::num_angles);

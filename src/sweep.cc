@@ -1558,17 +1558,17 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
 #ifdef USE_GPU_KERNELS
 extern void run_gpu_sweep(const Point<3> origin, 
-               const Accessor<MomentQuad,3> &fa_qtot,
-                     Accessor<double,3> &fa_flux,
-                     Accessor<MomentTriple,3> &fa_fluxm,
-               const Accessor<double,3> &fa_dinv,
-               const Accessor<double,3> &fa_time_flux_in,
-                     Accessor<double,3> &fa_time_flux_out,
-               const Accessor<double,3> &fa_t_xs,
-                     Accessor<double,2> &fa_ghostx,
-                     Accessor<double,2> &fa_ghosty,
-                     Accessor<double,2> &fa_ghostz,
-               const Accessor<double,3> &fa_qim,
+               const AccessorRO<MomentQuad,3> &fa_qtot,
+               const AccessorRW<double,3> &fa_flux,
+               const AccessorRW<MomentTriple,3> &fa_fluxm,
+               const AccessorRO<double,3> &fa_dinv,
+               const AccessorRO<double,3> &fa_time_flux_in,
+               const AccessorWO<double,3> &fa_time_flux_out,
+               const AccessorRO<double,3> &fa_t_xs,
+               const AccessorRW<double,2> &fa_ghostx,
+               const AccessorRW<double,2> &fa_ghosty,
+               const AccessorRW<double,2> &fa_ghostz,
+               const AccessorRO<double,3> &fa_qim,
                const int x_range, const int y_range, 
                const int z_range, const int corner,
                const bool stride_x_positive,
@@ -1617,29 +1617,29 @@ extern void run_gpu_sweep(const Point<3> origin,
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
-    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_qim;
-    Accessor<MomentTriple,3> fa_fluxm;
+    AccessorRO<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRW<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_qim;
+    AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
-      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<double,2> fa_ghostz(regions[8], 
+    AccessorRW<double,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghostx(regions[9],
+    AccessorRW<double,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghosty(regions[10],
+    AccessorRW<double,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = Accessor<double,1>(regions[11],
+    const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
 
     run_gpu_sweep(origin, fa_qtot, fa_flux, fa_fluxm, fa_dinv,

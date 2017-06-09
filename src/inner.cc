@@ -139,17 +139,17 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 
 #ifdef USE_GPU_KERNELS
   extern void run_inner_source_single_moment(const Rect<3> subgrid_bounds,
-                                    const Accessor<MomentQuad,3> fa_sxs,
-                                    const Accessor<double,3> fa_flux0,
-                                    const Accessor<double,3> fa_q2grp0,
-                                          Accessor<MomentQuad,3> fa_qtot);
+                                    const AccessorRO<MomentQuad,3> fa_sxs,
+                                    const AccessorRO<double,3> fa_flux0,
+                                    const AccessorRO<double,3> fa_q2grp0,
+                                          AccessorWO<MomentQuad,3> fa_qtot);
   extern void run_inner_source_multi_moment(const Rect<3> subgrid_bounds,
-                                   const Accessor<MomentQuad,3> fa_sxs,
-                                   const Accessor<double,3> fa_flux0,
-                                   const Accessor<double,3> fa_q2grp0,
-                                   const Accessor<MomentTriple,3> fa_fluxm,
-                                   const Accessor<MomentTriple,3> fa_q2grpm,
-                                         Accessor<MomentQuad,3> fa_qtot,
+                                   const AccessorRO<MomentQuad,3> fa_sxs,
+                                   const AccessorRO<double,3> fa_flux0,
+                                   const AccessorRO<double,3> fa_q2grp0,
+                                   const AccessorRO<MomentTriple,3> fa_fluxm,
+                                   const AccessorRO<MomentTriple,3> fa_q2grpm,
+                                         AccessorWO<MomentQuad,3> fa_qtot,
                                             const int num_moments, const int lma[4]);
 #endif
 
@@ -171,13 +171,13 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<MomentQuad,3> fa_sxs(regions[0], *t);
-    Accessor<double,3> fa_flux0(regions[1], *it);
-    Accessor<double,3> fa_q2grp0(regions[2], *it);
-    Accessor<MomentQuad,3> fa_qtot(regions[3], *it);
+    AccessorRO<MomentQuad,3> fa_sxs(regions[0], *t);
+    AccessorRO<double,3> fa_flux0(regions[1], *it);
+    AccessorRO<double,3> fa_q2grp0(regions[2], *it);
+    AccessorWO<MomentQuad,3> fa_qtot(regions[3], *it);
     if (multi_moment) {
-      Accessor<MomentTriple,3> fa_fluxm(regions[4], *it);
-      Accessor<MomentTriple,3> fa_q2grpm(regions[5], *it);
+      AccessorRO<MomentTriple,3> fa_fluxm(regions[4], *it);
+      AccessorRO<MomentTriple,3> fa_q2grpm(regions[5], *it);
       run_inner_source_multi_moment(dom.bounds, fa_sxs, fa_flux0, fa_q2grp0,
                                     fa_fluxm, fa_q2grpm, fa_qtot_ptr,
                                     Snap::num_moments, Snap::lma);
@@ -302,8 +302,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 
 #ifdef USE_GPU_KERNELS
 extern bool run_inner_convergence(const Rect<3> subgrid_bounds,
-                            const std::vector<Accessor<double,3> > &fa_flux0,
-                            const std::vector<Accessor<double,3> > &fa_flux0pi,
+                            const std::vector<AccessorRO<double,3> > &fa_flux0,
+                            const std::vector<AccessorRO<double,3> > &fa_flux0pi,
                             const double epsi);
 #endif
 
@@ -321,16 +321,16 @@ extern bool run_inner_convergence(const Rect<3> subgrid_bounds,
 
   assert(task->regions[0].privilege_fields.size() == 
          task->regions[1].privilege_fields.size());
-  std::vector<Accessor<double,3> > fa_flux0(
+  std::vector<AccessorRO<double,3> > fa_flux0(
       task->regions[0].privilege_fields.size());
-  std::vector<Accessor<double,3> > fa_flux0pi(fa_flux0.size());
+  std::vector<AccessorRO<double,3> > fa_flux0pi(fa_flux0.size());
   unsigned idx = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, idx++)
   {
-    fa_flux0[idx] = Accessor<double,3>(regions[0], *it);
-    fa_flux0pi[idx] = Accessor<double,3>(regions[1], *it);
+    fa_flux0[idx] = AccessorRO<double,3>(regions[0], *it);
+    fa_flux0pi[idx] = AccessorRO<double,3>(regions[1], *it);
   }
   return run_inner_convergence(dom.bounds, fa_flux0, fa_flux0pi, epsi);
 #else
