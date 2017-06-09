@@ -134,7 +134,7 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    Accessor<double,3> fa_flux(regions[0], *it);
+    AccessorRW<double,3> fa_flux(regions[0], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {    
       const Point<3> &p = *itr;
       int i = p[0] - dom.bounds.lo[0];
@@ -161,8 +161,8 @@ MMSInitFlux::MMSInitFlux(const Snap &snap, const SnapArray<3> &ref_flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    Accessor<double,3> fa_flux(regions[0], *it);
-    Accessor<MomentTriple,3> fa_fluxm(regions[1], *it);
+    AccessorRW<double,3> fa_flux(regions[0], *it);
+    AccessorRW<MomentTriple,3> fa_fluxm(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {
       double flux = fa_flux[*itr];
       MomentTriple result;
@@ -280,25 +280,25 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
   const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
   double *angle_buffer = (double*)malloc(angle_buffer_size);
 
-  Accessor<int,3> fa_mat(regions[2], Snap::FID_SINGLE);
+  AccessorRO<int,3> fa_mat(regions[2], Snap::FID_SINGLE);
 
   unsigned g_idx = 0;
-  std::vector<Accessor<double,3> > 
+  std::vector<AccessorRO<double,3> > 
     fa_fluxes(task->regions[0].privilege_fields.size());
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g_idx++)
-    fa_fluxes[g_idx] = Accessor<double,3>(regions[0], *it);
+    fa_fluxes[g_idx] = AccessorRO<double,3>(regions[0], *it);
   g_idx = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g_idx++)
   {
-    Accessor<double,3> &fa_flux = fa_fluxes[g_idx]; 
-    Accessor<MomentTriple,3> fa_fluxm(regions[1], *it);
-    Accessor<double,1> fa_sigt(regions[3], *it);
-    Accessor<MomentQuad,2> fa_slgg(regions[4], *it);
-    Accessor<double,3> fa_qim(regions[5], *it);
+    AccessorRO<double,3> &fa_flux = fa_fluxes[g_idx]; 
+    AccessorRO<MomentTriple,3> fa_fluxm(regions[1], *it);
+    AccessorRO<double,1> fa_sigt(regions[3], *it);
+    AccessorRO<MomentQuad,2> fa_slgg(regions[4], *it);
+    AccessorRW<double,3> fa_qim(regions[5], *it);
 
     for (DomainIterator<3> itr(dom); itr(); itr++) {
       const Point<3> &p = *itr;
@@ -325,7 +325,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
         for (std::set<FieldID>::const_iterator gp = 
               task->regions[0].privilege_fields.begin(); gp !=
               task->regions[0].privilege_fields.end(); gp++, gp_idx++) {
-          Accessor<double,3> &fa_flux_gp = fa_fluxes[gp_idx];
+          AccessorRO<double,3> &fa_flux_gp = fa_fluxes[gp_idx];
           const double flux_gp = fa_flux_gp[*itr];
           const MomentQuad quad = fa_slgg[mat][gp_idx];
           angle_buffer[ang] -= (quad[0] * flux_gp);
@@ -400,9 +400,9 @@ MMSInitTimeDependent::MMSInitTimeDependent(const Snap &snap,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,1> fa_v(regions[0], *it);
-    Accessor<double,3> fa_flux(regions[1], *it);
-    Accessor<double,3> fa_qi(regions[2], *it);
+    AccessorRO<double,1> fa_v(regions[0], *it);
+    AccessorRW<double,3> fa_flux(regions[1], *it);
+    AccessorWO<double,3> fa_qi(regions[2], *it);
 
     const double vg = fa_v[0];
 
@@ -459,7 +459,7 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,3> fa_qim(regions[0], *it);
+    AccessorRW<double,3> fa_qim(regions[0], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
       memcpy(angle_buffer, fa_qim.ptr(*itr), angle_buffer_size);
@@ -516,8 +516,8 @@ MMSCompare::MMSCompare(const Snap &snap, const SnapArray<3> &flux,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,3> fa_flux(regions[0], *it);
-    Accessor<double,3> fa_ref_flux(regions[1], *it);
+    AccessorRO<double,3> fa_flux(regions[0], *it);
+    AccessorRO<double,3> fa_ref_flux(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++) {
       const double flux = fa_flux[*itr];
       double ref_flux = fa_ref_flux[*itr];

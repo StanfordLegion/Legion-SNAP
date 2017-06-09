@@ -118,29 +118,29 @@ static int gcd(int a, int b)
   assert(num_groups == int(task->regions[1].privilege_fields.size()));
   assert(num_groups == int(task->regions[4].privilege_fields.size()));
   // Make the accessors for all the groups up front
-  std::vector<Accessor<double,3> > fa_qi0(num_groups);
-  std::vector<Accessor<double,3> > fa_flux0(num_groups);
-  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups);
-  std::vector<Accessor<double,3> > fa_qo0(num_groups);
-  std::vector<Accessor<MomentTriple,3> > fa_fluxm(multi_moment ? num_groups:0);
-  std::vector<Accessor<MomentTriple,3> > fa_qom(multi_moment ? num_groups : 0);
+  std::vector<AccessorRO<double,3> > fa_qi0(num_groups);
+  std::vector<AccessorRO<double,3> > fa_flux0(num_groups);
+  std::vector<AccessorRO<MomentQuad,2> > fa_slgg(num_groups);
+  std::vector<AccessorWO<double,3> > fa_qo0(num_groups);
+  std::vector<AccessorRO<MomentTriple,3> > fa_fluxm(multi_moment ? num_groups:0);
+  std::vector<AccessorWO<MomentTriple,3> > fa_qom(multi_moment ? num_groups : 0);
   // Field spaces are all the same so this is safe
   int g = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    fa_qi0[g] = Accessor<double,3>(regions[0], *it);
-    fa_flux0[g] = Accessor<double,3>(regions[1], *it);
-    fa_slgg[g] = Accessor<MomentQuad,2>(regions[2], *it);
-    fa_qo0[g] = Accessor<double,3>(regions[4], *it);
+    fa_qi0[g] = AccessorRO<double,3>(regions[0], *it);
+    fa_flux0[g] = AccessorRO<double,3>(regions[1], *it);
+    fa_slgg[g] = AccessorRO<MomentQuad,2>(regions[2], *it);
+    fa_qo0[g] = AccessorWO<double,3>(regions[4], *it);
     if (multi_moment)
     {
-      fa_fluxm[g] = Accessor<MomentTriple,3>(regions[5], *it);
-      fa_qom[g] = Accessor<MomentTriple,3>(regions[6], *it);
+      fa_fluxm[g] = AccessorRO<MomentTriple,3>(regions[5], *it);
+      fa_qom[g] = AccessorWO<MomentTriple,3>(regions[6], *it);
     }
   }
-  Accessor<int,3> fa_mat(regions[3], Snap::FID_SINGLE);
+  AccessorRO<int,3> fa_mat(regions[3], Snap::FID_SINGLE);
 
   // We'll block the innermost dimension to get some cache locality
   // This assumes a worst case 128 energy groups and a 32 KB L1 cache
@@ -378,8 +378,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,3> fa_flux0(regions[0], *it);
-    Accessor<double,3> fa_flux0po(regions[1], *it);
+    AccessorRO<double,3> fa_flux0(regions[0], *it);
+    AccessorRO<double,3> fa_flux0po(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
       double flux0po = fa_flux0po[*itr];

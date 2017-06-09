@@ -592,14 +592,14 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
   sigs_region.wait_until_valid(true/*ignore warnings*/);
   slgg_region.wait_until_valid(true/*ignore warnings*/);
 
-  std::vector<Accessor<double,1> > fa_sigt(num_groups);
-  std::vector<Accessor<double,1> > fa_siga(num_groups);
-  std::vector<Accessor<double,1> > fa_sigs(num_groups);
+  std::vector<AccessorRW<double,1> > fa_sigt(num_groups);
+  std::vector<AccessorRW<double,1> > fa_siga(num_groups);
+  std::vector<AccessorRW<double,1> > fa_sigs(num_groups);
   for (int g = 0; g < num_groups; g++)
   {
-    fa_sigt[g] = Accessor<double,1>(sigt_region, SNAP_ENERGY_GROUP_FIELD(g));
-    fa_siga[g] = Accessor<double,1>(siga_region, SNAP_ENERGY_GROUP_FIELD(g));
-    fa_sigs[g] = Accessor<double,1>(sigs_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_sigt[g] = AccessorRW<double,1>(sigt_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_siga[g] = AccessorRW<double,1>(siga_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_sigs[g] = AccessorRW<double,1>(sigs_region, SNAP_ENERGY_GROUP_FIELD(g));
   }
 
   fa_sigt[0][1] = 1.0; 
@@ -624,9 +624,9 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
     }
   }
 
-  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups); 
+  std::vector<AccessorRW<MomentQuad,2> > fa_slgg(num_groups); 
   for (int g = 0; g < num_groups; g++)
-    fa_slgg[g] = Accessor<MomentQuad,2>(slgg_region, 
+    fa_slgg[g] = AccessorRW<MomentQuad,2>(slgg_region, 
                           SNAP_ENERGY_GROUP_FIELD(g));
 
   if (num_groups == 1) {
@@ -734,8 +734,8 @@ void Snap::initialize_velocity(const SnapArray<1> &vel,
   const Point<1> dp(0);
   for (int g = 0; g < num_groups; g++) 
   {
-    Accessor<double,1> fa_vel(vel_region, SNAP_ENERGY_GROUP_FIELD(g));
-    Accessor<double,1> fa_vdelt(vdelt_region, SNAP_ENERGY_GROUP_FIELD(g));
+    AccessorRW<double,1> fa_vel(vel_region, SNAP_ENERGY_GROUP_FIELD(g));
+    AccessorRW<double,1> fa_vdelt(vdelt_region, SNAP_ENERGY_GROUP_FIELD(g));
     const double v = double(Snap::num_groups - g);
     fa_vel[dp] = v;
     if (Snap::time_dependent)
