@@ -142,14 +142,14 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
                                     const AccessorRO<MomentQuad,3> fa_sxs,
                                     const AccessorRO<double,3> fa_flux0,
                                     const AccessorRO<double,3> fa_q2grp0,
-                                          AccessorWO<MomentQuad,3> fa_qtot);
+                                    const AccessorWO<MomentQuad,3> fa_qtot);
   extern void run_inner_source_multi_moment(const Rect<3> subgrid_bounds,
                                    const AccessorRO<MomentQuad,3> fa_sxs,
                                    const AccessorRO<double,3> fa_flux0,
                                    const AccessorRO<double,3> fa_q2grp0,
                                    const AccessorRO<MomentTriple,3> fa_fluxm,
                                    const AccessorRO<MomentTriple,3> fa_q2grpm,
-                                         AccessorWO<MomentQuad,3> fa_qtot,
+                                   const AccessorWO<MomentQuad,3> fa_qtot,
                                             const int num_moments, const int lma[4]);
 #endif
 

@@ -39,11 +39,11 @@ public:
     assert(accs.size() == GROUPS);
     for (unsigned idx = 0; idx < GROUPS; idx++)
     {
-      bases[idx] = accs[idx].base;
+      bases[idx] = accs[idx].accessor.base;
       if (idx == 0)
-        strides = accs[0].strides;
+        strides = accs[0].accessor.strides;
       else
-        assert(strides == accs[idx].strides);
+        assert(strides == accs[idx].accessor.strides);
     }
   }
 public:
@@ -51,16 +51,16 @@ public:
   inline A operator[](unsigned idx) 
   { 
     A a;
-    a.base = bases[idx];
-    a.strides = strides;
+    a.accessor.base = bases[idx];
+    a.accessor.strides = strides;
     return a; 
   }
   __host__ __device__
   inline const A operator[](unsigned idx) const 
   { 
     A a;
-    a.base = bases[idx];
-    a.strides = strides;
+    a.accessor.base = bases[idx];
+    a.accessor.strides = strides;
     return a; 
   }
 protected:

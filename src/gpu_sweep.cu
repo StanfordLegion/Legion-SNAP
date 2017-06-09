@@ -70,9 +70,9 @@ template<int GROUPS>
 __global__
 void gpu_geometry_param(const Point<3> origin,
                         const AccessorArray<GROUPS,
-                                Accessor<double,3>,3> fa_xs,
-                              AccessorArray<GROUPS,
-                                Accessor<double,3>,3> fa_dinv,
+                                AccessorRO<double,3>,3> fa_xs,
+                        const AccessorArray<GROUPS,
+                                AccessorWO<double,3>,3> fa_dinv,
                         const ConstBuffer<GROUPS,double> vdelt,
                         const double hi, const double hj, const double hk,
                         const int angles_per_thread)
@@ -100,8 +100,8 @@ void gpu_geometry_param(const Point<3> origin,
 }
 
 __host__
-void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
-                        const std::vector<Accessor<double,3> > &fa_dinv,
+void run_geometry_param(const std::vector<AccessorRO<double,3> > &fa_xs,
+                        const std::vector<AccessorWO<double,3> > &fa_dinv,
                         const std::vector<double> &vdelts,
                         const double hi, const double hj, const double hk,
                         const Rect<3> &subgrid_bounds, const int num_angles)
@@ -127,9 +127,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<1><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<1,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<1,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<1,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -138,9 +138,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<2><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<2,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<2,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<2,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -149,9 +149,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<3><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<3,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<3,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<3,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -160,9 +160,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<4><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<4,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<4,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<4,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -171,9 +171,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<5><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<5,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<5,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<5,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -182,9 +182,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<6><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<6,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<6,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<6,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -193,9 +193,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<7><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<7,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<7,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<7,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -204,9 +204,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<8><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<8,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<8,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<8,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -215,9 +215,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<9><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<9,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<9,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<9,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -226,9 +226,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<10><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<10,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<10,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<10,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -237,9 +237,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<11><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<11,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<11,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<11,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -248,9 +248,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<12><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<12,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<12,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<12,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -259,9 +259,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<13><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<13,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<13,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<13,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -270,9 +270,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<14><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<14,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<14,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<14,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -281,9 +281,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<15><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<15,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<15,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<15,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -292,9 +292,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<16><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<16,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<16,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<16,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -303,9 +303,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<24><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<24,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<24,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<24,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -314,9 +314,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<32><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<32,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<32,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<32,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -325,9 +325,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<40><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<40,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<40,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<40,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -336,9 +336,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<48><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<48,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<48,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<48,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -347,9 +347,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<56><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<56,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<56,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<56,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -358,9 +358,9 @@ void run_geometry_param(const std::vector<Accessor<double,3> > &fa_xs,
       {
         gpu_geometry_param<64><<<grid,block>>>(subgrid_bounds.lo,
                                       AccessorArray<64,
-                                        Accessor<double,3>,3>(fa_xs),
+                                        AccessorRO<double,3>,3>(fa_xs),
                                       AccessorArray<64,
-                                        Accessor<double,3>,3>(fa_dinv),
+                                        AccessorWO<double,3>,3>(fa_dinv),
                                       ConstBuffer<64,double>(vdelts),
                                       hi, hj, hk, angles_per_thread);
         break;
@@ -390,7 +390,7 @@ void ourAtomicAdd(double *ptr, double value)
 
 template<int DIM>
 __device__ __forceinline__
-double angle_read(const Accessor<double,DIM> &fa_acc,
+double angle_read(const AccessorRO<double,DIM> &fa_acc,
                   const Point<DIM> &point, int ang)
 {
   const double *ptr = fa_acc.ptr(point);
@@ -402,7 +402,29 @@ double angle_read(const Accessor<double,DIM> &fa_acc,
 
 template<int DIM>
 __device__ __forceinline__
-void angle_write(Accessor<double,DIM> &fa_acc,
+double angle_read(const AccessorRW<double,DIM> &fa_acc,
+                  const Point<DIM> &point, int ang)
+{
+  const double *ptr = fa_acc.ptr(point);
+  ptr += ang * blockDim.x + threadIdx.x;
+  double result;
+  asm volatile("ld.global.cs.f64 %0, [%1];" : "=d"(result) : "l"(ptr) : "memory");
+  return result;
+}
+
+template<int DIM>
+__device__ __forceinline__
+void angle_write(const AccessorWO<double,DIM> &fa_acc,
+                 const Point<DIM> &point, int ang, double val)
+{
+  double *ptr = fa_acc.ptr(point);
+  ptr += ang * blockDim.x + threadIdx.x;
+  asm volatile("st.global.cs.f64 [%0], %1;" : : "l"(ptr), "d"(val) : "memory");
+}
+
+template<int DIM>
+__device__ __forceinline__
+void angle_write(const AccessorRW<double,DIM> &fa_acc,
                  const Point<DIM> &point, int ang, double val)
 {
   double *ptr = fa_acc.ptr(point);
@@ -440,17 +462,17 @@ Point<2> ghostz_point(const Point<3> &local_point)
 template<int THR_ANGLES>
 __global__
 void gpu_time_dependent_sweep_with_fixup(const Point<3> origin, 
-                                         const Accessor<MomentQuad,3> &fa_qtot,
-                                               Accessor<double,3> &fa_flux,
-                                               Accessor<MomentTriple,3> &fa_fluxm,
-                                         const Accessor<double,3> &fa_dinv,
-                                         const Accessor<double,3> &fa_time_flux_in,
-                                               Accessor<double,3> &fa_time_flux_out,
-                                         const Accessor<double,3> &fa_t_xs,
-                                               Accessor<double,2> &fa_ghostx,
-                                               Accessor<double,2> &fa_ghosty,
-                                               Accessor<double,2> &fa_ghostz,
-                                         const Accessor<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> &fa_qtot,
+                                         const AccessorRW<double,3> &fa_flux,
+                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
+                                         const AccessorRO<double,3> &fa_dinv,
+                                         const AccessorRO<double,3> &fa_time_flux_in,
+                                         const AccessorWO<double,3> &fa_time_flux_out,
+                                         const AccessorRO<double,3> &fa_t_xs,
+                                         const AccessorRW<double,2> &fa_ghostx,
+                                         const AccessorRW<double,2> &fa_ghosty,
+                                         const AccessorRW<double,2> &fa_ghostz,
+                                         const AccessorRO<double,3> &fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -798,17 +820,17 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_dependent_sweep_without_fixup(const Point<3> origin, 
-                                         const Accessor<MomentQuad,3> &fa_qtot,
-                                               Accessor<double,3> &fa_flux,
-                                               Accessor<MomentTriple,3> &fa_fluxm,
-                                         const Accessor<double,3> &fa_dinv,
-                                         const Accessor<double,3> &fa_time_flux_in,
-                                               Accessor<double,3> &fa_time_flux_out,
-                                         const Accessor<double,3> &fa_t_xs,
-                                               Accessor<double,2> &fa_ghostx,
-                                               Accessor<double,2> &fa_ghosty,
-                                               Accessor<double,2> &fa_ghostz,
-                                         const Accessor<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> &fa_qtot,
+                                         const AccessorRW<double,3> &fa_flux,
+                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
+                                         const AccessorRO<double,3> &fa_dinv,
+                                         const AccessorRO<double,3> &fa_time_flux_in,
+                                         const AccessorWO<double,3> &fa_time_flux_out,
+                                         const AccessorRO<double,3> &fa_t_xs,
+                                         const AccessorRW<double,2> &fa_ghostx,
+                                         const AccessorRW<double,2> &fa_ghosty,
+                                         const AccessorRW<double,2> &fa_ghostz,
+                                         const AccessorRO<double,3> &fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1059,15 +1081,15 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_independent_sweep_with_fixup(const Point<3> origin, 
-                                         const Accessor<MomentQuad,3> &fa_qtot,
-                                               Accessor<double,3> &fa_flux,
-                                               Accessor<MomentTriple,3> &fa_fluxm,
-                                         const Accessor<double,3> &fa_dinv,
-                                         const Accessor<double,3> &fa_t_xs,
-                                               Accessor<double,2> &fa_ghostx,
-                                               Accessor<double,2> &fa_ghosty,
-                                               Accessor<double,2> &fa_ghostz,
-                                         const Accessor<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> &fa_qtot,
+                                         const AccessorRW<double,3> &fa_flux,
+                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
+                                         const AccessorRO<double,3> &fa_dinv,
+                                         const AccessorRO<double,3> &fa_t_xs,
+                                         const AccessorRW<double,2> &fa_ghostx,
+                                         const AccessorRW<double,2> &fa_ghosty,
+                                         const AccessorRW<double,2> &fa_ghostz,
+                                         const AccessorRO<double,3> &fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1389,15 +1411,15 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_independent_sweep_without_fixup(const Point<3> origin, 
-                                         const Accessor<MomentQuad,3> &fa_qtot,
-                                               Accessor<double,3> &fa_flux,
-                                               Accessor<MomentTriple,3> &fa_fluxm,
-                                         const Accessor<double,3> &fa_dinv,
-                                         const Accessor<double,3> &fa_t_xs,
-                                               Accessor<double,2> &fa_ghostx,
-                                               Accessor<double,2> &fa_ghosty,
-                                               Accessor<double,2> &fa_ghostz,
-                                         const Accessor<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> &fa_qtot,
+                                         const AccessorRW<double,3> &fa_flux,
+                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
+                                         const AccessorRO<double,3> &fa_dinv,
+                                         const AccessorRO<double,3> &fa_t_xs,
+                                         const AccessorRW<double,2> &fa_ghostx,
+                                         const AccessorRW<double,2> &fa_ghosty,
+                                         const AccessorRW<double,2> &fa_ghostz,
+                                         const AccessorRO<double,3> &fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1635,17 +1657,17 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
 
 __host__
 void run_gpu_sweep(const Point<3> origin, 
-               const Accessor<MomentQuad,3> &fa_qtot,
-                     Accessor<double,3> &fa_flux,
-                     Accessor<MomentTriple,3> &fa_fluxm,
-               const Accessor<double,3> &fa_dinv,
-               const Accessor<double,3> &fa_time_flux_in,
-                     Accessor<double,3> &fa_time_flux_out,
-               const Accessor<double,3> &fa_t_xs,
-                     Accessor<double,2> &fa_ghostx,
-                     Accessor<double,2> &fa_ghosty,
-                     Accessor<double,2> &fa_ghostz,
-               const Accessor<double,3> &fa_qim,
+               const AccessorRO<MomentQuad,3> &fa_qtot,
+               const AccessorRW<double,3> &fa_flux,
+               const AccessorRW<MomentTriple,3> &fa_fluxm,
+               const AccessorRO<double,3> &fa_dinv,
+               const AccessorRO<double,3> &fa_time_flux_in,
+               const AccessorWO<double,3> &fa_time_flux_out,
+               const AccessorRO<double,3> &fa_t_xs,
+               const AccessorRW<double,2> &fa_ghostx,
+               const AccessorRW<double,2> &fa_ghosty,
+               const AccessorRW<double,2> &fa_ghostz,
+               const AccessorRO<double,3> &fa_qim,
                const int x_range, const int y_range, 
                const int z_range, const int corner,
                const bool stride_x_positive,

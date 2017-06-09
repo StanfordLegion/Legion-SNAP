@@ -21,10 +21,10 @@
 
 __global__
 void gpu_inner_source_single_moment(const Point<3> origin,
-                                    const Accessor<MomentQuad,3> fa_sxs,
-                                    const Accessor<double,3> fa_flux0,
-                                    const Accessor<double,3> fa_q2grp0,
-                                          Accessor<MomentQuad,3> fa_qtot)
+                                    const AccessorRO<MomentQuad,3> fa_sxs,
+                                    const AccessorRO<double,3> fa_flux0,
+                                    const AccessorRO<double,3> fa_q2grp0,
+                                    const AccessorWO<MomentQuad,3> fa_qtot)
 {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -43,10 +43,10 @@ void gpu_inner_source_single_moment(const Point<3> origin,
 
 __host__
 void run_inner_source_single_moment(const Rect<3> subgrid_bounds,
-                                    const Accessor<MomentQuad,3> fa_sxs,
-                                    const Accessor<double,3> fa_flux0,
-                                    const Accessor<double,3> fa_q2grp0,
-                                          Accessor<MomentQuad,3> fa_qtot)
+                                    const AccessorRO<MomentQuad,3> fa_sxs,
+                                    const AccessorRO<double,3> fa_flux0,
+                                    const AccessorRO<double,3> fa_q2grp0,
+                                    const AccessorWO<MomentQuad,3> fa_qtot)
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
@@ -61,12 +61,12 @@ void run_inner_source_single_moment(const Rect<3> subgrid_bounds,
 
 __global__
 void gpu_inner_source_multi_moment(const Point<3> origin,
-                                   const Accessor<MomentQuad,3> fa_sxs,
-                                   const Accessor<double,3> fa_flux0,
-                                   const Accessor<double,3> fa_q2grp0,
-                                   const Accessor<MomentTriple,3> fa_fluxm,
-                                   const Accessor<MomentTriple,3> fa_q2grpm,
-                                         Accessor<MomentQuad,3> fa_qtot,
+                                   const AccessorRO<MomentQuad,3> fa_sxs,
+                                   const AccessorRO<double,3> fa_flux0,
+                                   const AccessorRO<double,3> fa_q2grp0,
+                                   const AccessorRO<MomentTriple,3> fa_fluxm,
+                                   const AccessorRO<MomentTriple,3> fa_q2grpm,
+                                   const AccessorWO<MomentQuad,3> fa_qtot,
                                    const int num_moments,
                                    const ConstBuffer<4,int> lma)
 {
@@ -96,12 +96,12 @@ void gpu_inner_source_multi_moment(const Point<3> origin,
 
 __host__
 void run_inner_source_multi_moment(const Rect<3> subgrid_bounds,
-                                   const Accessor<MomentQuad,3> fa_sxs,
-                                   const Accessor<double,3> fa_flux0,
-                                   const Accessor<double,3> fa_q2grp0,
-                                   const Accessor<MomentTriple,3> fa_fluxm,
-                                   const Accessor<MomentTriple,3> fa_q2grpm,
-                                         Accessor<MomentQuad,3> fa_qtot,
+                                   const AccessorRO<MomentQuad,3> fa_sxs,
+                                   const AccessorRO<double,3> fa_flux0,
+                                   const AccessorRO<double,3> fa_q2grp0,
+                                   const AccessorRO<MomentTriple,3> fa_fluxm,
+                                   const AccessorRO<MomentTriple,3> fa_q2grpm,
+                                   const AccessorWO<MomentQuad,3> fa_qtot,
                                    const int num_moments, const int lma[4])
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
@@ -118,8 +118,8 @@ void run_inner_source_multi_moment(const Rect<3> subgrid_bounds,
 
 __global__
 void gpu_inner_convergence(const Point<3> origin,
-                           const Accessor<double,3> fa_flux0,
-                           const Accessor<double,3> fa_flux0pi,
+                           const AccessorRO<double,3> fa_flux0,
+                           const AccessorRO<double,3> fa_flux0pi,
                            const double epsi, int *total_converged)
 {
   // We know there is never more than 32 warps in a CTA
@@ -172,8 +172,8 @@ void gpu_inner_convergence(const Point<3> origin,
 
 __host__
 bool run_inner_convergence(const Rect<3> subgrid_bounds,
-                           const std::vector<Accessor<double,3> > &fa_flux0,
-                           const std::vector<Accessor<double,3> > &fa_flux0pi,
+                           const std::vector<AccessorRO<double,3> > &fa_flux0,
+                           const std::vector<AccessorRO<double,3> > &fa_flux0pi,
                            const double epsi)
 {
   int *converged_d;
