@@ -23,14 +23,14 @@ template<int GROUPS, int STRIP_SIZE>
 __global__
 void gpu_flux0_outer_source(const Point<3> origin,
                             const AccessorArray<GROUPS,
-                                    Accessor<double,3>,3> fa_qi0,
+                                    AccessorRO<double,3>,3> fa_qi0,
                             const AccessorArray<GROUPS,
-                                    Accessor<double,3>,3> fa_flux0,
+                                    AccessorRO<double,3>,3> fa_flux0,
                             const AccessorArray<GROUPS,
-                                    Accessor<MomentQuad,2>,2> fa_slgg,
-                            const Accessor<int,3> fa_mat,
-                                  AccessorArray<GROUPS,
-                                    Accessor<double,3>,3> fa_qo0)
+                                    AccessorRO<MomentQuad,2>,2> fa_slgg,
+                            const AccessorRO<int,3> fa_mat,
+                            const AccessorArray<GROUPS,
+                                    AccessorWO<double,3>,3> fa_qo0)
 {
   __shared__ double flux_buffer[GROUPS][STRIP_SIZE];
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -76,11 +76,11 @@ void gpu_flux0_outer_source(const Point<3> origin,
 template<int GROUPS, int MAX_X, int MAX_Y>
 __host__
 void flux0_launch_helper(Rect<3> subgrid_bounds,
-                         const std::vector<Accessor<double,3> > fa_qi0,
-                         const std::vector<Accessor<double,3> > fa_flux0,
-                         const std::vector<Accessor<MomentQuad,2> > fa_slgg,
-                         const Accessor<int,3> &fa_mat,
-                               std::vector<Accessor<double,3> > fa_qo0)
+                         const std::vector<AccessorRO<double,3> > fa_qi0,
+                         const std::vector<AccessorRO<double,3> > fa_flux0,
+                         const std::vector<AccessorRO<MomentQuad,2> > fa_slgg,
+                         const AccessorRO<int,3> &fa_mat,
+                         const std::vector<AccessorWO<double,3> > fa_qo0)
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
@@ -90,23 +90,23 @@ void flux0_launch_helper(Rect<3> subgrid_bounds,
   gpu_flux0_outer_source<GROUPS,MAX_X*MAX_Y><<<grid,block>>>(
                               subgrid_bounds.lo,
                               AccessorArray<GROUPS,
-                                Accessor<double,3>,3>(fa_qi0),
+                                AccessorRO<double,3>,3>(fa_qi0),
                               AccessorArray<GROUPS,
-                                Accessor<double,3>,3>(fa_flux0),
+                                AccessorRO<double,3>,3>(fa_flux0),
                               AccessorArray<GROUPS,
-                                Accessor<MomentQuad,2>,2>(fa_slgg),
+                                AccessorRO<MomentQuad,2>,2>(fa_slgg),
                               fa_mat,
                               AccessorArray<GROUPS,
-                                Accessor<double,3>,3>(fa_qo0));
+                                AccessorWO<double,3>,3>(fa_qo0));
 }
 
 __host__
 void run_flux0_outer_source(Rect<3> subgrid_bounds,
-                         const std::vector<Accessor<double,3> > fa_qi0,
-                         const std::vector<Accessor<double,3> > fa_flux0,
-                         const std::vector<Accessor<MomentQuad,2> > fa_slgg,
-                         const Accessor<int,3> &fa_mat,
-                               std::vector<Accessor<double,3> > fa_qo0,
+                         const std::vector<AccessorRO<double,3> > fa_qi0,
+                         const std::vector<AccessorRO<double,3> > fa_flux0,
+                         const std::vector<AccessorRO<MomentQuad,2> > fa_slgg,
+                         const AccessorRO<int,3> &fa_mat,
+                         const std::vector<AccessorWO<double,3> > fa_qo0,
                             const int num_groups)
 {
   // TODO: replace this template madness with Terra
@@ -227,12 +227,12 @@ template<int GROUPS, int STRIP_SIZE>
 __global__
 void gpu_fluxm_outer_source(const Point<3> origin,
                             const AccessorArray<GROUPS,
-                                    Accessor<MomentTriple,3>,3> fa_fluxm,
+                                    AccessorRO<MomentTriple,3>,3> fa_fluxm,
                             const AccessorArray<GROUPS,
-                                    Accessor<MomentQuad,2>,2> fa_slgg,
-                            const Accessor<int,3> fa_mat,
-                                  AccessorArray<GROUPS,
-                                    Accessor<MomentTriple,3>,3> fa_qom,
+                                    AccessorRO<MomentQuad,2>,2> fa_slgg,
+                            const AccessorRO<int,3> fa_mat,
+                            const AccessorArray<GROUPS,
+                                    AccessorWO<MomentTriple,3>,3> fa_qom,
                             const int           num_moments,
                             const ConstBuffer<4,int> lma)
 {
@@ -296,10 +296,10 @@ void gpu_fluxm_outer_source(const Point<3> origin,
 template<int GROUPS, int MAX_X, int MAX_Y>
 __host__
 void fluxm_launch_helper(Rect<3> subgrid_bounds,
-                         const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
-                         const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
-                         const std::vector<Accessor<MomentTriple,3> > &fa_qom,
-                         const Accessor<int,3> &fa_mat,
+                         const std::vector<AccessorRO<MomentTriple,3> > &fa_fluxm,
+                         const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                         const std::vector<AccessorWO<MomentTriple,3> > &fa_qom,
+                         const AccessorRO<int,3> &fa_mat,
                          const int num_groups, const int num_moments, const int lma[4])
 {
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
@@ -310,20 +310,20 @@ void fluxm_launch_helper(Rect<3> subgrid_bounds,
   gpu_fluxm_outer_source<GROUPS,MAX_X*MAX_Y><<<grid,block>>>(
                             subgrid_bounds.lo,
                             AccessorArray<GROUPS,
-                              Accessor<MomentTriple,3>,3>(fa_fluxm),
+                              AccessorRO<MomentTriple,3>,3>(fa_fluxm),
                             AccessorArray<GROUPS,
-                              Accessor<MomentQuad,2>,2>(fa_slgg), fa_mat,
+                              AccessorRO<MomentQuad,2>,2>(fa_slgg), fa_mat,
                             AccessorArray<GROUPS,
-                              Accessor<MomentTriple,3>,3>(fa_qom),
+                              AccessorWO<MomentTriple,3>,3>(fa_qom),
                             num_moments, ConstBuffer<4,int>(lma));
 }
 
 __host__
 void run_fluxm_outer_source(Rect<3> subgrid_bounds,
-                         const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
-                         const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
-                         const std::vector<Accessor<MomentTriple,3> > &fa_qom,
-                         const Accessor<int,3> &fa_mat,
+                         const std::vector<AccessorRO<MomentTriple,3> > &fa_fluxm,
+                         const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                         const std::vector<AccessorWO<MomentTriple,3> > &fa_qom,
+                         const AccessorRO<int,3> &fa_mat,
                          const int num_groups, const int num_moments, const int lma[4])
 {
   // TODO: replace this template madness with Terra
@@ -441,8 +441,8 @@ void run_fluxm_outer_source(Rect<3> subgrid_bounds,
 
 __global__
 void gpu_outer_convergence(const Point<3> origin,
-                           const Accessor<double,3> fa_flux0,
-                           const Accessor<double,3> fa_flux0po,
+                           const AccessorRO<double,3> fa_flux0,
+                           const AccessorRO<double,3> fa_flux0po,
                            const double epsi, int *total_converged)
 {
   // We know there is never more than 32 warps in a CTA
@@ -498,8 +498,8 @@ void gpu_outer_convergence(const Point<3> origin,
 
 __host__
 bool run_outer_convergence(Rect<3> subgrid_bounds,
-                           const std::vector<Accessor<double,3> > fa_flux0,
-                           const std::vector<Accessor<double,3> > fa_flux0po,
+                           const std::vector<AccessorRO<double,3> > fa_flux0,
+                           const std::vector<AccessorRO<double,3> > fa_flux0po,
                            const double epsi)
 {
   int *converged_d;
