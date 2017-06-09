@@ -98,13 +98,13 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<MomentQuad,3> fa_sxs(regions[0], *it);
-    Accessor<double,3> fa_flux0(regions[1], *it);
-    Accessor<double,3> fa_q2grp0(regions[2], *it);
-    Accessor<MomentQuad,3> fa_qtot(regions[3], *it);
+    AccessorRO<MomentQuad,3> fa_sxs(regions[0], *it);
+    AccessorRO<double,3> fa_flux0(regions[1], *it);
+    AccessorRO<double,3> fa_q2grp0(regions[2], *it);
+    AccessorRW<MomentQuad,3> fa_qtot(regions[3], *it);
     if (multi_moment) {
-      Accessor<MomentTriple,3> fa_fluxm(regions[4], *it);
-      Accessor<MomentTriple,3> fa_q2grpm(regions[5], *it);
+      AccessorRO<MomentTriple,3> fa_fluxm(regions[4], *it);
+      AccessorRO<MomentTriple,3> fa_q2grpm(regions[5], *it);
       for (DomainIterator<3> itr(dom); itr(); itr++)
       {
         MomentQuad sxs_quad = fa_sxs[*itr];
@@ -278,8 +278,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,3> fa_flux0(regions[0], *it);
-    Accessor<double,3> fa_flux0pi(regions[1], *it);
+    AccessorRO<double,3> fa_flux0(regions[0], *it);
+    AccessorRO<double,3> fa_flux0pi(regions[1], *it);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
       double flux0pi = fa_flux0pi[*itr];

@@ -343,29 +343,29 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
   // is super annoying so just do all the inlining for the compiler
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
-    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_qim;
-    Accessor<MomentTriple,3> fa_fluxm;
+    AccessorRO<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRW<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_qim;
+    AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
-      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<double,2> fa_ghostz(regions[8], 
+    AccessorRW<double,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghostx(regions[9],
+    AccessorRW<double,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<double,2> fa_ghosty(regions[10],
+    AccessorRW<double,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = Accessor<double,1>(regions[11],
+    const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
     
     // Now we do the sweeps over the points
@@ -705,29 +705,29 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
-    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m128d,3> fa_qim;
-    Accessor<MomentTriple,3> fa_fluxm;
+    AccessorRO<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRW<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m128d,3> fa_qim;
+    AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<__m128d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
-      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = AccessorRO<__m128d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<__m128d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m128d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m128d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m128d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m128d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorWO<__m128d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<__m128d,2> fa_ghostz(regions[8], 
+    AccessorRW<__m128d,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<__m128d,2> fa_ghostx(regions[9],
+    AccessorRW<__m128d,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<__m128d,2> fa_ghosty(regions[10],
+    AccessorRW<__m128d,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = Accessor<double,1>(regions[11],
+    const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
 
     for (int z = 0; z < z_range; z++) {
@@ -769,7 +769,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m128d *__restrict__ qim = fa_qim.ptr(local_point);
+            const __m128d *__restrict__ qim = fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm_add_pd(psi[ang], qim[ang]);
           }
@@ -810,7 +810,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
                     _mm_set_pd(Snap::xi[2*ang+1], Snap::xi[2*ang])),
                     _mm_set1_pd(Snap::hk)));
           // See if we're doing anything time dependent
-          __m128d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
+          const __m128d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -818,7 +818,7 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
                     _mm_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m128d *__restrict__ dinv = fa_dinv.ptr(local_point); 
+          const __m128d *__restrict__ dinv = fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm_mul_pd(pc[ang], dinv[ang]);
           if (Snap::flux_fixup) {
@@ -1123,29 +1123,29 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
-    Accessor<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m256d,3> fa_qim;
-    Accessor<MomentTriple,3> fa_fluxm;
+    AccessorRO<MomentQuad,3> fa_qtot(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRW<double,3> fa_flux(regions[1], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m256d,3> fa_qim;
+    AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = Accessor<__m256d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
-      fa_fluxm = Accessor<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_qim = AccessorRO<__m256d,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    Accessor<__m256d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m256d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<__m256d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
-    Accessor<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m256d,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<__m256d,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorWO<__m256d,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
-    Accessor<__m256d,2> fa_ghostz(regions[8], 
+    AccessorRW<__m256d,2> fa_ghostz(regions[8], 
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<__m256d,2> fa_ghostx(regions[9],
+    AccessorRW<__m256d,2> fa_ghostx(regions[9],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
-    Accessor<__m256d,2> fa_ghosty(regions[10],
+    AccessorRW<__m256d,2> fa_ghosty(regions[10],
         SNAP_FLUX_GROUP_FIELD(group, args->corner));
 
-    const double vdelt = Accessor<double,1>(regions[11],
+    const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
 
     for (int z = 0; z < z_range; z++) {
@@ -1189,7 +1189,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
           // If we're doing MMS, there is an additional term
           if (Snap::source_layout == Snap::MMS_SOURCE)
           {
-            __m256d *__restrict__ qim = fa_qim.ptr(local_point);
+            const __m256d *__restrict__ qim = fa_qim.ptr(local_point);
             for (int ang = 0; ang < num_vec_angles; ang++)
               psi[ang] = _mm256_add_pd(psi[ang], qim[ang]);
           }
@@ -1234,7 +1234,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(Snap::hk)));
 
           // See if we're doing anything time dependent
-          __m256d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
+          const __m256d *__restrict__ time_flux_in = fa_time_flux_in.ptr(local_point);
           if (vdelt != 0.0) 
           {
             for (int ang = 0; ang < num_vec_angles; ang++)
@@ -1242,7 +1242,7 @@ inline __m256d* malloc_avx_aligned(size_t size)
                     _mm256_set1_pd(vdelt), time_flux_in[ang]));
           }
           // Multiple by the precomputed denominator inverse
-          __m256d *__restrict__ dinv = fa_dinv.ptr(local_point); 
+          const __m256d *__restrict__ dinv = fa_dinv.ptr(local_point); 
           for (int ang = 0; ang < num_vec_angles; ang++)
             pc[ang] = _mm256_mul_pd(pc[ang], dinv[ang]);
 

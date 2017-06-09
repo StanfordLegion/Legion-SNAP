@@ -92,7 +92,7 @@ InitMaterial::InitMaterial(const Snap &snap, const SnapArray<3> &mat)
   }
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
           IndexSpace<3>(task->regions[0].region.get_index_space()));
-  Accessor<int,3> fa_mat(regions[0], Snap::FID_SINGLE);
+  AccessorRW<int,3> fa_mat(regions[0], Snap::FID_SINGLE);
   Rect<3> mat_bounds(Point<3>(i1-1, j1-1, k1-1),
                      Point<3>(i2-1, j2-1, k2-1));;
   Rect<3> local_bounds = dom.bounds.intersection(mat_bounds);
@@ -183,7 +183,7 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    Accessor<double,3> fa_qi(regions[0], *it);
+    AccessorRW<double,3> fa_qi(regions[0], *it);
     for (RectIterator<3> itr(local_bounds); itr(); itr++)
       fa_qi[*itr] = 1.0;
   }
