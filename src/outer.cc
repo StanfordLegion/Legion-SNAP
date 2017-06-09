@@ -220,16 +220,16 @@ static int gcd(int a, int b)
 
 #ifdef USE_GPU_KERNELS
   extern void run_flux0_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<Accessor<double,3> > &fa_qi0,
-                            const std::vector<Accessor<double,3> > &fa_flux0,
-                            const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
-                            const std::vector<Accessor<double,3> > &fa_qo0,
-                            const Accessor<int,3> &fa_mat, const int num_groups);
+                            const std::vector<AccessorRO<double,3> > &fa_qi0,
+                            const std::vector<AccessorRO<double,3> > &fa_flux0,
+                            const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                            const std::vector<AccessorWO<double,3> > &fa_qo0,
+                            const AccessorRO<int,3> &fa_mat, const int num_groups);
   extern void run_fluxm_outer_source(Rect<3> subgrid_bounds,
-                            const std::vector<Accessor<MomentTriple,3> > &fa_fluxm,
-                            const std::vector<Accessor<MomentQuad,2> > &fa_slgg,
-                            const std::vector<Accessor<MomentTriple,3> > &fa_qom,
-                            const Accessor<int,3> &fa_mat, const int num_groups, 
+                            const std::vector<AccessorRO<MomentTriple,3> > &fa_fluxm,
+                            const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                            const std::vector<AccessorWO<MomentTriple,3> > &fa_qom,
+                            const AccessorRO<int,3> &fa_mat, const int num_groups, 
                             const int num_moments, const int lma[4]);
 #endif
 
@@ -248,29 +248,29 @@ static int gcd(int a, int b)
   assert(num_groups == int(task->regions[1].privilege_fields.size()));
   assert(num_groups == int(task->regions[4].privilege_fields.size()));
   // Make the accessors for all the groups up front
-  std::vector<Accessor<double,3> > fa_qi0(num_groups);
-  std::vector<Accessor<double,3> > fa_flux0(num_groups);
-  std::vector<Accessor<MomentQuad,2> > fa_slgg(num_groups);
-  std::vector<Accessor<double,3> > fa_qo0(num_groups);
-  std::vector<Accessor<MomentTriple,3> > fa_fluxm(multi_moment ? num_groups:0);
-  std::vector<Accessor<MomentTriple,3> > fa_qom(multi_moment ? num_groups : 0);
+  std::vector<AccessorRO<double,3> > fa_qi0(num_groups);
+  std::vector<AccessorRO<double,3> > fa_flux0(num_groups);
+  std::vector<AccessorRO<MomentQuad,2> > fa_slgg(num_groups);
+  std::vector<AccessorWO<double,3> > fa_qo0(num_groups);
+  std::vector<AccessorRO<MomentTriple,3> > fa_fluxm(multi_moment ? num_groups:0);
+  std::vector<AccessorWO<MomentTriple,3> > fa_qom(multi_moment ? num_groups : 0);
   // Field spaces are all the same so this is safe
   int g = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, g++)
   {
-    fa_qi0[g] = Accessor<double,3>(regions[0], *it);
-    fa_flux0[g] = Accessor<double,3>(regions[1], *it);
-    fa_slgg[g] = Accessor<MomentQuad,2>(regions[2], *it);
-    fa_qo0[g] = Accessor<double,3>(regions[4], *it);
+    fa_qi0[g] = AccessorRO<double,3>(regions[0], *it);
+    fa_flux0[g] = AccessorRO<double,3>(regions[1], *it);
+    fa_slgg[g] = AccessorRO<MomentQuad,2>(regions[2], *it);
+    fa_qo0[g] = AccessorWO<double,3>(regions[4], *it);
     if (multi_moment)
     {
-      fa_fluxm[g] = Accessor<MomentTriple,3>(regions[5], *it);
-      fa_qom[g] = Accessor<MomentTriple,3>(regions[6], *it);
+      fa_fluxm[g] = AccessorRO<MomentTriple,3>(regions[5], *it);
+      fa_qom[g] = AccessorWO<MomentTriple,3>(regions[6], *it);
     }
   }
-  Accessor<int,3> fa_mat(regions[3], Snap::FID_SINGLE);
+  AccessorRO<int,3> fa_mat(regions[3], Snap::FID_SINGLE);
 
   run_flux0_outer_source(dom.bounds, fa_qi0, fa_flux0, fa_slgg, 
                          fa_qo0, fa_mat, num_groups);
@@ -405,8 +405,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 
 #ifdef USE_GPU_KERNELS
 extern bool run_outer_convergence(Rect<3> subgrid_bounds,
-                                  const std::vector<Accessor<double,3> > &fa_flux0,
-                                  const std::vector<Accessor<double,3> > &fa_flux0po,
+                                  const std::vector<AccessorRO<double,3> > &fa_flux0,
+                                  const std::vector<AccessorRO<double,3> > &fa_flux0po,
                                   const double epsi);
 #endif
 
@@ -429,16 +429,16 @@ extern bool run_outer_convergence(Rect<3> subgrid_bounds,
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
           IndexSpace<3>(task->regions[0].region.get_index_space()));
   const double epsi = 100.0 * Snap::convergence_eps;
-  std::vector<Accessor<double,3> > fa_flux0(
+  std::vector<AccessorRO<double,3> > fa_flux0(
                           task->regions[0].privilege_fields.size());
-  std::vector<Accessor<double,3> > fa_flux0po(fa_flux0.size());
+  std::vector<AccessorRO<double,3> > fa_flux0po(fa_flux0.size());
   unsigned idx = 0;
   for (std::set<FieldID>::const_iterator it = 
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++, idx++)
   {
-    fa_flux0[idx]   = Accessor<double,3>(regions[0], *it);
-    fa_flux0po[idx] = Accessor<double,3>(regions[1], *it);
+    fa_flux0[idx]   = AccessorRO<double,3>(regions[0], *it);
+    fa_flux0po[idx] = AccessorRO<double,3>(regions[1], *it);
   }
   return run_outer_convergence(dom.bounds, fa_flux0, fa_flux0po, epsi);
 #else
