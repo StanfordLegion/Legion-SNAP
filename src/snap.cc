@@ -71,7 +71,7 @@ void Snap::setup(void)
     xy_flux_is = runtime->create_index_space(ctx, 
           Rect<2>(Point<2>(zeroes), Point<2>(upper_xy)));
     runtime->attach_name(xy_flux_is, "XY Flux");
-    const long long bf[2] = { nx_per_chunk - 1, ny_per_chunk - 1 };
+    const long long bf[2] = { nx_per_chunk, ny_per_chunk };
     xy_flux_ip = runtime->create_partition_by_blockify(ctx, xy_flux_is, 
                                       Point<2>(bf), DISJOINT_PARTITION);
     runtime->attach_name(xy_flux_ip, "XY Flux Partition");
