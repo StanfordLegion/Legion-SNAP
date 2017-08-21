@@ -144,15 +144,13 @@ static int gcd(int a, int b)
 
   // We'll block the innermost dimension to get some cache locality
   // This assumes a worst case 128 energy groups and a 32 KB L1 cache
-  const int max_x = dom.bounds.hi[0] - dom.bounds.lo[0] + 1;
-  const int max_y = dom.bounds.hi[1] - dom.bounds.lo[1] + 1;
-  const int max_z = dom.bounds.hi[2] - dom.bounds.lo[2] + 1;
-  const int strip_size = gcd(max_x, 32);
+  const Rect<3> bounds = dom.bounds;
+  const int strip_size = gcd(bounds.hi[0] - bounds.lo[0] + 1, 32);
   double *flux_strip = (double*)malloc(num_groups*strip_size*sizeof(double));
 
-  for (int z = 0; z < max_z; z++) {
-    for (int y = 0; y < max_y; y++) {
-      for (int x = 0; x < max_x; x+=strip_size) {
+  for (int z = bounds.lo[2]; z <= bounds.hi[2]; z++) {
+    for (int y = bounds.lo[1]; y <= bounds.hi[1]; y++) {
+      for (int x = bounds.lo[0]; x <= bounds.hi[0]; x+=strip_size) {
         // Read in the flux strip first
         for (int g = 0; g < num_groups; g++)
           for (int i = 0; i < strip_size; i++) 
@@ -180,9 +178,9 @@ static int gcd(int a, int b)
   if (multi_moment) {
     MomentTriple *fluxm_strip = 
       (MomentTriple*)malloc(num_groups*strip_size*sizeof(MomentTriple));
-    for (int z = 0; z < max_z; z++) {
-      for (int y = 0; y < max_y; y++) {
-        for (int x = 0; x < max_x; x+=strip_size) {
+    for (int z = bounds.lo[2]; z <= bounds.hi[2]; z++) {
+      for (int y = bounds.lo[1]; y <= bounds.hi[1]; y++) {
+        for (int x = bounds.lo[0]; x <= bounds.hi[0]; x+=strip_size) {
           // Read in the fluxm strip first
           for (int g = 0; g < num_groups; g++)
             for (int i = 0; i < strip_size; i++)
