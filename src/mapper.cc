@@ -290,6 +290,13 @@ void Snap::SnapMapper::select_task_options(const MapperContext ctx,
                                                  TaskOptions& options)
 //------------------------------------------------------------------------------
 {
+  // If this is the top-level task, invoke the default mapper version
+  // so that we can get access to its control replication heuristics
+  if (task.get_depth() == 0)
+  {
+    DefaultMapper::select_task_options(ctx, task, options);
+    return;
+  }
   options.initial_proc = default_policy_select_initial_processor(ctx, task);
   options.inline_task = false;
   options.stealable = false;
