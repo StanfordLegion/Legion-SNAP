@@ -223,7 +223,7 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       output.src_instances[idx].push_back(result);
       // Save it for the next time
       assert((copy_instances.find(src_region) == copy_instances.end()) ||
-              (copy_instances[src_region] == result));;
+              (copy_instances[src_region] == result));
       copy_instances[src_region] = result;
     } else {
       // Found it, add it to the set
