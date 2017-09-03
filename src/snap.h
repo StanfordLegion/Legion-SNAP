@@ -55,11 +55,11 @@ using LogicalPartition = Legion::LogicalPartitionT<DIM,long long>;
 template<int DIM>
 using Domain = Legion::DomainT<DIM, long long>;
 template<typename FT, int N, typename T = long long>
-using AccessorRO = Legion::FieldAccessor<READ_ONLY,FT,N,T>;
+using AccessorRO = Legion::FieldAccessor<READ_ONLY,FT,N,T,Realm::AffineAccessor<FT,N,T> >;
 template<typename FT, int N, typename T = long long>
-using AccessorWO = Legion::FieldAccessor<WRITE_DISCARD,FT,N,T>;
+using AccessorWO = Legion::FieldAccessor<WRITE_DISCARD,FT,N,T,Realm::AffineAccessor<FT,N,T> >;
 template<typename FT, int N, typename T = long long>
-using AccessorRW = Legion::FieldAccessor<READ_WRITE,FT,N,T>;
+using AccessorRW = Legion::FieldAccessor<READ_WRITE,FT,N,T,Realm::AffineAccessor<FT,N,T> >;
 template<int DIM, typename T = long long>
 using DomainIterator = Legion::PointInDomainIterator<DIM,T>;
 template<int DIM, typename T = long long>
