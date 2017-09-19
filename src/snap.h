@@ -42,7 +42,7 @@ using Point = Legion::Point<DIM,long long>;
 template<int DIM>
 using Rect = Legion::Rect<DIM,long long>;
 template<int DIM1, int DIM2>
-using Matrix = Legion::Matrix<DIM1,DIM2,long long>;
+using Matrix = Legion::Transform<DIM1,DIM2,long long>;
 template<int DIM>
 using IndexSpace = Legion::IndexSpaceT<DIM,long long>;
 template<int DIM>
