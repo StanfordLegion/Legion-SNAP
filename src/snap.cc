@@ -1687,24 +1687,13 @@ Legion::LogicalRegion
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  return project(upper_bound, point); 
+  return project_internal(upper_bound, point); 
 }
 
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
-  SnapSweepProjectionFunctor::project(Legion::LogicalRegion upper_bound,
-                                      const Legion::DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return Legion::LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-Legion::LogicalRegion
-  SnapSweepProjectionFunctor::project(Legion::LogicalPartition upper_bound,
-                                      const Legion::DomainPoint &point)
+  SnapSweepProjectionFunctor::project_internal(
+         Legion::LogicalPartition upper_bound, const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   Point<2> p = point;
@@ -1743,24 +1732,13 @@ Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  return project(upper_bound, point);  
+  return project_internal(upper_bound, point);  
 }
 
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
-  FluxProjectionFunctor::project(Legion::LogicalRegion upper_bound,
-                                 const Legion::DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return Legion::LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-Legion::LogicalRegion
-  FluxProjectionFunctor::project(Legion::LogicalPartition upper_bound,
-                                 const Legion::DomainPoint &point)
+  FluxProjectionFunctor::project_internal(
+         Legion::LogicalPartition upper_bound, const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
   Point<2> p = point;

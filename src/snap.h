@@ -675,10 +675,8 @@ public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
-                                const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point);
+  Legion::LogicalRegion project_internal(Legion::LogicalPartition upper_bound,
+                                         const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
 public:
@@ -696,10 +694,8 @@ public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
-                                const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point);
+  Legion::LogicalRegion project_internal(Legion::LogicalPartition upper_bound,
+                                         const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
 public:
