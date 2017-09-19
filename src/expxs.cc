@@ -374,7 +374,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   for (int group = group_start; group <= group_stop; group++)
   {
     AccessorRO<double,3> fa_xs(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    AccessorWO<double,3> fa_dinv(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+    AccessorWO<double,3> fa_dinv(regions[2], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
     const double vdelt = 
       AccessorRO<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
     for (DomainIterator<3> itr(dom); itr(); itr++)
