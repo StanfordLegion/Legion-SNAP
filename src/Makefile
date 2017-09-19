@@ -57,9 +57,7 @@ NVCC_FLAGS	?= -std=c++11
 GASNET_FLAGS	?=
 LD_FLAGS	?=
 # GCC apparently needs some hand-holding for its name mangling
-ifneq ($(shell $(CXX) --version | grep -q clang),0)
-CC_FLAGS	+= -fabi-version=0
-endif
+CC_FLAGS	+= $(shell $(CXX) --version | grep -q clang || echo -fabi-version=0)
 
 ifeq ($(strip $(USE_CUDA)),1)
 CC_FLAGS	+= -DUSE_GPU_KERNELS
