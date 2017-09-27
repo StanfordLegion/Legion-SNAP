@@ -227,6 +227,10 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
                    "in %lld microsecond", data.outer_loop_number,
                    data.time_step_number, loop_time);
     data.outer_loop_number++;
+    if (data.outer_loop_number == Snap::max_outer_iters) {
+      data.time_step_number++;
+      data.outer_loop_number = 0;
+    }
   }
   data.total_outer_loops++;
   data.total_outer_time += loop_time;
