@@ -228,8 +228,11 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
                    data.time_step_number, loop_time);
     data.outer_loop_number++;
     if (data.outer_loop_number == Snap::max_outer_iters) {
-      data.time_step_number++;
       data.outer_loop_number = 0;
+      data.time_step_number++;
+      const long long step_time = time - data.step_start;
+      data.total_step_time += step_time;
+      data.step_start = time;
     }
   }
   data.total_outer_loops++;
