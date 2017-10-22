@@ -32,6 +32,9 @@
 #ifndef SNAP_MAX_ENERGY_GROUPS
 #define SNAP_MAX_ENERGY_GROUPS            1024
 #endif
+#ifndef SNAP_MAX_WAVEFRONTS
+#define SNAP_MAX_WAVEFRONTS               1024
+#endif
 
 #ifndef PI
 #define PI (3.14159265358979)
@@ -83,7 +86,11 @@ typedef Legion::RegionRequirement RegionRequirement;
 typedef Legion::Mappable Mappable;
 typedef Legion::Task Task;
 typedef Legion::Copy Copy;
+typedef Legion::Close Close;
+typedef Legion::Partition Partition;
+typedef Legion::Fill Fill;
 typedef Legion::ProjectionID ProjectionID;
+typedef Legion::ShardID ShardID;
 typedef Legion::LayoutConstraintID LayoutConstraintID;
 typedef Legion::FieldID FieldID;
 typedef Legion::PrivilegeMode PrivilegeMode;
@@ -216,6 +223,9 @@ public:
     // ...
     XZ_PROJECTION = YZ_PROJECTION + 8,
   };
+#define SNAP_SHARDING_ID        1
+#define SNAP_SWEEP_SHARDING_ID(corner,wavefront)   \
+  (((corner) * SNAP_MAX_WAVEFRONTS) + (wavefront) + SNAP_SHARDING_ID + 1)
 public:
   Snap(Context c, Runtime *rt)
     : ctx(c), runtime(rt) { }
@@ -382,6 +392,27 @@ public:
                           const Task &task,
                           const MapTaskInput &input,
                                 MapTaskOutput &output);
+  public:
+    virtual void select_sharding_functor(const MapperContext ctx,
+                                         const Task &task,
+                                         const SelectShardingFunctorInput &input,
+                                               SelectShardingFunctorOutput &output);
+    virtual void select_sharding_functor(const MapperContext ctx,
+                                         const Copy &copy,
+                                         const SelectShardingFunctorInput &input,
+                                               SelectShardingFunctorOutput &output);
+    virtual void select_sharding_functor(const MapperContext ctx,
+                                         const Close &close,
+                                         const SelectShardingFunctorInput &input,
+                                               SelectShardingFunctorOutput &output);
+    virtual void select_sharding_functor(const MapperContext ctx,
+                                         const Partition &partition,
+                                         const SelectShardingFunctorInput &input,
+                                               SelectShardingFunctorOutput &output);
+    virtual void select_sharding_functor(const MapperContext ctx,
+                                         const Fill &fill,
+                                         const SelectShardingFunctorInput &input,
+                                               SelectShardingFunctorOutput &output);
   protected:
     void update_variants(const MapperContext ctx);
     void map_snap_array(const MapperContext ctx, 
@@ -705,6 +736,34 @@ public:
 public:
   const Snap::SnapProjectionID projection_kind;
   const std::vector<std::vector<Point<3> > > &wavefront_map;
+};
+
+class SnapShardingFunctor : public Legion::ShardingFunctor {
+public:
+  SnapShardingFunctor(int x_chunks, int y_chunks, int z_chunks);
+public:
+  size_t linearize_point(const Point<3> &point) const;
+public:
+  virtual ShardID shard(const Legion::DomainPoint &point,
+                        const Legion::Domain &full_space,
+                        const ShardID total_shards) const;
+public:
+  const int x_chunks, y_chunks, z_chunks;
+};
+
+class SweepShardingFunctor : public SnapShardingFunctor {
+public:
+  SweepShardingFunctor(unsigned corner, unsigned wavefront,
+                       int x_chunks, int y_chunks, int z_chunks,
+                       const std::vector<Point<3> > &points);
+public:
+  virtual ShardID shard(const Legion::DomainPoint &point,
+                        const Legion::Domain &full_space,
+                        const ShardID total_shards) const;
+public:
+  const unsigned corner;
+  const unsigned wavefront;
+  const std::vector<Point<3> > &points;
 };
 
 class AndReduction {

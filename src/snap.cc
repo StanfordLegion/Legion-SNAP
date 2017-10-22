@@ -1163,6 +1163,7 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
     unsigned wavefront_number = 0;
     while (!current_points.empty())
     {
+      assert(wavefront_number < SNAP_MAX_WAVEFRONTS);
       wavefront_map[corner].push_back(std::vector<Point<3> >());
       std::vector<Point<3> > &wavefront_points = 
                           wavefront_map[corner][wavefront_number];
@@ -1448,6 +1449,21 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
               new FluxProjectionFunctor(YZ_PROJECTION, wavefront_map[corner]));
     Runtime::preregister_projection_functor(SNAP_XZ_PROJECTION(corner),
               new FluxProjectionFunctor(XZ_PROJECTION, wavefront_map[corner]));
+  }
+  // Register sharding functors for each corner and wavefront
+  Runtime::preregister_sharding_functor(SNAP_SHARDING_ID,
+      new SnapShardingFunctor(nx_chunks, ny_chunks, nz_chunks));
+  for (unsigned corner = 0; corner < 8; corner++)
+  {
+    for (unsigned wavefront = 0; 
+          wavefront < wavefront_map[corner].size(); wavefront++)
+    {
+      Runtime::preregister_sharding_functor(
+          SNAP_SWEEP_SHARDING_ID(corner, wavefront),
+          new SweepShardingFunctor(corner, wavefront, 
+                    nx_chunks, ny_chunks, nz_chunks,
+                    wavefront_map[corner][wavefront]));
+    }
   }
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
@@ -1796,6 +1812,53 @@ Legion::LogicalRegion
       assert(false);
   }
   return Legion::LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+SnapShardingFunctor::SnapShardingFunctor(int x, int y, int z)
+  : ShardingFunctor(), x_chunks(x), y_chunks(y), z_chunks(z)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+size_t SnapShardingFunctor::linearize_point(const Point<3> &point) const
+//------------------------------------------------------------------------------
+{
+  return ((point[2] * y_chunks + point[1]) * x_chunks + point[0]);
+}
+
+//------------------------------------------------------------------------------
+ShardID SnapShardingFunctor::shard(const Legion::DomainPoint &point,
+                                   const Legion::Domain &full_space,
+                                   const ShardID total_shards) const
+//------------------------------------------------------------------------------
+{
+  const Point<3> p = point;
+  const size_t linearized = linearize_point(p);
+  return (linearized % total_shards);
+}
+
+//------------------------------------------------------------------------------
+SweepShardingFunctor::SweepShardingFunctor(unsigned corn, unsigned wave,
+                                           int x, int y, int z,
+                                           const std::vector<Point<3> > &pts)
+  : SnapShardingFunctor(x, y, z), corner(corn), wavefront(wave), points(pts)
+//------------------------------------------------------------------------------
+{
+}
+
+//------------------------------------------------------------------------------
+ShardID SweepShardingFunctor::shard(const Legion::DomainPoint &point,
+                                    const Legion::Domain &full_space,
+                                    const ShardID total_shards) const
+//------------------------------------------------------------------------------
+{
+  assert(point.get_dim() == 1);
+  const unsigned index = point[0];
+  assert(index < points.size());
+  const size_t linearized = linearize_point(points[index]);
+  return (linearized % total_shards);
 }
 
 //------------------------------------------------------------------------------

@@ -551,6 +551,65 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
 }
 
 //------------------------------------------------------------------------------
+void Snap::SnapMapper::select_sharding_functor(const MapperContext ctx,
+                                               const Task &task,
+                                      const SelectShardingFunctorInput &input,
+                                            SelectShardingFunctorOutput &output)
+//------------------------------------------------------------------------------
+{
+  // Sweeps need a special projection functor dependent on corner and wavefront
+  if (task.task_id == MINI_KBA_TASK_ID)
+  {
+    const MiniKBATask::MiniKBAArgs *args = 
+      (const MiniKBATask::MiniKBAArgs*)task.args;
+    output.chosen_functor = 
+      SNAP_SWEEP_SHARDING_ID(args->corner, args->wavefront);
+  }
+  else // Everything else is data parallel so use the normal sharding functor
+    output.chosen_functor = SNAP_SHARDING_ID;
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::select_sharding_functor(const MapperContext ctx,
+                                               const Copy &copy,
+                                      const SelectShardingFunctorInput &input,
+                                            SelectShardingFunctorOutput &output)
+//------------------------------------------------------------------------------
+{
+  output.chosen_functor = SNAP_SHARDING_ID;
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::select_sharding_functor(const MapperContext ctx,
+                                               const Close &close,
+                                      const SelectShardingFunctorInput &input,
+                                            SelectShardingFunctorOutput &output)
+//------------------------------------------------------------------------------
+{
+  output.chosen_functor = SNAP_SHARDING_ID;
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::select_sharding_functor(const MapperContext ctx,
+                                               const Partition &partition,
+                                      const SelectShardingFunctorInput &input,
+                                            SelectShardingFunctorOutput &output)
+//------------------------------------------------------------------------------
+{
+  output.chosen_functor = SNAP_SHARDING_ID;
+}
+
+//------------------------------------------------------------------------------
+void Snap::SnapMapper::select_sharding_functor(const MapperContext ctx,
+                                               const Fill &fill,
+                                      const SelectShardingFunctorInput &input,
+                                            SelectShardingFunctorOutput &output)
+//------------------------------------------------------------------------------
+{
+  output.chosen_functor = SNAP_SHARDING_ID;
+}
+
+//------------------------------------------------------------------------------
 void Snap::SnapMapper::update_variants(const MapperContext ctx)
 //------------------------------------------------------------------------------
 {
