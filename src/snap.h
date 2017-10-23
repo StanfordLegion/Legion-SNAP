@@ -712,6 +712,7 @@ public:
                                 const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
+  virtual bool is_exclusive(void) const { return true; }
 public:
   const std::vector<std::vector<Point<3> > > &wavefront_map;
 };
@@ -733,6 +734,7 @@ public:
                                 const Legion::DomainPoint &point);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
+  virtual bool is_exclusive(void) const { return true; }
 public:
   const Snap::SnapProjectionID projection_kind;
   const std::vector<std::vector<Point<3> > > &wavefront_map;
