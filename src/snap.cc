@@ -1856,7 +1856,8 @@ ShardID SweepShardingFunctor::shard(const Legion::DomainPoint &point,
                                     const ShardID total_shards) const
 //------------------------------------------------------------------------------
 {
-  assert(point.get_dim() == 1);
+  assert(point.get_dim() == 2);
+  assert(point[1] == wavefront);
   const unsigned index = point[0];
   assert(index < points.size());
   const size_t linearized = linearize_point(points[index]);
