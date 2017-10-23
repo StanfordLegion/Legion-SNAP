@@ -1405,6 +1405,8 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
 {
   TaskVariantRegistrar registrar(SNAP_TOP_LEVEL_TASK_ID, "snap_main_variant");
   registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+  registrar.set_idempotent();
+  registrar.set_replicable();
   Runtime::preregister_task_variant<snap_top_level_task>(registrar,
                           Snap::task_names[SNAP_TOP_LEVEL_TASK_ID]);
   Runtime::set_top_level_task_id(SNAP_TOP_LEVEL_TASK_ID);

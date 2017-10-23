@@ -326,8 +326,8 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
       wavefront_map[args->corner][args->wavefront];
     const bool use_gpu = !local_gpus.empty() &&
       (gpu_variants.find(MINI_KBA_TASK_ID) != gpu_variants.end());
-    Rect<2> all_points = input.domain;
-    for (RectIterator<2> pir(all_points); pir(); pir++) {
+    Domain<2> all_points = input.domain;
+    for (DomainIterator<2> pir(all_points); pir(); pir++) {
       // Get the physical space point
       Point<3> point = wavefront_points[(*pir)[0]];
       TaskSlice slice;
@@ -342,7 +342,7 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     DefaultMapper::slice_task(ctx, task, input, output);
   } else {
     // Iterate over the points and assign them to the best target processors
-    Rect<3> all_points = input.domain;
+    Domain<3> all_points = input.domain;
     // We still keep convergence tests on the CPU if we're doing reductions
 #ifndef SNAP_USE_RELAXED_COHERENCE
     const bool use_gpu = !local_gpus.empty() &&
@@ -353,7 +353,7 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
     const bool use_gpu = !local_gpus.empty() &&
       (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
 #endif
-    for (RectIterator<3> pir(all_points); pir(); pir++) {
+    for (DomainIterator<3> pir(all_points); pir(); pir++) {
       TaskSlice slice;
       slice.domain = Domain<3>(Rect<3>(*pir, *pir));
       slice.proc = use_gpu ? global_gpu_mapping[*pir]:global_cpu_mapping[*pir];
