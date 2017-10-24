@@ -62,6 +62,8 @@ ConvergenceMonad::~ConvergenceMonad(void)
   // Launch the summary task
   TaskLauncher launcher(Snap::SUMMARY_TASK_ID, TaskArgument(NULL, 0));
   launcher.add_future(monad_future);
+  // All SNAP tasks need 3-D points
+  launcher.point = Point<3>(0,0,0);
 
   runtime->execute_task(ctx, launcher);
 }
@@ -89,6 +91,8 @@ void ConvergenceMonad::bind_inner(const Predicate &pred,
   launcher.add_future(inner_converged);
   launcher.add_future(timing_future);
   launcher.predicate_false_future = monad_future;
+  // All SNAP tasks need 3-D points
+  launcher.point = Point<3>(0,0,0);
 
   monad_future = runtime->execute_task(ctx, launcher);
 }
@@ -107,6 +111,8 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   launcher.add_future(outer_converged);
   launcher.add_future(timing_future);
   launcher.predicate_false_future = monad_future;
+  // All SNAP tasks need 3-D points
+  launcher.point = Point<3>(0,0,0);
 
   monad_future = runtime->execute_task(ctx, launcher);
 }
