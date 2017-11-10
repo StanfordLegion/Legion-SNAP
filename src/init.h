@@ -43,6 +43,38 @@ public:
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
+class InitScattering : public TaskLauncher {
+public:
+  static const Snap::SnapTaskID TASK_ID = Snap::INIT_SCATTERING_TASK_ID;
+public:
+  InitScattering(const SnapArray<1> &sigt,
+                 const SnapArray<1> &siga,
+                 const SnapArray<1> &sigs,
+                 const SnapArray<2> &slgg);
+public:
+  void dispatch(Context ctx, Runtime *runtime);
+public:
+  static void preregister_cpu_variants(void);
+public:
+  static void cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
+class InitVelocity : public TaskLauncher {
+public:
+  static const Snap::SnapTaskID TASK_ID = Snap::INIT_VELOCITY_TASK_ID;
+public:
+  InitVelocity(const SnapArray<1> &vel,
+               const SnapArray<1> &vdelt);
+public:
+  void dispatch(Context ctx, Runtime *runtime);
+public:
+  static void preregister_cpu_variants(void);
+public:
+  static void cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
+};
+
 class InitGPUSweep : public SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID> {
 public:
   InitGPUSweep(const Snap &snap, const Rect<3> &launch_bounds); 

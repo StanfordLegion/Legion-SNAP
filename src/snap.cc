@@ -583,143 +583,8 @@ void Snap::initialize_scattering(const SnapArray<1> &sigt,
                                  const SnapArray<2> &slgg) const
 //------------------------------------------------------------------------------
 {
-  PhysicalRegion sigt_region = sigt.map();
-  PhysicalRegion siga_region = siga.map();
-  PhysicalRegion sigs_region = sigs.map();
-  PhysicalRegion slgg_region = slgg.map();
-  sigt_region.wait_until_valid(true/*ignore warnings*/);
-  siga_region.wait_until_valid(true/*ignore warnings*/);
-  sigs_region.wait_until_valid(true/*ignore warnings*/);
-  slgg_region.wait_until_valid(true/*ignore warnings*/);
-
-  std::vector<AccessorRW<double,1> > fa_sigt(num_groups);
-  std::vector<AccessorRW<double,1> > fa_siga(num_groups);
-  std::vector<AccessorRW<double,1> > fa_sigs(num_groups);
-  for (int g = 0; g < num_groups; g++)
-  {
-    fa_sigt[g] = AccessorRW<double,1>(sigt_region, SNAP_ENERGY_GROUP_FIELD(g));
-    fa_siga[g] = AccessorRW<double,1>(siga_region, SNAP_ENERGY_GROUP_FIELD(g));
-    fa_sigs[g] = AccessorRW<double,1>(sigs_region, SNAP_ENERGY_GROUP_FIELD(g));
-  }
-
-  fa_sigt[0][1] = 1.0; 
-  fa_siga[0][1] = 0.5;
-  fa_sigs[0][1] = 0.5;
-  for (int g = 1; g < num_groups; g++)
-  {
-    fa_sigt[g][1] = 0.01 * fa_sigt[g-1][1];
-    fa_siga[g][1] = 0.005 * fa_siga[g-1][1];
-    fa_sigs[g][1] = 0.005 * fa_sigs[g-1][1];
-  }
-
-  if (material_layout != HOMOGENEOUS_LAYOUT) {
-    fa_sigt[0][2] = 2.0;
-    fa_siga[0][2] = 0.8;
-    fa_sigs[0][2] = 1.2;
-    for (int g = 1; g < num_groups; g++)
-    {
-      fa_sigt[g][2] = 0.01 * fa_sigt[g-1][2];
-      fa_siga[g][2] = 0.005 * fa_siga[g-1][2];
-      fa_sigs[g][2] = 0.005 * fa_sigs[g-1][2];
-    }
-  }
-
-  std::vector<AccessorRW<MomentQuad,2> > fa_slgg(num_groups); 
-  for (int g = 0; g < num_groups; g++)
-    fa_slgg[g] = AccessorRW<MomentQuad,2>(slgg_region, 
-                          SNAP_ENERGY_GROUP_FIELD(g));
-
-  if (num_groups == 1) {
-    MomentQuad local;
-    local[0] = fa_sigs[0][1];
-    fa_slgg[0][1][0] = local;
-    if (material_layout != HOMOGENEOUS_LAYOUT) {
-      local[0] = fa_sigs[0][2];
-      fa_slgg[0][1][1] = local;
-    }
-  } else {
-    MomentQuad local;
-    for (int g = 0; g < num_groups; g++) {
-      local[0] = 0.2 * fa_sigs[g][1];
-      fa_slgg[g][1][g] = local;
-      if (g > 0) {
-        const double t = 1.0 / double(g);
-        for (int g2 = 0; g2 < g; g2++) {
-          local[0] = 0.1 * fa_sigs[g][1] * t;
-          fa_slgg[g2][1][g] = local;
-        }
-      } else {
-        local[0] = 0.3 * fa_sigs[g][1];
-        fa_slgg[g][1][g] = local;
-      }
-
-      if (g < (num_groups-1)) {
-        const double t = 1.0 / double(num_groups-(g+1));
-        for (int g2 = g+1; g2 < num_groups; g2++) {
-          local[0] = 0.7 * fa_sigs[g][1] * t;
-          fa_slgg[g2][1][g] = local;
-        }
-      } else {
-        local[0] = 0.9 * fa_sigs[g][1];
-        fa_slgg[g][1][g] = local;
-      }
-    }
-    if (material_layout != HOMOGENEOUS_LAYOUT) {
-      for (int g = 0; g < num_groups; g++) {
-        local[0] = 0.5 * fa_sigs[g][2];
-        fa_slgg[g][2][g] = local;
-        if (g > 0) {
-          const double t = 1.0 / double(g);
-          for (int g2 = 0; g2 < g; g2++) {
-            local[0] = 0.1 * fa_sigs[g][2] * t;
-            fa_slgg[g2][2][g] = local;
-          }
-        } else {
-          local[0] = 0.6 * fa_sigs[g][2];
-          fa_slgg[g][2][g] = local;
-        }
-
-        if (g < (num_groups-1)) {
-          const double t = 1.0 / double(num_groups-(g+1));
-          for (int g2 = g+1; g2 < num_groups; g2++) {
-            local[0] = 0.4 * fa_sigs[g][2] * t;
-            fa_slgg[g2][2][g] = local;
-          }
-        } else {
-          local[0] = 0.9 * fa_sigs[g][2];
-          fa_slgg[g][2][g] = local;
-        }
-      }
-    }
-  }
-  if (num_moments > 1) 
-  {
-    for (int m = 1; m < num_moments; m++) {
-      for (int g = 0; g < num_groups; g++) {
-        for (int g2 = 0; g2 < num_groups; g2++) {
-          MomentQuad quad = fa_slgg[g2][1][g];
-          quad[m] = ((m == 1) ? 0.1 : 0.5) * quad[m-1];
-          fa_slgg[g2][1][g] = quad;
-        }
-      }
-    }
-    if (material_layout != HOMOGENEOUS_LAYOUT) {
-      for (int m = 1; m < num_moments; m++) {
-        for (int g = 0; g < num_groups; g++) {
-          for (int g2 = 0; g2 < num_groups; g2++) {
-            MomentQuad quad = fa_slgg[g2][2][g];
-            quad[m] = ((m == 1) ? 0.8 : 0.6) * quad[m-1];
-            fa_slgg[g2][2][g] = quad;
-          }
-        }
-      }
-    }
-  }
-
-  sigt.unmap(sigt_region);
-  siga.unmap(siga_region);
-  sigs.unmap(sigs_region);
-  slgg.unmap(slgg_region);
+  InitScattering init_scattering(sigt, siga, sigs, slgg);
+  init_scattering.dispatch(ctx, runtime);
 }
 
 //------------------------------------------------------------------------------
@@ -727,24 +592,8 @@ void Snap::initialize_velocity(const SnapArray<1> &vel,
                                const SnapArray<1> &vdelt) const
 //------------------------------------------------------------------------------
 {
-  PhysicalRegion vel_region = vel.map();
-  PhysicalRegion vdelt_region = vdelt.map();
-  vel_region.wait_until_valid(true/*ignore warnings*/);
-  vdelt_region.wait_until_valid(true/*ignore warnings*/);
-  const Point<1> dp(0);
-  for (int g = 0; g < num_groups; g++) 
-  {
-    AccessorRW<double,1> fa_vel(vel_region, SNAP_ENERGY_GROUP_FIELD(g));
-    AccessorRW<double,1> fa_vdelt(vdelt_region, SNAP_ENERGY_GROUP_FIELD(g));
-    const double v = double(Snap::num_groups - g);
-    fa_vel[dp] = v;
-    if (Snap::time_dependent)
-      fa_vdelt[dp] = 2.0 / (Snap::dt * v);
-    else
-      fa_vdelt[dp] = 0.0;
-  }
-  vel.unmap(vel_region);
-  vdelt.unmap(vdelt_region);
+  InitVelocity init_velocity(vel, vdelt);
+  init_velocity.dispatch(ctx, runtime);
 }
 
 //------------------------------------------------------------------------------
@@ -1414,6 +1263,8 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   // Now register all the task variants
   InitMaterial::preregister_cpu_variants();
   InitSource::preregister_cpu_variants();
+  InitScattering::preregister_cpu_variants();
+  InitVelocity::preregister_cpu_variants();
 #ifdef USE_GPU_KERNELS
   InitGPUSweep::preregister_gpu_variants();
   CalcOuterSource::preregister_all_variants();

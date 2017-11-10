@@ -191,6 +191,243 @@ InitSource::InitSource(const Snap &snap, const SnapArray<3> &qi)
 }
 
 //------------------------------------------------------------------------------
+InitScattering::InitScattering(const SnapArray<1> &sigt,
+                               const SnapArray<1> &siga,
+                               const SnapArray<1> &sigs,
+                               const SnapArray<2> &slgg)
+  : TaskLauncher(TASK_ID, TaskArgument())
+//------------------------------------------------------------------------------
+{
+  sigt.add_region_requirement(READ_WRITE, *this);
+  siga.add_region_requirement(READ_WRITE, *this);
+  sigs.add_region_requirement(READ_WRITE, *this);
+  slgg.add_region_requirement(READ_WRITE, *this);
+  // All SNAP tasks need 3-D points
+  point = Point<3>(0,0,0);
+}
+
+//------------------------------------------------------------------------------
+void InitScattering::dispatch(Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  runtime->execute_task(ctx, *this);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void InitScattering::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  char variant_name[128];
+  strcpy(variant_name, "CPU ");
+  strncat(variant_name, Snap::task_names[TASK_ID], 123);
+  TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
+                                 NULL/*generator*/, variant_name);
+  registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+  registrar.leaf_variant = true;
+  registrar.inner_variant = false;
+  for (int idx = 0; idx < 4; idx++)
+    registrar.layout_constraints.add_layout_constraint(idx, 
+                                    Snap::get_soa_layout());
+  Runtime::preregister_task_variant<cpu_implementation>(
+                                registrar, Snap::task_names[TASK_ID]);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void InitScattering::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  PhysicalRegion sigt_region = regions[0];
+  PhysicalRegion siga_region = regions[1];
+  PhysicalRegion sigs_region = regions[2];
+  PhysicalRegion slgg_region = regions[3];
+
+  std::vector<AccessorRW<double,1> > fa_sigt(Snap::num_groups);
+  std::vector<AccessorRW<double,1> > fa_siga(Snap::num_groups);
+  std::vector<AccessorRW<double,1> > fa_sigs(Snap::num_groups);
+  for (int g = 0; g < Snap::num_groups; g++)
+  {
+    fa_sigt[g] = AccessorRW<double,1>(sigt_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_siga[g] = AccessorRW<double,1>(siga_region, SNAP_ENERGY_GROUP_FIELD(g));
+    fa_sigs[g] = AccessorRW<double,1>(sigs_region, SNAP_ENERGY_GROUP_FIELD(g));
+  }
+
+  fa_sigt[0][1] = 1.0; 
+  fa_siga[0][1] = 0.5;
+  fa_sigs[0][1] = 0.5;
+  for (int g = 1; g < Snap::num_groups; g++)
+  {
+    fa_sigt[g][1] = 0.01 * fa_sigt[g-1][1];
+    fa_siga[g][1] = 0.005 * fa_siga[g-1][1];
+    fa_sigs[g][1] = 0.005 * fa_sigs[g-1][1];
+  }
+
+  if (Snap::material_layout != Snap::HOMOGENEOUS_LAYOUT) {
+    fa_sigt[0][2] = 2.0;
+    fa_siga[0][2] = 0.8;
+    fa_sigs[0][2] = 1.2;
+    for (int g = 1; g < Snap::num_groups; g++)
+    {
+      fa_sigt[g][2] = 0.01 * fa_sigt[g-1][2];
+      fa_siga[g][2] = 0.005 * fa_siga[g-1][2];
+      fa_sigs[g][2] = 0.005 * fa_sigs[g-1][2];
+    }
+  }
+
+  std::vector<AccessorRW<MomentQuad,2> > fa_slgg(Snap::num_groups); 
+  for (int g = 0; g < Snap::num_groups; g++)
+    fa_slgg[g] = AccessorRW<MomentQuad,2>(slgg_region, 
+                          SNAP_ENERGY_GROUP_FIELD(g));
+
+  if (Snap::num_groups == 1) {
+    MomentQuad local;
+    local[0] = fa_sigs[0][1];
+    fa_slgg[0][1][0] = local;
+    if (Snap::material_layout != Snap::HOMOGENEOUS_LAYOUT) {
+      local[0] = fa_sigs[0][2];
+      fa_slgg[0][1][1] = local;
+    }
+  } else {
+    MomentQuad local;
+    for (int g = 0; g < Snap::num_groups; g++) {
+      local[0] = 0.2 * fa_sigs[g][1];
+      fa_slgg[g][1][g] = local;
+      if (g > 0) {
+        const double t = 1.0 / double(g);
+        for (int g2 = 0; g2 < g; g2++) {
+          local[0] = 0.1 * fa_sigs[g][1] * t;
+          fa_slgg[g2][1][g] = local;
+        }
+      } else {
+        local[0] = 0.3 * fa_sigs[g][1];
+        fa_slgg[g][1][g] = local;
+      }
+
+      if (g < (Snap::num_groups-1)) {
+        const double t = 1.0 / double(Snap::num_groups-(g+1));
+        for (int g2 = g+1; g2 < Snap::num_groups; g2++) {
+          local[0] = 0.7 * fa_sigs[g][1] * t;
+          fa_slgg[g2][1][g] = local;
+        }
+      } else {
+        local[0] = 0.9 * fa_sigs[g][1];
+        fa_slgg[g][1][g] = local;
+      }
+    }
+    if (Snap::material_layout != Snap::HOMOGENEOUS_LAYOUT) {
+      for (int g = 0; g < Snap::num_groups; g++) {
+        local[0] = 0.5 * fa_sigs[g][2];
+        fa_slgg[g][2][g] = local;
+        if (g > 0) {
+          const double t = 1.0 / double(g);
+          for (int g2 = 0; g2 < g; g2++) {
+            local[0] = 0.1 * fa_sigs[g][2] * t;
+            fa_slgg[g2][2][g] = local;
+          }
+        } else {
+          local[0] = 0.6 * fa_sigs[g][2];
+          fa_slgg[g][2][g] = local;
+        }
+
+        if (g < (Snap::num_groups-1)) {
+          const double t = 1.0 / double(Snap::num_groups-(g+1));
+          for (int g2 = g+1; g2 < Snap::num_groups; g2++) {
+            local[0] = 0.4 * fa_sigs[g][2] * t;
+            fa_slgg[g2][2][g] = local;
+          }
+        } else {
+          local[0] = 0.9 * fa_sigs[g][2];
+          fa_slgg[g][2][g] = local;
+        }
+      }
+    }
+  }
+  if (Snap::num_moments > 1) 
+  {
+    for (int m = 1; m < Snap::num_moments; m++) {
+      for (int g = 0; g < Snap::num_groups; g++) {
+        for (int g2 = 0; g2 < Snap::num_groups; g2++) {
+          MomentQuad quad = fa_slgg[g2][1][g];
+          quad[m] = ((m == 1) ? 0.1 : 0.5) * quad[m-1];
+          fa_slgg[g2][1][g] = quad;
+        }
+      }
+    }
+    if (Snap::material_layout != Snap::HOMOGENEOUS_LAYOUT) {
+      for (int m = 1; m < Snap::num_moments; m++) {
+        for (int g = 0; g < Snap::num_groups; g++) {
+          for (int g2 = 0; g2 < Snap::num_groups; g2++) {
+            MomentQuad quad = fa_slgg[g2][2][g];
+            quad[m] = ((m == 1) ? 0.8 : 0.6) * quad[m-1];
+            fa_slgg[g2][2][g] = quad;
+          }
+        }
+      }
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+InitVelocity::InitVelocity(const SnapArray<1> &vel,
+                           const SnapArray<1> &vdelt)
+  : TaskLauncher(TASK_ID, TaskArgument())
+//------------------------------------------------------------------------------
+{
+  vel.add_region_requirement(READ_WRITE, *this);
+  vdelt.add_region_requirement(READ_WRITE, *this);
+  // All SNAP tasks need 3-D points
+  point = Point<3>(0,0,0);
+}
+
+//------------------------------------------------------------------------------
+void InitVelocity::dispatch(Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  runtime->execute_task(ctx, *this);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void InitVelocity::preregister_cpu_variants(void)
+//------------------------------------------------------------------------------
+{
+  char variant_name[128];
+  strcpy(variant_name, "CPU ");
+  strncat(variant_name, Snap::task_names[TASK_ID], 123);
+  TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
+                                 NULL/*generator*/, variant_name);
+  registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+  registrar.leaf_variant = true;
+  registrar.inner_variant = false;
+  for (int idx = 0; idx < 2; idx++)
+    registrar.layout_constraints.add_layout_constraint(idx, 
+                                    Snap::get_soa_layout());
+  Runtime::preregister_task_variant<cpu_implementation>(
+                                registrar, Snap::task_names[TASK_ID]);
+}
+
+//------------------------------------------------------------------------------
+/*static*/ void InitVelocity::cpu_implementation(const Task *task,
+      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
+//------------------------------------------------------------------------------
+{
+  PhysicalRegion vel_region = regions[0];
+  PhysicalRegion vdelt_region = regions[1];
+
+  const Point<1> dp(0);
+  for (int g = 0; g < Snap::num_groups; g++) 
+  {
+    AccessorRW<double,1> fa_vel(vel_region, SNAP_ENERGY_GROUP_FIELD(g));
+    AccessorRW<double,1> fa_vdelt(vdelt_region, SNAP_ENERGY_GROUP_FIELD(g));
+    const double v = double(Snap::num_groups - g);
+    fa_vel[dp] = v;
+    if (Snap::time_dependent)
+      fa_vdelt[dp] = 2.0 / (Snap::dt * v);
+    else
+      fa_vdelt[dp] = 0.0;
+  }
+}
+
+//------------------------------------------------------------------------------
 InitGPUSweep::InitGPUSweep(const Snap &snap, const Rect<3> &launch)
   : SnapTask<InitGPUSweep, Snap::INIT_GPU_SWEEP_TASK_ID>(
       snap, launch, Predicate::TRUE_PRED)

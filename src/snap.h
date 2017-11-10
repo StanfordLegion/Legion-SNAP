@@ -126,6 +126,8 @@ public:
     SNAP_TOP_LEVEL_TASK_ID,
     INIT_MATERIAL_TASK_ID,
     INIT_SOURCE_TASK_ID,
+    INIT_SCATTERING_TASK_ID,
+    INIT_VELOCITY_TASK_ID,
     INIT_GPU_SWEEP_TASK_ID,
     CALC_OUTER_SOURCE_TASK_ID,
     TEST_OUTER_CONVERGENCE_TASK_ID,
@@ -149,6 +151,8 @@ public:
     "Top_Level_Task",                   \
     "Initialize_Material",              \
     "Initialize_Source",                \
+    "Initialize_Scattering",            \
+    "Initialize_Velocity",              \
     "Initialize_GPU Sweep",             \
     "Calc_Outer_Source",                \
     "Test_Outer_Convergence",           \
