@@ -298,7 +298,7 @@ MMSInitSource::MMSInitSource(const Snap &snap, const SnapArray<3> &ref_flux,
     AccessorRO<MomentTriple,3> fa_fluxm(regions[1], *it);
     AccessorRO<double,1> fa_sigt(regions[3], *it);
     AccessorRO<MomentQuad,2> fa_slgg(regions[4], *it);
-    AccessorRW<double,3> fa_qim(regions[5], *it, Snap::num_angles);
+    AccessorRW<double,3> fa_qim(regions[5], *it, angle_buffer_size);
 
     for (DomainIterator<3> itr(dom); itr(); itr++) {
       const Point<3> &p = *itr;
@@ -459,7 +459,7 @@ MMSScale::MMSScale(const Snap &snap, const SnapArray<3> &qim, double f)
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    AccessorRW<double,3> fa_qim(regions[0], *it, Snap::num_angles);
+    AccessorRW<double,3> fa_qim(regions[0], *it, angle_buffer_size);
     for (DomainIterator<3> itr(dom); itr(); itr++)
     {
       memcpy(angle_buffer, fa_qim.ptr(*itr), angle_buffer_size);
