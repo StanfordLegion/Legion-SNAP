@@ -374,7 +374,7 @@ CalculateGeometryParam::CalculateGeometryParam(const Snap &snap,
   for (int group = group_start; group <= group_stop; group++)
   {
     AccessorRO<double,3> fa_xs(regions[0], SNAP_ENERGY_GROUP_FIELD(group));
-    AccessorWO<double,3> fa_dinv(regions[2], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
+    AccessorWO<double,3> fa_dinv(regions[2], SNAP_ENERGY_GROUP_FIELD(group), buffer_size);
     const double vdelt = 
       AccessorRO<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
     for (DomainIterator<3> itr(dom); itr(); itr++)
@@ -415,6 +415,8 @@ extern void run_geometry_param(const std::vector<AccessorRO<double,3> > &xs_ptrs
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
           IndexSpace<3>(task->regions[2].region.get_index_space()));
 
+  const size_t buffer_size = Snap::num_angles * sizeof(double);
+
   std::vector<double> vdelts(num_groups);
   std::vector<AccessorRO<double,3> > fa_xs(num_groups);
   std::vector<AccessorWO<double,3> > fa_dinv(num_groups);
@@ -426,7 +428,7 @@ extern void run_geometry_param(const std::vector<AccessorRO<double,3> > &xs_ptrs
     vdelts[idx] = 
       AccessorRO<double,1>(regions[1], SNAP_ENERGY_GROUP_FIELD(group))[0];
     fa_dinv[idx] = 
-      AccessorWO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group));
+      AccessorWO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group), buffer_size);
   }
   run_geometry_param(fa_xs, fa_dinv, vdelts, Snap::hi, Snap::hj, Snap::hk, 
                      dom.bounds, Snap::num_angles);

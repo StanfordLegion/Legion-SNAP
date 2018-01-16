@@ -348,22 +348,22 @@ static inline Point<2> ghostz_point(const Point<3> &local_point)
     AccessorRO<double,3> fa_qim;
     AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
+      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
       fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
-    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
-    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
+    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
+    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
+    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
     AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
     AccessorRW<double,2> fa_ghostz(regions[8], 
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
     AccessorRW<double,2> fa_ghostx(regions[9],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
     AccessorRW<double,2> fa_ghosty(regions[10],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
 
     const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
@@ -1139,11 +1139,11 @@ inline __m256d* malloc_avx_aligned(size_t size)
 
     // Ghost regions
     AccessorRW<__m256d,2> fa_ghostz(regions[8], 
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m128d));
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m256d));
     AccessorRW<__m256d,2> fa_ghostx(regions[9],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m128d));
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m256d));
     AccessorRW<__m256d,2> fa_ghosty(regions[10],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m128d));
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), num_vec_angles * sizeof(__m256d));
 
     const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
@@ -1614,6 +1614,7 @@ extern void run_gpu_sweep(const Point<3> origin,
   const int z_range = (dom.bounds.hi[2] - dom.bounds.lo[2]) + 1;
 
   const bool mms_source = (Snap::source_layout == Snap::MMS_SOURCE);
+  const size_t angle_buffer_size = Snap::num_angles * sizeof(double);
 
   for (int group = args->group_start; group <= args->group_stop; group++) {
     // Get all the accessors for this energy group
@@ -1622,22 +1623,22 @@ extern void run_gpu_sweep(const Point<3> origin,
     AccessorRO<double,3> fa_qim;
     AccessorRW<MomentTriple,3> fa_fluxm;
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
+      fa_qim = AccessorRO<double,3>(regions[2], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
       fa_fluxm = AccessorRW<MomentTriple,3>(regions[3], SNAP_ENERGY_GROUP_FIELD(group));
     }
     
-    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
-    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
-    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group), Snap::num_angles);
+    AccessorRO<double,3> fa_dinv(regions[4], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
+    AccessorRO<double,3> fa_time_flux_in(regions[5], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
+    AccessorWO<double,3> fa_time_flux_out(regions[6], SNAP_ENERGY_GROUP_FIELD(group), angle_buffer_size);
     AccessorRO<double,3> fa_t_xs(regions[7], SNAP_ENERGY_GROUP_FIELD(group));
 
     // Ghost regions
     AccessorRW<double,2> fa_ghostz(regions[8], 
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
     AccessorRW<double,2> fa_ghostx(regions[9],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
     AccessorRW<double,2> fa_ghosty(regions[10],
-        SNAP_FLUX_GROUP_FIELD(group, args->corner), Snap::num_angles);
+        SNAP_FLUX_GROUP_FIELD(group, args->corner), angle_buffer_size);
 
     const double vdelt = AccessorRO<double,1>(regions[11],
                           SNAP_ENERGY_GROUP_FIELD(group))[0];
