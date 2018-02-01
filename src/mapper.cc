@@ -157,12 +157,12 @@ void Snap::SnapMapper::speculate(const MapperContext ctx,
                                        SpeculativeOutput &output)
 //------------------------------------------------------------------------------
 {
-#ifdef ENABLE_SPECULATION
+#ifdef DISABLE_SPECULATION
+  output.speculate = false;
+#else
   output.speculate = true;
   output.speculative_value = true; // not converged
   output.speculate_mapping_only = true;
-#else
-  output.speculate = false;
 #endif
 }
 
