@@ -126,8 +126,7 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   strncat(variant_name, 
       Snap::task_names[Snap::BIND_INNER_CONVERGENCE_TASK_ID], 123);
   TaskVariantRegistrar inner_registrar(
-      Snap::BIND_INNER_CONVERGENCE_TASK_ID, true/*global*/,
-      NULL/*generator*/, variant_name);
+      Snap::BIND_INNER_CONVERGENCE_TASK_ID, true/*global*/, variant_name);
   inner_registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
   inner_registrar.leaf_variant = true;
   inner_registrar.inner_variant = false;
@@ -138,8 +137,7 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   strncat(variant_name, 
       Snap::task_names[Snap::BIND_OUTER_CONVERGENCE_TASK_ID], 123);
   TaskVariantRegistrar outer_registrar(
-      Snap::BIND_OUTER_CONVERGENCE_TASK_ID, true/*global*/,
-      NULL/*generator*/, variant_name);
+      Snap::BIND_OUTER_CONVERGENCE_TASK_ID, true/*global*/, variant_name);
   outer_registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
   outer_registrar.leaf_variant = true;
   outer_registrar.inner_variant = false;
@@ -150,7 +148,7 @@ void ConvergenceMonad::bind_outer(const Predicate &pred,
   strncat(variant_name,
       Snap::task_names[Snap::SUMMARY_TASK_ID], 123);
   TaskVariantRegistrar summary_registrar(
-      Snap::SUMMARY_TASK_ID, true/*global*/, NULL/*generator*/, variant_name);
+      Snap::SUMMARY_TASK_ID, true/*global*/, variant_name);
   summary_registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
   summary_registrar.leaf_variant = true;
   summary_registrar.inner_variant = false;
