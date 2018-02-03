@@ -490,8 +490,7 @@ protected:
     char variant_name[128];
     strcpy(variant_name, "CPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
-    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
-        NULL/*generator*/, variant_name);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/, variant_name);
     registrar.execution_constraints = execution_constraints;
     registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
@@ -510,8 +509,7 @@ protected:
     char variant_name[128];
     strcpy(variant_name, "CPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
-    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
-        NULL/*generator*/, variant_name);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/, variant_name);
     registrar.execution_constraints = execution_constraints;
     registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
@@ -532,8 +530,7 @@ protected:
     char variant_name[128];
     strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
-    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
-        NULL/*generator*/, variant_name);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/, variant_name);
     registrar.execution_constraints = execution_constraints;
     registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
@@ -552,8 +549,7 @@ protected:
     char variant_name[128];
     strcpy(variant_name, "GPU ");
     strncat(variant_name, Snap::task_names[TASK_ID], 123);
-    TaskVariantRegistrar registrar(TASK_ID, true/*global*/,
-        NULL/*generator*/, variant_name);
+    TaskVariantRegistrar registrar(TASK_ID, true/*global*/, variant_name);
     registrar.execution_constraints = execution_constraints;
     registrar.layout_constraints = layout_constraints;
     registrar.add_constraint(ProcessorConstraint(Processor::TOC_PROC));
