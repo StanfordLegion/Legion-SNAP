@@ -910,7 +910,7 @@ Predicate Snap::test_outer_convergence(const Predicate &outer_pred,
 static void skip_line(FILE *f)
 {
   char buffer[80];
-  assert(fgets(buffer, 79, f) > 0);
+  assert(fgets(buffer, 79, f) != NULL);
 }
 
 static void read_int(FILE *f, const char *name, int &result)
