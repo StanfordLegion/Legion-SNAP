@@ -707,9 +707,11 @@ public:
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
   virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
-                                const Legion::DomainPoint &point);
+                                const Legion::DomainPoint &point,
+                                const Legion::Domain &launch_domain);
   virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point);
+                                const Legion::DomainPoint &point,
+                                const Legion::Domain &launch_domain);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
   virtual bool is_exclusive(void) const { return true; }
@@ -729,9 +731,11 @@ public:
                                 Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point);
   virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
-                                const Legion::DomainPoint &point);
+                                const Legion::DomainPoint &point,
+                                const Legion::Domain &launch_domain);
   virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point);
+                                const Legion::DomainPoint &point,
+                                const Legion::Domain &launch_domain);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
   virtual bool is_exclusive(void) const { return true; }

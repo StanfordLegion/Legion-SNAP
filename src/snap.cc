@@ -1556,13 +1556,14 @@ Legion::LogicalRegion
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  return project(upper_bound, point); 
+  return project(upper_bound, point, task->index_domain); 
 }
 
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
   SnapSweepProjectionFunctor::project(Legion::LogicalRegion upper_bound,
-                                      const Legion::DomainPoint &point)
+                                      const Legion::DomainPoint &point,
+                                      const Legion::Domain &launch_domain)
 //------------------------------------------------------------------------------
 {
   // should never be called
@@ -1573,7 +1574,8 @@ Legion::LogicalRegion
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
   SnapSweepProjectionFunctor::project(Legion::LogicalPartition upper_bound,
-                                      const Legion::DomainPoint &point)
+                                      const Legion::DomainPoint &point,
+                                      const Legion::Domain &launch_domain)
 //------------------------------------------------------------------------------
 {
   Point<2> p = point;
@@ -1612,13 +1614,14 @@ Legion::LogicalRegion FluxProjectionFunctor::project(const Mappable *mappable,
   const Task *task = mappable->as_task();
   assert(task != NULL);
   assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  return project(upper_bound, point);  
+  return project(upper_bound, point, task->index_domain);  
 }
 
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
   FluxProjectionFunctor::project(Legion::LogicalRegion upper_bound,
-                                 const Legion::DomainPoint &point)
+                                 const Legion::DomainPoint &point,
+                                 const Legion::Domain &launch_domain)
 //------------------------------------------------------------------------------
 {
   // should never be called
@@ -1629,7 +1632,8 @@ Legion::LogicalRegion
 //------------------------------------------------------------------------------
 Legion::LogicalRegion
   FluxProjectionFunctor::project(Legion::LogicalPartition upper_bound,
-                                 const Legion::DomainPoint &point)
+                                 const Legion::DomainPoint &point,
+                                 const Legion::Domain &launch_domain)
 //------------------------------------------------------------------------------
 {
   Point<2> p = point;
