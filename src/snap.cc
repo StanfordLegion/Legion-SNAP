@@ -1688,7 +1688,7 @@ size_t SnapShardingFunctor::linearize_point(const Point<3> &point) const
 //------------------------------------------------------------------------------
 ShardID SnapShardingFunctor::shard(const Legion::DomainPoint &point,
                                    const Legion::Domain &full_space,
-                                   const size_t total_shards) const
+                                   const size_t total_shards)
 //------------------------------------------------------------------------------
 {
   const Point<3> p = point;
@@ -1708,7 +1708,7 @@ SweepShardingFunctor::SweepShardingFunctor(unsigned corn, unsigned wave,
 //------------------------------------------------------------------------------
 ShardID SweepShardingFunctor::shard(const Legion::DomainPoint &point,
                                     const Legion::Domain &full_space,
-                                    const size_t total_shards) const
+                                    const size_t total_shards)
 //------------------------------------------------------------------------------
 {
   assert(point.get_dim() == 2);

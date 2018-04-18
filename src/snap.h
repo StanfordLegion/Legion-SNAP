@@ -752,7 +752,7 @@ public:
 public:
   virtual ShardID shard(const Legion::DomainPoint &point,
                         const Legion::Domain &full_space,
-                        const size_t total_shards) const;
+                        const size_t total_shards);
 public:
   const int x_chunks, y_chunks, z_chunks;
 };
@@ -765,7 +765,7 @@ public:
 public:
   virtual ShardID shard(const Legion::DomainPoint &point,
                         const Legion::Domain &full_space,
-                        const size_t total_shards) const;
+                        const size_t total_shards);
 public:
   const unsigned corner;
   const unsigned wavefront;
