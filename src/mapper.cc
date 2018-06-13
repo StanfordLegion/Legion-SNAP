@@ -173,7 +173,6 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
                                       MapCopyOutput &output)
 //------------------------------------------------------------------------------
 {
-  assert(!copy.is_index_space);
   // See if we already know where the copy is going
   for (unsigned idx = 0; idx < copy.src_requirements.size(); idx++)
   {
