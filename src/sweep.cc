@@ -36,7 +36,8 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
                          const SnapArray<2> &flux_xz,
                          int group_start, int group_stop, int corner, 
                          const int ghost_offsets[3])
-  : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID, 2>(snap,IndexSpace<2>(),pred),
+  : SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID>(
+      snap, snap.get_launch_bounds(), pred),
     mini_kba_args(MiniKBAArgs(corner, group_start, group_stop))
 //------------------------------------------------------------------------------
 {
@@ -44,124 +45,87 @@ MiniKBATask::MiniKBATask(const Snap &snap, const Predicate &pred,
   if (group_start == group_stop) {
     // Special case for a single field
     const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
-    qtot.add_projection_requirement(READ_ONLY, *this, 
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+    qtot.add_projection_requirement(READ_ONLY, *this, group_field);
 #ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
-    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID, group_field);
 #else
-    flux.add_projection_requirement(READ_WRITE, *this, 
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+    flux.add_projection_requirement(READ_WRITE, *this, group_field);
     region_requirements.back().prop = SIMULTANEOUS;
 #endif
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      qim.add_projection_requirement(READ_ONLY, *this,
-                                     group_field,SNAP_SWEEP_PROJECTION(corner));
+      qim.add_projection_requirement(READ_ONLY, *this, group_field);
 #ifndef SNAP_USE_RELAXED_COHERENCE
-      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID, group_field);
 #else
-      fluxm.add_projection_requirement(READ_WRITE, *this,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+      fluxm.add_projection_requirement(READ_WRITE, *this, group_field);
       region_requirements.back().prop = SIMULTANEOUS;
 #endif
     }
     else {
-      qim.add_projection_requirement(NO_ACCESS, *this,
-                                     group_field,SNAP_SWEEP_PROJECTION(corner));
-      fluxm.add_projection_requirement(NO_ACCESS, *this, 
-                                     group_field,SNAP_SWEEP_PROJECTION(corner));
+      qim.add_projection_requirement(NO_ACCESS, *this, group_field);
+      fluxm.add_projection_requirement(NO_ACCESS, *this, group_field);
     }
     // Add the dinv array for this field
-    dinv.add_projection_requirement(READ_ONLY, *this,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
-    time_flux_in.add_projection_requirement(READ_ONLY, *this,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
-    time_flux_out.add_projection_requirement(WRITE_DISCARD, *this,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
-    t_xs.add_projection_requirement(READ_ONLY, *this,
-                                    group_field, SNAP_SWEEP_PROJECTION(corner));
+    dinv.add_projection_requirement(READ_ONLY, *this, group_field);
+    time_flux_in.add_projection_requirement(READ_ONLY, *this, group_field);
+    time_flux_out.add_projection_requirement(WRITE_DISCARD, *this, group_field);
+    t_xs.add_projection_requirement(READ_ONLY, *this, group_field);
     // Now do our ghost requirements
     const Snap::SnapFieldID flux_field = SNAP_FLUX_GROUP_FIELD(group_start, corner);
-    flux_xy.add_projection_requirement(READ_WRITE, *this,
-                                       flux_field, SNAP_XY_PROJECTION(corner));
-    flux_yz.add_projection_requirement(READ_WRITE, *this,
-                                       flux_field, SNAP_YZ_PROJECTION(corner));
-    flux_xz.add_projection_requirement(READ_WRITE, *this,
-                                       flux_field, SNAP_XZ_PROJECTION(corner));
+    flux_xy.add_projection_requirement(READ_WRITE, *this, flux_field, 
+        SNAP_XY_PROJECTION(corner & 0x4));
+    flux_yz.add_projection_requirement(READ_WRITE, *this, flux_field, 
+        SNAP_YZ_PROJECTION(corner & 0x1));
+    flux_xz.add_projection_requirement(READ_WRITE, *this, flux_field, 
+        SNAP_XZ_PROJECTION(corner & 0x2));
     // This one last since it's not a projection requirement
     vdelt.add_region_requirement(READ_ONLY, *this, group_field);
   } else {
     std::vector<Snap::SnapFieldID> group_fields((group_stop - group_start) + 1);
     for (int group = group_start; group <= group_stop; group++)
       group_fields[group-group_start] = SNAP_ENERGY_GROUP_FIELD(group);
-    qtot.add_projection_requirement(READ_ONLY, *this, 
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
+    qtot.add_projection_requirement(READ_ONLY, *this, group_fields);
 #ifndef SNAP_USE_RELAXED_COHERENCE
     // We need reduction privileges on the flux field since all sweeps
     // will be contributing to it
-    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
+    flux.add_projection_requirement(*this, Snap::SUM_REDUCTION_ID, group_fields);
 #else
-    flux.add_projection_requirement(READ_WRITE, *this,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
+    flux.add_projection_requirement(READ_WRITE, *this, group_fields);
     region_requirements.back().prop = SIMULTANEOUS;
 #endif
     if (Snap::source_layout == Snap::MMS_SOURCE) {
-      qim.add_projection_requirement(READ_ONLY, *this,
-                                   group_fields, SNAP_SWEEP_PROJECTION(corner));
+      qim.add_projection_requirement(READ_ONLY, *this, group_fields);
 #ifndef SNAP_USE_RELAXED_COHERENCE
-      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID,
-                                   group_fields, SNAP_SWEEP_PROJECTION(corner));
+      fluxm.add_projection_requirement(*this, Snap::TRIPLE_REDUCTION_ID, group_fields);
 #else
-      fluxm.add_projection_requirement(READ_WRITE, *this,
-                                   group_fields, SNAP_SWEEP_PROJECTION(corner));
+      fluxm.add_projection_requirement(READ_WRITE, *this, group_fields);
       region_requirements.back().prop = SIMULTANEOUS;
 #endif
     }
     else {
-      qim.add_projection_requirement(NO_ACCESS, *this,
-                                   group_fields, SNAP_SWEEP_PROJECTION(corner));
-      fluxm.add_projection_requirement(NO_ACCESS, *this,
-                                   group_fields, SNAP_SWEEP_PROJECTION(corner));
+      qim.add_projection_requirement(NO_ACCESS, *this, group_fields);
+      fluxm.add_projection_requirement(NO_ACCESS, *this, group_fields);
     }
     // Add the dinv array for this field
-    dinv.add_projection_requirement(READ_ONLY, *this,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
-    time_flux_in.add_projection_requirement(READ_ONLY, *this,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
-    time_flux_out.add_projection_requirement(WRITE_DISCARD, *this,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
-    t_xs.add_projection_requirement(READ_ONLY, *this,
-                                    group_fields,SNAP_SWEEP_PROJECTION(corner));
+    dinv.add_projection_requirement(READ_ONLY, *this, group_fields);
+    time_flux_in.add_projection_requirement(READ_ONLY, *this, group_fields);
+    time_flux_out.add_projection_requirement(WRITE_DISCARD, *this, group_fields);
+    t_xs.add_projection_requirement(READ_ONLY, *this, group_fields);
     // Then do our ghost region requirements
     std::vector<Snap::SnapFieldID> flux_fields((group_stop - group_start) + 1);
     for (int group = group_start; group <= group_stop; group++)
       flux_fields[group-group_start] = SNAP_FLUX_GROUP_FIELD(group, corner);
-    flux_xy.add_projection_requirement(READ_WRITE, *this,
-                                       flux_fields, SNAP_XY_PROJECTION(corner));
-    flux_yz.add_projection_requirement(READ_WRITE, *this,
-                                       flux_fields, SNAP_YZ_PROJECTION(corner));
-    flux_xz.add_projection_requirement(READ_WRITE, *this,
-                                       flux_fields, SNAP_XZ_PROJECTION(corner));
+    flux_xy.add_projection_requirement(READ_WRITE, *this, flux_fields, 
+        SNAP_XY_PROJECTION(corner & 0x4));
+    flux_yz.add_projection_requirement(READ_WRITE, *this, flux_fields, 
+        SNAP_YZ_PROJECTION(corner & 0x1));
+    flux_xz.add_projection_requirement(READ_WRITE, *this, flux_fields, 
+        SNAP_XZ_PROJECTION(corner & 0x2));
     // This one last since it's not a projection requirement
     vdelt.add_region_requirement(READ_ONLY, *this, group_fields);
   }
-}
-
-//------------------------------------------------------------------------------
-void MiniKBATask::dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp,
-                                     Context ctx, Runtime *runtime)
-//------------------------------------------------------------------------------
-{
-  // Save our wavefront
-  this->mini_kba_args.wavefront = wavefront;
-  // Set our launch space 
-  this->launch_space = launch_sp;
-  // Then call the normal dispatch routine
-  dispatch(ctx, runtime);
 }
 
 //------------------------------------------------------------------------------

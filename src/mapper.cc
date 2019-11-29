@@ -315,28 +315,7 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
 {
   if (!has_variants)
     update_variants(ctx);
-  // Sweep tasks compute their target processors differently than
-  // all the other data parallel tasks
-  if (task.task_id == MINI_KBA_TASK_ID) {
-    // Figure out 3-D point from corner, and wavefront
-    const MiniKBATask::MiniKBAArgs *args = 
-      (const MiniKBATask::MiniKBAArgs*)task.args;  
-    const std::vector<Point<3> > &wavefront_points = 
-      wavefront_map[args->corner][args->wavefront];
-    const bool use_gpu = !local_gpus.empty() &&
-      (gpu_variants.find(MINI_KBA_TASK_ID) != gpu_variants.end());
-    Rect<2> all_points = input.domain;
-    for (RectIterator<2> pir(all_points); pir(); pir++) {
-      // Get the physical space point
-      Point<3> point = wavefront_points[(*pir)[0]];
-      TaskSlice slice;
-      slice.domain = Domain<2>(Rect<2>(*pir, *pir));
-      slice.proc = use_gpu ? global_gpu_mapping[point] : global_cpu_mapping[point];
-      slice.recurse = false;
-      slice.stealable = false;
-      output.slices.push_back(slice);
-    }
-  } else if (task.task_id == INIT_GPU_SWEEP_TASK_ID) {
+  if (task.task_id == INIT_GPU_SWEEP_TASK_ID) {
     // This one needs the default mapper implementation
     DefaultMapper::slice_task(ctx, task, input, output);
   } else {

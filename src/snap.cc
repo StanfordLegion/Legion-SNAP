@@ -219,22 +219,6 @@ void Snap::setup(void)
       runtime->attach_name(angle_fs, dinv_fields[idx], name_buffer);
     }
   }
-  // Compute the wavefronts for our sweeps
-  for (int corner = 0; corner < num_corners; corner++)
-  {
-    assert(!wavefront_map[corner].empty());
-    unsigned wavefront_index = 0;
-    for (std::vector<std::vector<Point<3> > >::const_iterator it = 
-          wavefront_map[corner].begin(); it != 
-          wavefront_map[corner].end(); it++, wavefront_index++)
-    {
-      const size_t wavefront_points = it->size();
-      assert(wavefront_points > 0);
-      wavefront_domains[corner].push_back(runtime->create_index_space(ctx,
-            Rect<2>(Point<2>(0,wavefront_index), 
-                    Point<2>(wavefront_points-1,wavefront_index))));
-    }
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -824,8 +808,6 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray<3> &flux,
     int ghost_offsets[3] = { 0, 0, 0 };
     for (int i = 0; i < num_dims; i++)
       ghost_offsets[i] = (corner & (0x1 << i)) >> i;
-    const std::vector<IndexSpace<2> > &launch_domains = 
-      wavefront_domains[corner];
     // Then loop over the energy groups by chunks
     for (int group = 0; group < num_groups; group+=energy_group_chunks)
     {
@@ -839,8 +821,7 @@ void Snap::perform_sweeps(const Predicate &pred, const SnapArray<3> &flux,
                            *time_flux_in[corner], *time_flux_out[corner],
                            *qim[corner], flux_xy, flux_yz, flux_xz,
                            group, group_stop, corner, ghost_offsets);
-      for (unsigned idx = 0; idx < launch_domains.size(); idx++)
-        mini_kba.dispatch_wavefront(idx, launch_domains[idx], ctx, runtime);
+      mini_kba.dispatch(ctx, runtime);
     }
   }
 }
@@ -971,7 +952,6 @@ int Snap::num_corners = 1;
 int Snap::nx_per_chunk;
 int Snap::ny_per_chunk;
 int Snap::nz_per_chunk;
-std::vector<std::vector<Point<3> > > Snap::wavefront_map[8];
 double Snap::dt;
 int Snap::cmom;
 int Snap::num_octants;
@@ -1124,66 +1104,7 @@ int Snap::lma[4];
   nx_per_chunk = nx / nx_chunks;
   ny_per_chunk = ny / ny_chunks;
   nz_per_chunk = nz / nz_chunks;
-  compute_wavefronts();
   compute_derived_globals();
-}
-
-static bool contains_point(Point<3> &point, int xlo, int xhi, 
-                           int ylo, int yhi, int zlo, int zhi)
-{
-  if ((point[0] < xlo) || (point[0] > xhi))
-    return false;
-  if ((point[1] < ylo) || (point[1] > yhi))
-    return false;
-  if ((point[2] < zlo) || (point[2] > zhi))
-    return false;
-  return true;
-}
-
-//------------------------------------------------------------------------------
-/*static*/ void Snap::compute_wavefronts(void)
-//------------------------------------------------------------------------------
-{
-  const long long zeroes[3] = { 0, 0, 0 };
-  const long long chunks[3] = { nx_chunks, ny_chunks, nz_chunks };
-  // Compute the mapping from corners to wavefronts
-  for (int corner = 0; corner < num_corners; corner++)
-  {
-    Point<3> strides[3] = 
-      { Point<3>(zeroes), Point<3>(zeroes), Point<3>(zeroes) };
-    Point<3> start;
-    for (int i = 0; i < num_dims; i++)
-    {
-      start[i] = ((corner & (0x1 << i)) ? 0 : chunks[i]-1);
-      strides[i][i] = ((corner & (0x1 << i)) ? 1 : -1);
-    }
-    std::set<Point<3> > current_points;
-    current_points.insert(Point<3>(start));
-    // Do a little BFS to handle weird rectangle shapes correctly
-    unsigned wavefront_number = 0;
-    while (!current_points.empty())
-    {
-      wavefront_map[corner].push_back(std::vector<Point<3> >());
-      std::vector<Point<3> > &wavefront_points = 
-                          wavefront_map[corner][wavefront_number];
-      std::set<Point<3> > next_points;
-      for (std::set<Point<3> >::const_iterator it = current_points.begin();
-            it != current_points.end(); it++)
-      {
-        // Save the point in this wavefront
-        wavefront_points.push_back(*it);
-        for (int i = 0; i < num_dims; i++)
-        {
-          Point<3> next = *it + strides[i];
-          if (contains_point(next, 0, nx_chunks-1, 0, 
-                             ny_chunks-1, 0, nz_chunks-1))
-            next_points.insert(Point<3>(next));
-        }
-      }
-      current_points = next_points;
-      wavefront_number++;
-    }
-  }
 }
 
 //------------------------------------------------------------------------------
@@ -1438,17 +1359,18 @@ static bool contains_point(Point<3> &point, int xlo, int xhi,
   MMSCompare::preregister_cpu_variants();
   ConvergenceMonad::preregister_cpu_variants();
   // Register projection functors for each corner
-  for (unsigned corner = 0; corner < 8; corner++)
-  {
-    Runtime::preregister_projection_functor(SNAP_SWEEP_PROJECTION(corner), 
-              new SnapSweepProjectionFunctor(wavefront_map[corner]));
-    Runtime::preregister_projection_functor(SNAP_XY_PROJECTION(corner),
-              new FluxProjectionFunctor(XY_PROJECTION, wavefront_map[corner]));
-    Runtime::preregister_projection_functor(SNAP_YZ_PROJECTION(corner),
-              new FluxProjectionFunctor(YZ_PROJECTION, wavefront_map[corner]));
-    Runtime::preregister_projection_functor(SNAP_XZ_PROJECTION(corner),
-              new FluxProjectionFunctor(XZ_PROJECTION, wavefront_map[corner]));
-  }
+  Runtime::preregister_projection_functor(SNAP_XY_PROJECTION(true/*forward*/),
+            new FluxProjectionFunctor(XY_PROJECTION, true/*forward*/));
+  Runtime::preregister_projection_functor(SNAP_XY_PROJECTION(false/*forward*/),
+            new FluxProjectionFunctor(XY_PROJECTION, false/*forward*/));
+  Runtime::preregister_projection_functor(SNAP_YZ_PROJECTION(true/*forward*/),
+            new FluxProjectionFunctor(YZ_PROJECTION, true/*forward*/));
+  Runtime::preregister_projection_functor(SNAP_YZ_PROJECTION(false/*forward*/),
+            new FluxProjectionFunctor(YZ_PROJECTION, false/*forward*/));
+  Runtime::preregister_projection_functor(SNAP_XZ_PROJECTION(true/*forward*/),
+            new FluxProjectionFunctor(XZ_PROJECTION, true/*forward*/));
+  Runtime::preregister_projection_functor(SNAP_XZ_PROJECTION(false/*forward*/),
+            new FluxProjectionFunctor(XZ_PROJECTION, false/*forward*/));
   // Finally register our reduction operators
   Runtime::register_reduction_op<AndReduction>(AndReduction::REDOP);
   Runtime::register_reduction_op<SumReduction>(SumReduction::REDOP);
@@ -1658,56 +1580,9 @@ void SnapArray<DIM>::unmap(const PhysicalRegion &region) const
 }
 
 //------------------------------------------------------------------------------
-SnapSweepProjectionFunctor::SnapSweepProjectionFunctor(
-                               const std::vector<std::vector<Point<3> > > &map)
-  : ProjectionFunctor(), wavefront_map(map)
-//------------------------------------------------------------------------------
-{
-}
-
-//------------------------------------------------------------------------------
-Legion::LogicalRegion 
-  SnapSweepProjectionFunctor::project(const Mappable *mappable,
-             unsigned index, Legion::LogicalRegion upper_bound, 
-             const Legion::DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  // should never be called
-  assert(false);
-  return Legion::LogicalRegion::NO_REGION;
-}
-
-//------------------------------------------------------------------------------
-Legion::LogicalRegion 
-  SnapSweepProjectionFunctor::project(const Mappable *mappable,
-          unsigned index, Legion::LogicalPartition upper_bound, 
-          const Legion::DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  const Task *task = mappable->as_task();
-  assert(task != NULL);
-  assert(task->task_id == Snap::MINI_KBA_TASK_ID);
-  return project_internal(upper_bound, point); 
-}
-
-//------------------------------------------------------------------------------
-Legion::LogicalRegion
-  SnapSweepProjectionFunctor::project_internal(
-         Legion::LogicalPartition upper_bound, const Legion::DomainPoint &point)
-//------------------------------------------------------------------------------
-{
-  Point<2> p = point;
-  // Figure out which wavefront we are in
-  const unsigned wavefront = p[1];
-  // Not valid, need to go get the result
-  return runtime->get_logical_subregion_by_color(
-          LogicalPartition<3>(upper_bound), wavefront_map[wavefront][p[0]]);
-}
-
-//------------------------------------------------------------------------------
 FluxProjectionFunctor::FluxProjectionFunctor(Snap::SnapProjectionID k,
-                                const std::vector<std::vector<Point<3> > > &map)
-  : ProjectionFunctor(), projection_kind(k), wavefront_map(map)
+                                             const bool f)
+  : ProjectionFunctor(), projection_kind(k), forward(f)
 //------------------------------------------------------------------------------
 {
 }
@@ -1741,10 +1616,7 @@ Legion::LogicalRegion
          Legion::LogicalPartition upper_bound, const Legion::DomainPoint &point)
 //------------------------------------------------------------------------------
 {
-  Point<2> p = point;
-  // Figure out which wavefront we are in
-  const unsigned wavefront = p[1];
-  Point<3> spatial_point = wavefront_map[wavefront][p[0]]; 
+  Point<3> spatial_point = point;
   // Get the right sub-partition by projection down to the proper color
   Point<2> color;
   switch (projection_kind)
@@ -1774,6 +1646,86 @@ Legion::LogicalRegion
       assert(false);
   }
   return Legion::LogicalRegion::NO_REGION;
+}
+
+//------------------------------------------------------------------------------
+void FluxProjectionFunctor::invert(Legion::LogicalRegion region, 
+                               const Legion::Domain &launch_domain,
+                               std::vector<Legion::DomainPoint> &ordered_points)
+//------------------------------------------------------------------------------
+{
+  const Point<2> color = 
+    runtime->get_index_space_color_point(region.get_index_space());
+  Point<3> spatial_point;
+  Rect<3> bounds = launch_domain;
+  switch (projection_kind)
+  {
+    case Snap::XY_PROJECTION:
+      {
+        spatial_point[0] = color[0];
+        spatial_point[1] = color[1];
+        ordered_points.resize((bounds.hi[2] - bounds.lo[2]) + 1);
+        unsigned index = 0;
+        if (forward) {
+          for (Legion::coord_t z = bounds.lo[2]; z <= bounds.hi[2]; z++)
+          {
+            spatial_point[2] = z;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        } else {
+          for (Legion::coord_t z = bounds.hi[2]; z >= bounds.lo[2]; z--)
+          {
+            spatial_point[2] = z;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        }
+        break;
+      }
+    case Snap::YZ_PROJECTION:
+      {
+        spatial_point[1] = color[0];
+        spatial_point[2] = color[1];
+        ordered_points.resize((bounds.hi[0] - bounds.lo[0]) + 1);
+        unsigned index = 0;
+        if (forward) {
+          for (Legion::coord_t x = bounds.lo[0]; x <= bounds.hi[0]; x++)
+          {
+            spatial_point[0] = x;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        } else {
+          for (Legion::coord_t x = bounds.hi[0]; x >= bounds.lo[0]; x--)
+          {
+            spatial_point[0] = x;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        }
+        break;
+      }
+    case Snap::XZ_PROJECTION:
+      {
+        spatial_point[0] = color[0];
+        spatial_point[2] = color[1];
+        ordered_points.resize((bounds.hi[1] - bounds.lo[1]) + 1);
+        unsigned index = 0;
+        if (forward) {
+          for (Legion::coord_t y = bounds.lo[1]; y <= bounds.hi[1]; y++)
+          {
+            spatial_point[1] = y;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        } else {
+          for (Legion::coord_t y = bounds.hi[1]; y >= bounds.lo[1]; y--)
+          {
+            spatial_point[1] = y;
+            ordered_points[index++] = Legion::DomainPoint(spatial_point);
+          }
+        }
+        break;
+      }
+    default:
+      assert(false);
+  }
 }
 
 //------------------------------------------------------------------------------
