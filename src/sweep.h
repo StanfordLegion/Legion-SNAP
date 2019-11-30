@@ -22,16 +22,15 @@
 #include "snap.h"
 #include "legion.h"
 
-class MiniKBATask : public SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID, 2> {
+class MiniKBATask : public SnapTask<MiniKBATask, Snap::MINI_KBA_TASK_ID> {
 public:
   static const int NON_GHOST_REQUIREMENTS = 3;
 public:
   struct MiniKBAArgs {
   public:
     MiniKBAArgs(int c, int start, int stop)
-      : wavefront(0), corner(c), group_start(start), group_stop(stop) { }
+      : corner(c), group_start(start), group_stop(stop) { }
   public:
-    int wavefront;
     int corner;
     int group_start;
     int group_stop; // inclusive
@@ -47,9 +46,6 @@ public:
               const SnapArray<2> &flux_yz, const SnapArray<2> &flux_xz,
               int group_start, int group_stop, int corner, 
               const int ghost_offsets[3]);
-public:
-  void dispatch_wavefront(int wavefront, IndexSpace<2> launch_sp, 
-                          Context cxt, Runtime *runtime);
 public:
   MiniKBAArgs mini_kba_args;
 public:

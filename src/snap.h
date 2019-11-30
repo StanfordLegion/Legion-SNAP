@@ -210,26 +210,20 @@ public:
   enum SnapPartitionID {
     DISJOINT_PARTITION = 0,
   };
-#define SNAP_SWEEP_PROJECTION(corner)     \
-  ((Snap::SnapProjectionID)(Snap::SWEEP_PROJECTION + (corner)))
-#define SNAP_XY_PROJECTION(corner)        \
-  ((Snap::SnapProjectionID)(Snap::XY_PROJECTION + (corner)))
-#define SNAP_YZ_PROJECTION(corner)        \
-  ((Snap::SnapProjectionID)(Snap::YZ_PROJECTION + (corner)))
-#define SNAP_XZ_PROJECTION(corner)        \
-  ((Snap::SnapProjectionID)(Snap::XZ_PROJECTION + (corner)))
+#define SNAP_XY_PROJECTION(forward)        \
+  ((Snap::SnapProjectionID)(Snap::XY_PROJECTION + (forward ? 0 : 1)))
+#define SNAP_YZ_PROJECTION(forward)        \
+  ((Snap::SnapProjectionID)(Snap::YZ_PROJECTION + (forward ? 0 : 1)))
+#define SNAP_XZ_PROJECTION(forward)        \
+  ((Snap::SnapProjectionID)(Snap::XZ_PROJECTION + (forward ? 0 : 1)))
   enum SnapProjectionID {
-    SWEEP_PROJECTION = 1,
+    XY_PROJECTION = 1,
     // ...
-    XY_PROJECTION = SWEEP_PROJECTION + 8,
+    YZ_PROJECTION = XY_PROJECTION + 2,
     // ...
-    YZ_PROJECTION = XY_PROJECTION + 8,
-    // ...
-    XZ_PROJECTION = YZ_PROJECTION + 8,
+    XZ_PROJECTION = YZ_PROJECTION + 2,
   };
 #define SNAP_SHARDING_ID        1
-#define SNAP_SWEEP_SHARDING_ID(corner,wavefront)   \
-  (((corner) * SNAP_MAX_WAVEFRONTS) + (wavefront) + SNAP_SHARDING_ID + 1)
 public:
   Snap(Context c, Runtime *rt)
     : ctx(c), runtime(rt) { }
@@ -287,15 +281,12 @@ private:
   FieldSpace flux_moment_fs;
   FieldSpace mat_fs;
   FieldSpace angle_fs;
-private:
-  std::vector<IndexSpace<2> > wavefront_domains[8];
 public:
   static void snap_top_level_task(const Task *task,
                                   const std::vector<PhysicalRegion> &regions,
                                   Context ctx, Runtime *runtime); 
 public:
   static void parse_arguments(int argc, char **argv);
-  static void compute_wavefronts(void);
   static void compute_derived_globals(void);
   static void report_arguments(void);
   static void perform_registrations(void);
@@ -340,8 +331,6 @@ public: // derived
   static int nx_per_chunk;
   static int ny_per_chunk;
   static int nz_per_chunk;
-  // Indexed by wavefront number and the point number
-  static std::vector<std::vector<Point<3> > > wavefront_map[8];
 public:
   static double dt; 
   static int cmom;
@@ -695,34 +684,9 @@ protected:
   size_t field_size;
 };
 
-class SnapSweepProjectionFunctor : public ProjectionFunctor {
-public:
-  SnapSweepProjectionFunctor(
-      const std::vector<std::vector<Point<3> > > &wavefront_map);
-public:
-  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
-                                Legion::LogicalRegion upper_bound,
-                                const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
-                                Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point);
-  virtual Legion::LogicalRegion project(Legion::LogicalRegion upper_bound, 
-                                const Legion::DomainPoint &point,
-                                const Legion::Domain &launch_domain);
-  virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
-                                const Legion::DomainPoint &point,
-                                const Legion::Domain &launch_domain);
-  virtual unsigned get_depth(void) const { return 0; }
-  virtual bool is_functional(void) const { return true; }
-  virtual bool is_exclusive(void) const { return true; }
-public:
-  const std::vector<std::vector<Point<3> > > &wavefront_map;
-};
-
 class FluxProjectionFunctor : public ProjectionFunctor {
 public:
-  FluxProjectionFunctor(Snap::SnapProjectionID kind,
-      const std::vector<std::vector<Point<3> > > &wavefront_map);
+  FluxProjectionFunctor(Snap::SnapProjectionID kind, const bool forward);
 public:
   virtual Legion::LogicalRegion project(const Mappable *mappable, unsigned index,
                                 Legion::LogicalRegion upper_bound,
@@ -736,12 +700,16 @@ public:
   virtual Legion::LogicalRegion project(Legion::LogicalPartition upper_bound,
                                 const Legion::DomainPoint &point,
                                 const Legion::Domain &launch_domain);
+  virtual void invert(Legion::LogicalRegion region, 
+                      const Legion::Domain &launch_domain,
+                      std::vector<Legion::DomainPoint> &ordered_points);
   virtual unsigned get_depth(void) const { return 0; }
   virtual bool is_functional(void) const { return true; }
   virtual bool is_exclusive(void) const { return true; }
+  virtual bool is_invertible(void) const { return true; }
 public:
   const Snap::SnapProjectionID projection_kind;
-  const std::vector<std::vector<Point<3> > > &wavefront_map;
+  const bool forward;
 };
 
 class SnapShardingFunctor : public Legion::ShardingFunctor {
@@ -755,21 +723,6 @@ public:
                         const size_t total_shards);
 public:
   const int x_chunks, y_chunks, z_chunks;
-};
-
-class SweepShardingFunctor : public SnapShardingFunctor {
-public:
-  SweepShardingFunctor(unsigned corner, unsigned wavefront,
-                       int x_chunks, int y_chunks, int z_chunks,
-                       const std::vector<Point<3> > &points);
-public:
-  virtual ShardID shard(const Legion::DomainPoint &point,
-                        const Legion::Domain &full_space,
-                        const size_t total_shards);
-public:
-  const unsigned corner;
-  const unsigned wavefront;
-  const std::vector<Point<3> > &points;
 };
 
 class AndReduction {
