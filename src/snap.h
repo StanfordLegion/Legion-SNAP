@@ -663,7 +663,7 @@ public:
                                 const Legion::DomainPoint &point);
   Legion::LogicalRegion project_internal(Legion::LogicalPartition upper_bound,
                                          const Legion::DomainPoint &point);
-  virtual void invert(Legion::LogicalRegion region, 
+  virtual void invert(Legion::LogicalRegion region, Legion::LogicalPartition upper,
                       const Legion::Domain &launch_domain,
                       std::vector<Legion::DomainPoint> &ordered_points);
   virtual unsigned get_depth(void) const { return 0; }

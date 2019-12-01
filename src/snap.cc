@@ -1650,6 +1650,7 @@ Legion::LogicalRegion
 
 //------------------------------------------------------------------------------
 void FluxProjectionFunctor::invert(Legion::LogicalRegion region, 
+                                   Legion::LogicalPartition upper,
                                const Legion::Domain &launch_domain,
                                std::vector<Legion::DomainPoint> &ordered_points)
 //------------------------------------------------------------------------------
