@@ -342,6 +342,10 @@ public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
   public:
+    enum Tunables {
+      BATCHES_TUNABLE = 1000,
+    };
+  public:
     typedef Legion::Mapping::MapperRuntime MapperRuntime;
     typedef Legion::Mapping::MapperContext MapperContext;
     typedef Legion::Mapping::PhysicalInstance PhysicalInstance;

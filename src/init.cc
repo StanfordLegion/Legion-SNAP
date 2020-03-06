@@ -216,7 +216,8 @@ extern void initialize_gpu_context(const double *ec_h, const double *mu_h,
                                    const double *eta_h, const double *xi_h,
                                    const double *w_h, const int num_angles,
                                    const int num_moments, const int num_octants,
-                                   const int nx_per_chunk, const int ny_per_chunk);
+                                   const int nx_per_chunk, const int ny_per_chunk,
+                                   const int nz_per_chunk, const int num_groups);
 #endif
 
 //------------------------------------------------------------------------------
@@ -228,7 +229,8 @@ extern void initialize_gpu_context(const double *ec_h, const double *mu_h,
 #ifdef USE_GPU_KERNELS
   initialize_gpu_context(Snap::ec, Snap::mu, Snap::eta, Snap::xi, Snap::w,
                          Snap::num_angles, Snap::num_moments, Snap::num_octants,
-                         Snap::nx_per_chunk, Snap::ny_per_chunk);
+                         Snap::nx_per_chunk, Snap::ny_per_chunk, 
+                         Snap::nz_per_chunk, Snap::num_groups);
 #else
   assert(false); 
 #endif
