@@ -344,7 +344,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
   for (unsigned idx = 0; idx < 2; idx++)
     layout_constraints.add_layout_constraint(idx/*index*/, 
                                              Snap::get_soa_layout());
-  register_gpu_variant<bool, gpu_implementation>(execution_constraints,
+  register_gpu_variant<DeferredValue<bool>, gpu_implementation>(
+                                                 execution_constraints,
                                                  layout_constraints,
                                                  true/*leaf*/);
 }
@@ -402,14 +403,15 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 }
 
 #ifdef USE_GPU_KERNELS
-extern bool run_outer_convergence(Rect<3> subgrid_bounds,
+extern DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
                                   const std::vector<AccessorRO<double,3> > &fa_flux0,
                                   const std::vector<AccessorRO<double,3> > &fa_flux0po,
                                   const double epsi);
 #endif
 
 //------------------------------------------------------------------------------
-/*static*/ bool TestOuterConvergence::gpu_implementation(const Task *task,
+/*static*/ DeferredValue<bool> 
+            TestOuterConvergence::gpu_implementation(const Task *task,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
