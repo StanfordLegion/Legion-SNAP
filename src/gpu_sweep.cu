@@ -44,11 +44,11 @@ static double *flux_z_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS]; /* nx * ny * angles 
 static int blocks_per_sweep[MAX_GPUS][MAX_OCTANTS];
 static int total_wavefronts[MAX_GPUS][MAX_OCTANTS];
 static int max_wavefront_length[MAX_GPUS][MAX_OCTANTS];
-static int *diag_length_d[MAX_GPUS][MAX_OCTANTS];
-static int *diag_offset_d[MAX_GPUS][MAX_OCTANTS];
-static int *diag_x_d[MAX_GPUS][MAX_OCTANTS];
-static int *diag_y_d[MAX_GPUS][MAX_OCTANTS];
-static int *diag_z_d[MAX_GPUS][MAX_OCTANTS];
+static int *wavefront_length_d[MAX_GPUS][MAX_OCTANTS];
+static int *wavefront_offset_d[MAX_GPUS][MAX_OCTANTS];
+static int *wavefront_x_d[MAX_GPUS][MAX_OCTANTS];
+static int *wavefront_y_d[MAX_GPUS][MAX_OCTANTS];
+static int *wavefront_z_d[MAX_GPUS][MAX_OCTANTS];
 static int *mutex_in_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS];
 static int *mutex_out_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS];
 
@@ -191,75 +191,75 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
     }
     total_wavefronts[gpu][corner] = wavefront_count;
     max_wavefront_length[gpu][corner] = max_length;
-    int *diag_length_h = (int*)malloc(wavefront_count * sizeof(int));
-    int *diag_offset_h = (int*)malloc(wavefront_count* sizeof(int));
+    int *wavefront_length_h = (int*)malloc(wavefront_count * sizeof(int));
+    int *wavefront_offset_h = (int*)malloc(wavefront_count* sizeof(int));
     int offset = 0;
     for (int i = 0; i < wavefront_count; i++)
     {
-      diag_offset_h[i] = offset;
-      diag_length_h[i] = wavefront_map[i].size();
+      wavefront_offset_h[i] = offset;
+      wavefront_length_h[i] = wavefront_map[i].size();
       offset += wavefront_map[i].size();
     }
-    if (cudaMalloc((void**)&diag_length_d[gpu][corner], 
+    if (cudaMalloc((void**)&wavefront_length_d[gpu][corner], 
           wavefront_count * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for diag length corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront length corner %d of %zd bytes on GPU %d",
              corner, wavefront_count * sizeof(int), gpu);
       assert(false);
     }
-    cudaMemcpy(diag_length_d[gpu][corner], diag_length_h, 
+    cudaMemcpy(wavefront_length_d[gpu][corner], wavefront_length_h, 
         wavefront_count * sizeof(int), cudaMemcpyDeviceToHost);
-    if (cudaMalloc((void**)&diag_offset_d[gpu][corner], 
+    if (cudaMalloc((void**)&wavefront_offset_d[gpu][corner], 
           wavefront_count * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for diag offset corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront offset corner %d of %zd bytes on GPU %d",
              corner, wavefront_count * sizeof(int), gpu);
       assert(false);
     }
-    cudaMemcpy(diag_offset_d[gpu][corner], diag_offset_h, 
+    cudaMemcpy(wavefront_offset_d[gpu][corner], wavefront_offset_h, 
         wavefront_count * sizeof(int), cudaMemcpyDeviceToHost);
-    int *diag_x_h = (int*)malloc(offset * sizeof(int));
-    int *diag_y_h = (int*)malloc(offset * sizeof(int));
-    int *diag_z_h = (int*)malloc(offset * sizeof(int));
+    int *wavefront_x_h = (int*)malloc(offset * sizeof(int));
+    int *wavefront_y_h = (int*)malloc(offset * sizeof(int));
+    int *wavefront_z_h = (int*)malloc(offset * sizeof(int));
     offset = 0;
     for (int i = 0; i < wavefront_count; i++)
       for (int j = 0; j < wavefront_map[i].size(); j++, offset++)
       {
-        diag_x_h[offset] = wavefront_map[i][j][0];
-        diag_y_h[offset] = wavefront_map[i][j][1];
-        diag_z_h[offset] = wavefront_map[i][j][2];
+        wavefront_x_h[offset] = wavefront_map[i][j][0];
+        wavefront_y_h[offset] = wavefront_map[i][j][1];
+        wavefront_z_h[offset] = wavefront_map[i][j][2];
       }
-    if (cudaMalloc((void**)&diag_x_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
+    if (cudaMalloc((void**)&wavefront_x_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for diag x of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront x of corner %d of %zd bytes on GPU %d",
           corner, offset * sizeof(int), gpu);
       assert(false);
     }
-    cudaMemcpy(diag_x_d[gpu][corner], diag_x_h, 
+    cudaMemcpy(wavefront_x_d[gpu][corner], wavefront_x_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaMalloc((void**)&diag_y_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
+    if (cudaMalloc((void**)&wavefront_y_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for diag y of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront y of corner %d of %zd bytes on GPU %d",
           corner, offset * sizeof(int), gpu);
       assert(false);
     }
-    cudaMemcpy(diag_y_d[gpu][corner], diag_y_h, 
+    cudaMemcpy(wavefront_y_d[gpu][corner], wavefront_y_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaMalloc((void**)&diag_z_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
+    if (cudaMalloc((void**)&wavefront_z_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for diag z of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront z of corner %d of %zd bytes on GPU %d",
           corner, offset * sizeof(int), gpu);
       assert(false);
     }
-    cudaMemcpy(diag_z_d[gpu][corner], diag_z_h, 
+    cudaMemcpy(wavefront_z_d[gpu][corner], wavefront_z_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
     // Make sure all the copies are done before we delete host memory
     cudaDeviceSynchronize();
-    free(diag_length_h);
-    free(diag_offset_h);
-    free(diag_x_h);
-    free(diag_y_h);
-    free(diag_z_h);
+    free(wavefront_length_h);
+    free(wavefront_offset_h);
+    free(wavefront_x_h);
+    free(wavefront_y_h);
+    free(wavefront_z_h);
   }    
 }
 
@@ -729,17 +729,17 @@ void kernel_barrier(int val, volatile int *mutexin, volatile int *mutexout)
 template<int THR_ANGLES>
 __global__
 void gpu_time_dependent_sweep_with_fixup(const Point<3> origin, 
-                                         const AccessorRO<MomentQuad,3> &fa_qtot,
-                                         const AccessorRW<double,3> &fa_flux,
-                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
-                                         const AccessorRO<double,3> &fa_dinv,
-                                         const AccessorRO<double,3> &fa_time_flux_in,
-                                         const AccessorWO<double,3> &fa_time_flux_out,
-                                         const AccessorRO<double,3> &fa_t_xs,
-                                         const AccessorRW<double,2> &fa_ghostx,
-                                         const AccessorRW<double,2> &fa_ghosty,
-                                         const AccessorRW<double,2> &fa_ghostz,
-                                         const AccessorRO<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> fa_qtot,
+                                         const AccessorRW<double,3> fa_flux,
+                                         const AccessorRW<MomentTriple,3> fa_fluxm,
+                                         const AccessorRO<double,3> fa_dinv,
+                                         const AccessorRO<double,3> fa_time_flux_in,
+                                         const AccessorWO<double,3> fa_time_flux_out,
+                                         const AccessorRO<double,3> fa_t_xs,
+                                         const AccessorRW<double,2> fa_ghostx,
+                                         const AccessorRW<double,2> fa_ghosty,
+                                         const AccessorRW<double,2> fa_ghostz,
+                                         const AccessorRO<double,3> fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -758,11 +758,11 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
                                          volatile double *flux_x,
                                          volatile double *flux_y,
                                          volatile double *flux_z,
-                                         const int *diag_length,
-                                         const int *diag_offset,
-                                         const int *diag_x,
-                                         const int *diag_y,
-                                         const int *diag_z,
+                                         const int *wave_length,
+                                         const int *wave_offset,
+                                         const int *wave_x,
+                                         const int *wave_y,
+                                         const int *wave_z,
                                          volatile int *mutexin,
                                          volatile int *mutexout)
 {
@@ -795,15 +795,15 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
 
   int barval = gridDim.x;
 
-  for (int d = 0; d < num_wavefronts; d++) {
-    const int wave_size = diag_length[d];
-    const int wave_offset = diag_offset[d];
+  for (int w = 0; w < num_wavefronts; w++) {
+    const int wave_size = wave_length[w];
+    const int wave_offset = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = diag_x[wave_offset+n];
-      const int y = diag_y[wave_offset+n];
-      const int z = diag_z[wave_offset+n];
+      const int x = wave_x[wave_offset+n];
+      const int y = wave_y[wave_offset+n];
+      const int z = wave_z[wave_offset+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1106,17 +1106,17 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_dependent_sweep_without_fixup(const Point<3> origin, 
-                                         const AccessorRO<MomentQuad,3> &fa_qtot,
-                                         const AccessorRW<double,3> &fa_flux,
-                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
-                                         const AccessorRO<double,3> &fa_dinv,
-                                         const AccessorRO<double,3> &fa_time_flux_in,
-                                         const AccessorWO<double,3> &fa_time_flux_out,
-                                         const AccessorRO<double,3> &fa_t_xs,
-                                         const AccessorRW<double,2> &fa_ghostx,
-                                         const AccessorRW<double,2> &fa_ghosty,
-                                         const AccessorRW<double,2> &fa_ghostz,
-                                         const AccessorRO<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> fa_qtot,
+                                         const AccessorRW<double,3> fa_flux,
+                                         const AccessorRW<MomentTriple,3> fa_fluxm,
+                                         const AccessorRO<double,3> fa_dinv,
+                                         const AccessorRO<double,3> fa_time_flux_in,
+                                         const AccessorWO<double,3> fa_time_flux_out,
+                                         const AccessorRO<double,3> fa_t_xs,
+                                         const AccessorRW<double,2> fa_ghostx,
+                                         const AccessorRW<double,2> fa_ghosty,
+                                         const AccessorRW<double,2> fa_ghostz,
+                                         const AccessorRO<double,3> fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1135,11 +1135,11 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
                                          volatile double *flux_x,
                                          volatile double *flux_y,
                                          volatile double *flux_z,
-                                         const int *diag_length,
-                                         const int *diag_offset,
-                                         const int *diag_x,
-                                         const int *diag_y,
-                                         const int *diag_z,
+                                         const int *wave_length,
+                                         const int *wave_offset,
+                                         const int *wave_x,
+                                         const int *wave_y,
+                                         const int *wave_z,
                                          volatile int *mutexin,
                                          volatile int *mutexout)
 {
@@ -1161,15 +1161,15 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
 
   int barval = gridDim.x;
 
-  for (int d = 0; d < num_wavefronts; d++) {
-    const int wave_size = diag_length[d];
-    const int wave_offset = diag_offset[d];
+  for (int w = 0; w < num_wavefronts; w++) {
+    const int wave_size = wave_length[w];
+    const int wave_offset = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = diag_x[wave_offset+n];
-      const int y = diag_y[wave_offset+n];
-      const int z = diag_z[wave_offset+n];
+      const int x = wave_x[wave_offset+n];
+      const int y = wave_y[wave_offset+n];
+      const int z = wave_z[wave_offset+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1386,15 +1386,15 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_independent_sweep_with_fixup(const Point<3> origin, 
-                                         const AccessorRO<MomentQuad,3> &fa_qtot,
-                                         const AccessorRW<double,3> &fa_flux,
-                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
-                                         const AccessorRO<double,3> &fa_dinv,
-                                         const AccessorRO<double,3> &fa_t_xs,
-                                         const AccessorRW<double,2> &fa_ghostx,
-                                         const AccessorRW<double,2> &fa_ghosty,
-                                         const AccessorRW<double,2> &fa_ghostz,
-                                         const AccessorRO<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> fa_qtot,
+                                         const AccessorRW<double,3> fa_flux,
+                                         const AccessorRW<MomentTriple,3> fa_fluxm,
+                                         const AccessorRO<double,3> fa_dinv,
+                                         const AccessorRO<double,3> fa_t_xs,
+                                         const AccessorRW<double,2> fa_ghostx,
+                                         const AccessorRW<double,2> fa_ghosty,
+                                         const AccessorRW<double,2> fa_ghostz,
+                                         const AccessorRO<double,3> fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1413,11 +1413,11 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
                                          volatile double *flux_x,
                                          volatile double *flux_y,
                                          volatile double *flux_z,
-                                         const int *diag_length,
-                                         const int *diag_offset,
-                                         const int *diag_x,
-                                         const int *diag_y,
-                                         const int *diag_z,
+                                         const int *wave_length,
+                                         const int *wave_offset,
+                                         const int *wave_x,
+                                         const int *wave_y,
+                                         const int *wave_z,
                                          volatile int *mutexin,
                                          volatile int *mutexout)
 {
@@ -1447,15 +1447,15 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
 
   int barval = gridDim.x;
 
-  for (int d = 0; d < num_wavefronts; d++) {
-    const int wave_size = diag_length[d];
-    const int wave_offset = diag_offset[d];
+  for (int w = 0; w < num_wavefronts; w++) {
+    const int wave_size = wave_length[w];
+    const int wave_offset = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = diag_x[wave_offset+n];
-      const int y = diag_y[wave_offset+n];
-      const int z = diag_z[wave_offset+n];
+      const int x = wave_x[wave_offset+n];
+      const int y = wave_y[wave_offset+n];
+      const int z = wave_z[wave_offset+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1735,15 +1735,15 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
 template<int THR_ANGLES>
 __global__
 void gpu_time_independent_sweep_without_fixup(const Point<3> origin, 
-                                         const AccessorRO<MomentQuad,3> &fa_qtot,
-                                         const AccessorRW<double,3> &fa_flux,
-                                         const AccessorRW<MomentTriple,3> &fa_fluxm,
-                                         const AccessorRO<double,3> &fa_dinv,
-                                         const AccessorRO<double,3> &fa_t_xs,
-                                         const AccessorRW<double,2> &fa_ghostx,
-                                         const AccessorRW<double,2> &fa_ghosty,
-                                         const AccessorRW<double,2> &fa_ghostz,
-                                         const AccessorRO<double,3> &fa_qim,
+                                         const AccessorRO<MomentQuad,3> fa_qtot,
+                                         const AccessorRW<double,3> fa_flux,
+                                         const AccessorRW<MomentTriple,3> fa_fluxm,
+                                         const AccessorRO<double,3> fa_dinv,
+                                         const AccessorRO<double,3> fa_t_xs,
+                                         const AccessorRW<double,2> fa_ghostx,
+                                         const AccessorRW<double,2> fa_ghosty,
+                                         const AccessorRW<double,2> fa_ghostz,
+                                         const AccessorRO<double,3> fa_qim,
                                          const int x_range, const int y_range, 
                                          const int z_range, const int corner,
                                          const bool stride_x_positive,
@@ -1762,11 +1762,11 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
                                          volatile double *flux_x,
                                          volatile double *flux_y,
                                          volatile double *flux_z,
-                                         const int *diag_length,
-                                         const int *diag_offset,
-                                         const int *diag_x,
-                                         const int *diag_y,
-                                         const int *diag_z,
+                                         const int *wave_length,
+                                         const int *wave_offset,
+                                         const int *wave_x,
+                                         const int *wave_y,
+                                         const int *wave_z,
                                          volatile int *mutexin,
                                          volatile int *mutexout) 
 {
@@ -1787,15 +1787,15 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
 
   int barval = gridDim.x;
 
-  for (int d = 0; d < num_wavefronts; d++) {
-    const int wave_size = diag_length[d];
-    const int wave_offset = diag_offset[d];
+  for (int w = 0; w < num_wavefronts; w++) {
+    const int wave_size = wave_length[w];
+    const int wave_offset = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = diag_x[wave_offset+n];
-      const int y = diag_y[wave_offset+n];
-      const int z = diag_z[wave_offset+n];
+      const int x = wave_x[wave_offset+n];
+      const int y = wave_y[wave_offset+n];
+      const int z = wave_z[wave_offset+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -2004,7 +2004,6 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
                              Runtime *runtime, Context ctx, int gpu, 
                              int corner, int num_groups)
 {
-#if 0
   int numsm;
   cudaDeviceGetAttribute(&numsm, cudaDevAttrMultiProcessorCount, gpu);
   Future batches = runtime->select_tunable_value(ctx, Snap::GPU_SMS_PER_SWEEP_TUNABLE, 
@@ -2014,7 +2013,7 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
       func, threads_per_block, 0);
   int numsm_per_kernel = batches.get_result<int>(true/*silence warnings*/); 
   int grid_size = active_blocks_per_sm * numsm_per_kernel;
-  // Clamp this to the max diagonal length
+  // Clamp this to the max wavefront length
   if (grid_size > max_wavefront_length[gpu][corner])
     grid_size = max_wavefront_length[gpu][corner];
   for (int g = 0; g < num_groups; g++)
@@ -2034,9 +2033,6 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
       assert(false);
     }
   return grid_size; 
-#else
-  return 1;
-#endif
 }
 
 __host__
@@ -2104,9 +2100,9 @@ void run_gpu_sweep(const Point<3> origin,
                 num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]); 
             break;
           }
@@ -2128,9 +2124,9 @@ void run_gpu_sweep(const Point<3> origin,
                 num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]); 
             break;
           }
@@ -2159,9 +2155,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
@@ -2182,9 +2178,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
@@ -2216,9 +2212,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
@@ -2239,9 +2235,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
@@ -2270,9 +2266,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
@@ -2293,9 +2289,9 @@ void run_gpu_sweep(const Point<3> origin,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], diag_length_d[gpu][corner],
-                diag_offset_d[gpu][corner], diag_x_d[gpu][corner],
-                diag_y_d[gpu][corner], diag_z_d[gpu][corner],
+                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
+                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
                 mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
             break;
           }
