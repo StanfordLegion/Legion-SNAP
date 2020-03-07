@@ -30,6 +30,9 @@
 #ifndef MAX_OCTANTS
 #define MAX_OCTANTS  8
 #endif
+#ifndef MAX_STREAMS
+#define MAX_STREAMS   12
+#endif
 
 static double *ec_d[MAX_GPUS]; /*corners * moments * angles*/
 static double *mu_d[MAX_GPUS]; /*angles*/
@@ -37,9 +40,12 @@ static double *eta_d[MAX_GPUS]; /*angles*/
 static double *xi_d[MAX_GPUS]; /*angles*/
 static double *w_d[MAX_GPUS]; /*angles*/
 
-static double *flux_x_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS]; /* ny * nz * angles */
-static double *flux_y_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS]; /* nx * nz * angles */
-static double *flux_z_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS]; /* nx * ny * angles */
+static double *flux_x_d[MAX_GPUS][MAX_STREAMS]; /* ny * nz * angles */
+static double *flux_y_d[MAX_GPUS][MAX_STREAMS]; /* nx * nz * angles */
+static double *flux_z_d[MAX_GPUS][MAX_STREAMS]; /* nx * ny * angles */
+static int *mutex_in_d[MAX_GPUS][MAX_STREAMS];
+static int *mutex_out_d[MAX_GPUS][MAX_STREAMS];
+static cudaStream_t flux_streams[MAX_GPUS][MAX_STREAMS];
 
 static int blocks_per_sweep[MAX_GPUS][MAX_OCTANTS];
 static int total_wavefronts[MAX_GPUS][MAX_OCTANTS];
@@ -49,8 +55,7 @@ static int *wavefront_offset_d[MAX_GPUS][MAX_OCTANTS];
 static int *wavefront_x_d[MAX_GPUS][MAX_OCTANTS];
 static int *wavefront_y_d[MAX_GPUS][MAX_OCTANTS];
 static int *wavefront_z_d[MAX_GPUS][MAX_OCTANTS];
-static int *mutex_in_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS];
-static int *mutex_out_d[MAX_GPUS][MAX_OCTANTS][MAX_GROUPS];
+
 
 __host__
 static bool contains_point(Point<3> &point, int xlo, int xhi, 
@@ -81,7 +86,7 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   if (cudaMalloc((void**)&ec_d[gpu], ec_size) != cudaSuccess)
   {
     printf("ERROR: out of memory for ec_d of %zd bytes on GPU %d\n", ec_size, gpu);
-    assert(false);
+    exit(1);
   }
   cudaMemcpy(ec_d[gpu], ec_h, ec_size, cudaMemcpyHostToDevice);
 
@@ -89,61 +94,60 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   if (cudaMalloc((void**)&mu_d[gpu], angle_size) != cudaSuccess)
   {
     printf("ERROR: out of memory for mu_d of %zd bytes on GPU %d\n", angle_size, gpu);
-    assert(false);
+    exit(1);
   }
   cudaMemcpy(mu_d[gpu], mu_h, angle_size, cudaMemcpyHostToDevice);
 
   if (cudaMalloc((void**)&eta_d[gpu], angle_size) != cudaSuccess)
   {
     printf("ERROR: out of memory for eta_d of %zd bytes on GPU %d\n", angle_size, gpu);
-    assert(false);
+    exit(1);
   }
   cudaMemcpy(eta_d[gpu], eta_h, angle_size, cudaMemcpyHostToDevice);
 
   if (cudaMalloc((void**)&xi_d[gpu], angle_size) != cudaSuccess)
   {
     printf("ERROR: out of memory for xi_d of %zd bytes on GPU %d\n", angle_size, gpu);
-    assert(false);
+    exit(1);
   }
   cudaMemcpy(xi_d[gpu], xi_h, angle_size, cudaMemcpyHostToDevice);
 
   if (cudaMalloc((void**)&w_d[gpu], angle_size) != cudaSuccess)
   {
     printf("ERROR: out of memory for w_d of %zd bytes on GPU %d\n", angle_size, gpu);
-    assert(false);
+    exit(1);
   }
   cudaMemcpy(w_d[gpu], w_h, angle_size, cudaMemcpyHostToDevice);
 
   assert(num_groups <= MAX_GROUPS);
   const size_t flux_x_size = ny_per_chunk * nz_per_chunk * angle_size;
-  for (int idx = 0; idx < num_octants; idx++)
-    for (int g = 0; g < num_groups; g++)
-      if (cudaMalloc((void**)&flux_x_d[gpu][idx][g], flux_x_size) != cudaSuccess)
-      {
-        printf("ERROR: out of memory for flux X %d of group %d of %zd bytes on GPU %d",
-               idx, g, flux_x_size, gpu);
-        assert(false);
-      }
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    if (cudaMalloc((void**)&flux_x_d[gpu][idx], flux_x_size) != cudaSuccess)
+    {
+      printf("ERROR: out of memory for flux X %d of group %d of %zd bytes on GPU %d\n",
+             idx, g, flux_x_size, gpu);
+      exit(1);
+    }
 
   const size_t flux_y_size = nx_per_chunk * nz_per_chunk * angle_size;
-  for (int idx = 0; idx < num_octants; idx++)
-    for (int g = 0; g < num_groups; g++)
-      if (cudaMalloc((void**)&flux_y_d[gpu][idx][g], flux_y_size) != cudaSuccess)
-      {
-        printf("ERROR: out of memory for flux Y %d of group %d of %zd bytes on GPU %d",
-               idx, g, flux_y_size, gpu);
-        assert(false);
-      }
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    if (cudaMalloc((void**)&flux_y_d[gpu][idx], flux_y_size) != cudaSuccess)
+    {
+      printf("ERROR: out of memory for flux Y %d of group %d of %zd bytes on GPU %d\n",
+             idx, g, flux_y_size, gpu);
+      exit(1);
+    }
 
   const size_t flux_z_size = nx_per_chunk * ny_per_chunk * angle_size;
-  for (int idx = 0; idx < num_octants; idx++)
-    for (int g = 0; g < num_groups; g++)
-      if (cudaMalloc((void**)&flux_z_d[gpu][idx][g], flux_z_size) != cudaSuccess)
-      {
-        printf("ERROR: out of memory for flux Z %d of group %d of %zd bytes on GPU %d",
-               idx, g, flux_z_size, gpu);
-        assert(false);
-      }
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    if (cudaMalloc((void**)&flux_z_d[gpu][idx], flux_z_size) != cudaSuccess)
+    {
+      printf("ERROR: out of memory for flux Z %d of group %d of %zd bytes on GPU %d\n",
+             idx, g, flux_z_size, gpu);
+      exit(1);
+    }
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    flux_streams[gpu][idx] = 0;
    
   const long long zeroes[3] = { 0, 0, 0 };
   const long long chunks[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
@@ -203,18 +207,18 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
     if (cudaMalloc((void**)&wavefront_length_d[gpu][corner], 
           wavefront_count * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for wavefront length corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront length corner %d of %zd bytes on GPU %d\n",
              corner, wavefront_count * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
     cudaMemcpy(wavefront_length_d[gpu][corner], wavefront_length_h, 
         wavefront_count * sizeof(int), cudaMemcpyDeviceToHost);
     if (cudaMalloc((void**)&wavefront_offset_d[gpu][corner], 
           wavefront_count * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for wavefront offset corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront offset corner %d of %zd bytes on GPU %d\n",
              corner, wavefront_count * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
     cudaMemcpy(wavefront_offset_d[gpu][corner], wavefront_offset_h, 
         wavefront_count * sizeof(int), cudaMemcpyDeviceToHost);
@@ -231,25 +235,25 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
       }
     if (cudaMalloc((void**)&wavefront_x_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for wavefront x of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront x of corner %d of %zd bytes on GPU %d\n",
           corner, offset * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
     cudaMemcpy(wavefront_x_d[gpu][corner], wavefront_x_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
     if (cudaMalloc((void**)&wavefront_y_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for wavefront y of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront y of corner %d of %zd bytes on GPU %d\n",
           corner, offset * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
     cudaMemcpy(wavefront_y_d[gpu][corner], wavefront_y_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
     if (cudaMalloc((void**)&wavefront_z_d[gpu][corner], offset * sizeof(int)) != cudaSuccess)
     {
-      printf("ERROR: out of memory for wavefront z of corner %d of %zd bytes on GPU %d",
+      printf("ERROR: out of memory for wavefront z of corner %d of %zd bytes on GPU %d\n",
           corner, offset * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
     cudaMemcpy(wavefront_z_d[gpu][corner], wavefront_z_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
@@ -592,7 +596,7 @@ void run_geometry_param(const std::vector<AccessorRO<double,3> > &fa_xs,
         break;
       }
     default:
-      assert(false); // need more cases
+      exit(1); // need more cases
   }
 }
 
@@ -2022,7 +2026,7 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
     {
       printf("ERROR: failed to allocate mutex in data structure of %zd bytes on gpu %d\n",
           grid_size * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
   for (int g = 0; g < num_groups; g++)
     if (cudaMalloc((void**)&mutex_out_d[gpu][corner][g], grid_size*sizeof(int)) 
@@ -2030,7 +2034,7 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
     {
       printf("ERROR: failed to allocate mutex out data structure of %zd bytes on gpu %d\n",
           grid_size * sizeof(int), gpu);
-      assert(false);
+      exit(1);
     }
   return grid_size; 
 }
@@ -2054,7 +2058,6 @@ void run_gpu_sweep(const Point<3> origin,
                const bool stride_y_positive,
                const bool stride_z_positive,
                const bool mms_source, 
-               const int group,
                const int num_moments, 
                const double hi, const double hj,
                const double hk, const double vdelt,
@@ -2075,6 +2078,22 @@ void run_gpu_sweep(const Point<3> origin,
   // Put each sweep on its own stream since they are independent
   cudaStream_t stream;
   cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
+  int stream_idx = -1;
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+  {
+    if (flux_streams[gpu][idx] == stream)
+    {
+      stream_idx = idx;
+      break;
+    }
+    else if (flux_streams[gpu][idx] == 0)
+    {
+      flux_streams[gpu][idx] = stream;
+      stream_idx = idx;
+      break;
+    }
+  }
+  assert(stream_idx > 0);
   // No need to delete the stream, Realm CUDA hijack takes care of it
   if (fixup) {
     // Need fixup
@@ -2099,11 +2118,11 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_y_positive, stride_z_positive, mms_source, 
                 num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]); 
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         case 2:
@@ -2123,16 +2142,16 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_y_positive, stride_z_positive, mms_source, 
                 num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]); 
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         default:
           printf("OH SNAP! That is a lot of angles! Add more cases!\n");
-          assert(false);
+          exit(1);
       }
     } else {
       // Time independent
@@ -2154,11 +2173,11 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         case 2:
@@ -2177,16 +2196,16 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         default:
           printf("ON SNAP! That is a lot of angles! Add more cases!\n");
-          assert(false);
+          exit(1);
       }
     }
   } else {
@@ -2211,11 +2230,11 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive, 
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         case 2:
@@ -2234,16 +2253,16 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive, 
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         default:
           printf("OH SNAP! That is a lot of angles! Add more cases!\n");
-          assert(false);
+          exit(1);
       }
     } else {
       // Time independent
@@ -2265,11 +2284,11 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         case 2:
@@ -2288,16 +2307,16 @@ void run_gpu_sweep(const Point<3> origin,
                 stride_x_positive, stride_y_positive, stride_z_positive,
                 mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][corner][group], flux_y_d[gpu][corner][group],
-                flux_z_d[gpu][corner][group], wavefront_length_d[gpu][corner],
+                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
+                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
                 wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
                 wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][corner][group], mutex_out_d[gpu][corner][group]);
+                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
             break;
           }
         default:
           printf("ON SNAP! That is a lot of angles! Add more cases!\n");
-          assert(false);
+          exit(1);
       }
     }
   }
