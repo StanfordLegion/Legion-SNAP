@@ -67,6 +67,10 @@ template<int DIM, typename T = long long>
 using DomainIterator = Legion::PointInDomainIterator<DIM,T>;
 template<int DIM, typename T = long long>
 using RectIterator = Legion::PointInRectIterator<DIM,T>;
+template<typename T>
+using DeferredValue = Legion::DeferredValue<T>;
+template<typename T, int DIM, typename COORD_T = long long, bool CHECK_BOUNDS = false>
+using DeferredBuffer = Legion::DeferredBuffer<T,DIM,COORD_T,CHECK_BOUNDS>;
 typedef Legion::Runtime Runtime;
 typedef Legion::Context Context;
 typedef Legion::PhysicalRegion PhysicalRegion;
@@ -186,6 +190,7 @@ public:
     OUTER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST,
     INNER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+1,
     SWEEP_ENERGY_CHUNKS_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+2,
+    GPU_SMS_PER_SWEEP_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+3,
   };
   enum SnapReductionID {
     NO_REDUCTION_ID = 0,

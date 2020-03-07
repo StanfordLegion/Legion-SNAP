@@ -1542,7 +1542,8 @@ extern void run_gpu_sweep(const Point<3> origin,
                const int num_moments, 
                const double hi, const double hj,
                const double hk, const double vdelt,
-               const int num_angles, const bool fixup);
+               const int num_angles, const bool fixup, 
+               Runtime *runtime, Context ctx);
 #endif
 
 //------------------------------------------------------------------------------
@@ -1568,10 +1569,7 @@ extern void run_gpu_sweep(const Point<3> origin,
   const bool stride_y_positive = ((args->corner & 0x2) != 0);
   const bool stride_z_positive = ((args->corner & 0x4) != 0);
   // Convert to local coordinates
-  const Point<3> origin( 
-    (stride_x_positive ? dom.bounds.lo[0] : dom.bounds.hi[0]),
-    (stride_y_positive ? dom.bounds.lo[1] : dom.bounds.hi[1]),
-    (stride_z_positive ? dom.bounds.lo[2] : dom.bounds.hi[2]));
+  const Point<3> &origin = dom.bounds.lo;
 
   const int x_range = (dom.bounds.hi[0] - dom.bounds.lo[0]) + 1; 
   const int y_range = (dom.bounds.hi[1] - dom.bounds.lo[1]) + 1;
@@ -1611,9 +1609,9 @@ extern void run_gpu_sweep(const Point<3> origin,
                   fa_time_flux_in, fa_time_flux_out, fa_t_xs,
                   fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                   x_range, y_range, z_range, args->corner, stride_x_positive,
-                  stride_y_positive, stride_z_positive, mms_source, 
+                  stride_y_positive, stride_z_positive, mms_source,
                   Snap::num_moments, Snap::hi, Snap::hj, Snap::hk, vdelt,
-                  Snap::num_angles, Snap::flux_fixup);
+                  Snap::num_angles, Snap::flux_fixup, runtime, ctx);
   }
 #else
   assert(false);

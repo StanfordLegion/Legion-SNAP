@@ -357,7 +357,7 @@ void Snap::transport_solve(void)
   {
     Future f_gpus = runtime->select_tunable_value(ctx, 
         Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_GLOBAL_GPUS);
-    int num_gpus = f_gpus.get_result<int>(true/*silence warnings*/);
+    long num_gpus = f_gpus.get_result<long>(true/*silence warnings*/);
     assert(num_gpus > 0);
     Rect<3> gpu_bounds(Point<3>(0,0,0), Point<3>(0,0,0));
     gpu_bounds.hi[0] = num_gpus - 1;

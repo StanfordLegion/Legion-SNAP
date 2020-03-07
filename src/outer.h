@@ -53,7 +53,7 @@ public:
 public:
   static bool cpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
-  static bool gpu_implementation(const Task *task,
+  static DeferredValue<bool> gpu_implementation(const Task *task,
      const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime);
 };
 
