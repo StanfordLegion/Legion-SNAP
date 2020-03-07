@@ -499,7 +499,7 @@ void Snap::transport_solve(void)
                              flux0pi, true_future, energy_group_chunks);
         inner_converged = runtime->get_predicate_future(ctx, converged);
         convergence.bind_inner(inner_pred, inner_converged);
-#ifdef DISABLE_PREDICATION
+#ifndef DISABLE_PREDICATION
         inner_converged_tests.push_back(inner_converged);
         // Update the next predicate
         inner_pred = runtime->predicate_not(ctx, converged);
@@ -521,7 +521,7 @@ void Snap::transport_solve(void)
            flux0po, inner_converged, true_future, energy_group_chunks);
       Future outer_converged = runtime->get_predicate_future(ctx, converged);
       convergence.bind_outer(outer_pred, outer_converged);
-#ifdef DISABLE_PREDICATION
+#ifndef DISABLE_PREDICATION
       outer_converged_tests.push_back(outer_converged);
       // Update the next predicate
       outer_pred = runtime->predicate_not(ctx, converged);
