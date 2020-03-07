@@ -2089,7 +2089,7 @@ void run_gpu_sweep(const Point<3> origin,
       break;
     }
   }
-  assert(stream_idx > 0);
+  assert(stream_idx >= 0);
   // No need to delete the stream, Realm CUDA hijack takes care of it
   if (fixup) {
     // Need fixup
