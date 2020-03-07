@@ -197,13 +197,24 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       // First figure out which memory it is going into
       assert(copy.index_point.get_dim() == 3);
       Point<3> point = copy.index_point;
-      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
-      Processor cpu_proc = global_cpu_mapping[point];
-      // Find the target memory with affinity to the proper node
-      Machine::MemoryQuery target_query(machine);
-      target_query.has_affinity_to(cpu_proc);
-      target_query.only_kind(Memory::SYSTEM_MEM);
-      Memory target = target_query.first();
+      Memory target;
+      if (global_gpu_mapping.empty()) {
+        assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+        Processor cpu_proc = global_cpu_mapping[point];
+        // Find the target memory with affinity to the proper node
+        Machine::MemoryQuery target_query(machine);
+        target_query.has_affinity_to(cpu_proc);
+        target_query.only_kind(Memory::SYSTEM_MEM);
+        target = target_query.first();
+      } else {
+        assert(global_gpu_mapping.find(point) != global_gpu_mapping.end());
+        Processor gpu_proc = global_gpu_mapping[point];
+        // Find the target memory with affinity to the proper node
+        Machine::MemoryQuery target_query(machine);
+        target_query.has_affinity_to(gpu_proc);
+        target_query.only_kind(Memory::GPU_FB_MEM);
+        target = target_query.first();
+      }
       assert(target.exists());
       // Now we can make the instance
       std::vector<LogicalRegion> regions(1, src_region);  
@@ -247,13 +258,24 @@ void Snap::SnapMapper::map_copy(const MapperContext ctx,
       // First figure out which memory it is going into
       assert(copy.index_point.get_dim() == 3);
       Point<3> point = copy.index_point;
-      assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
-      Processor cpu_proc = global_cpu_mapping[point];
-      // Find the target memory with affinity to the proper node
-      Machine::MemoryQuery target_query(machine);
-      target_query.has_affinity_to(cpu_proc);
-      target_query.only_kind(Memory::SYSTEM_MEM);
-      Memory target = target_query.first();
+      Memory target;
+      if (global_gpu_mapping.empty()) {
+        assert(global_cpu_mapping.find(point) != global_cpu_mapping.end());
+        Processor cpu_proc = global_cpu_mapping[point];
+        // Find the target memory with affinity to the proper node
+        Machine::MemoryQuery target_query(machine);
+        target_query.has_affinity_to(cpu_proc);
+        target_query.only_kind(Memory::SYSTEM_MEM);
+        target = target_query.first();
+      } else {
+        assert(global_gpu_mapping.find(point) != global_gpu_mapping.end());
+        Processor gpu_proc = global_gpu_mapping[point];
+        // Find the target memory with affinity to the proper node
+        Machine::MemoryQuery target_query(machine);
+        target_query.has_affinity_to(gpu_proc);
+        target_query.only_kind(Memory::GPU_FB_MEM);
+        target = target_query.first();
+      }
       assert(target.exists());
       // Now we can make the instance
       std::vector<LogicalRegion> regions(1, dst_region);  
