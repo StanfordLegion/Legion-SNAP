@@ -797,13 +797,13 @@ void gpu_time_dependent_sweep_with_fixup(const Point<3> origin,
 
   for (int w = 0; w < num_wavefronts; w++) {
     const int wave_size = wave_length[w];
-    const int wave_offset = wave_offset[w];
+    const int wave_off = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = wave_x[wave_offset+n];
-      const int y = wave_y[wave_offset+n];
-      const int z = wave_z[wave_offset+n];
+      const int x = wave_x[wave_off+n];
+      const int y = wave_y[wave_off+n];
+      const int z = wave_z[wave_off+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1163,13 +1163,13 @@ void gpu_time_dependent_sweep_without_fixup(const Point<3> origin,
 
   for (int w = 0; w < num_wavefronts; w++) {
     const int wave_size = wave_length[w];
-    const int wave_offset = wave_offset[w];
+    const int wave_off = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = wave_x[wave_offset+n];
-      const int y = wave_y[wave_offset+n];
-      const int z = wave_z[wave_offset+n];
+      const int x = wave_x[wave_off+n];
+      const int y = wave_y[wave_off+n];
+      const int z = wave_z[wave_off+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1449,13 +1449,13 @@ void gpu_time_independent_sweep_with_fixup(const Point<3> origin,
 
   for (int w = 0; w < num_wavefronts; w++) {
     const int wave_size = wave_length[w];
-    const int wave_offset = wave_offset[w];
+    const int wave_off = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = wave_x[wave_offset+n];
-      const int y = wave_y[wave_offset+n];
-      const int z = wave_z[wave_offset+n];
+      const int x = wave_x[wave_off+n];
+      const int y = wave_y[wave_off+n];
+      const int z = wave_z[wave_off+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
@@ -1789,13 +1789,13 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
 
   for (int w = 0; w < num_wavefronts; w++) {
     const int wave_size = wave_length[w];
-    const int wave_offset = wave_offset[w];
+    const int wave_off = wave_offset[w];
     for (int n = blockIdx.x; n < wave_size; n += gridDim.x) {
       // Figure out the local point that we are working on    
       Point<3> local_point = origin;
-      const int x = wave_x[wave_offset+n];
-      const int y = wave_y[wave_offset+n];
-      const int z = wave_z[wave_offset+n];
+      const int x = wave_x[wave_off+n];
+      const int y = wave_y[wave_off+n];
+      const int z = wave_z[wave_off+n];
       local_point[0] += x;
       local_point[1] += y;
       local_point[2] += z;
