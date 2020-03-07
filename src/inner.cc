@@ -159,7 +159,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
 //------------------------------------------------------------------------------
 {
 #ifndef NO_COMPUTE
-#ifdef tSE_GPU_KERNELS
+#ifdef USE_GPU_KERNELS
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
           IndexSpace<3>(task->regions[0].region.get_index_space()));
   const bool multi_moment = (Snap::num_moments > 1);
@@ -171,7 +171,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
         task->regions[0].privilege_fields.begin(); it !=
         task->regions[0].privilege_fields.end(); it++)
   {
-    AccessorRO<MomentQuad,3> fa_sxs(regions[0], *t);
+    AccessorRO<MomentQuad,3> fa_sxs(regions[0], *it);
     AccessorRO<double,3> fa_flux0(regions[1], *it);
     AccessorRO<double,3> fa_q2grp0(regions[2], *it);
     AccessorWO<MomentQuad,3> fa_qtot(regions[3], *it);
@@ -179,7 +179,7 @@ CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
       AccessorRO<MomentTriple,3> fa_fluxm(regions[4], *it);
       AccessorRO<MomentTriple,3> fa_q2grpm(regions[5], *it);
       run_inner_source_multi_moment(dom.bounds, fa_sxs, fa_flux0, fa_q2grp0,
-                                    fa_fluxm, fa_q2grpm, fa_qtot_ptr,
+                                    fa_fluxm, fa_q2grpm, fa_qtot,
                                     Snap::num_moments, Snap::lma);
     } else {
       run_inner_source_single_moment(dom.bounds, fa_sxs, fa_flux0, 
@@ -302,7 +302,8 @@ TestInnerConvergence::TestInnerConvergence(const Snap &snap,
 }
 
 #ifdef USE_GPU_KERNELS
-extern DeferredValue<bool> run_inner_convergence(const Rect<3> subgrid_bounds,
+extern void run_inner_convergence(const Rect<3> subgrid_bounds,
+                            const DeferredValue<bool> &result,
                             const std::vector<AccessorRO<double,3> > &fa_flux0,
                             const std::vector<AccessorRO<double,3> > &fa_flux0pi,
                             const double epsi);
@@ -314,8 +315,9 @@ extern DeferredValue<bool> run_inner_convergence(const Rect<3> subgrid_bounds,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-#ifndef NO_COMPUTE
   log_snap.info("Running GPU Test Inner Convergence");
+  DeferredValue<bool> result(false);
+#ifndef NO_COMPUTE
 #ifdef USE_GPU_KERNELS
   Domain<3> dom = runtime->get_index_space_domain(ctx, 
           IndexSpace<3>(task->regions[0].region.get_index_space()));
@@ -334,11 +336,11 @@ extern DeferredValue<bool> run_inner_convergence(const Rect<3> subgrid_bounds,
     fa_flux0[idx] = AccessorRO<double,3>(regions[0], *it);
     fa_flux0pi[idx] = AccessorRO<double,3>(regions[1], *it);
   }
-  return run_inner_convergence(dom.bounds, fa_flux0, fa_flux0pi, epsi);
+  run_inner_convergence(dom.bounds, result, fa_flux0, fa_flux0pi, epsi);
 #else
   assert(false);
 #endif
 #endif
-  return false;
+  return result;
 }
 

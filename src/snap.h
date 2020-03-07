@@ -179,6 +179,7 @@ public:
     OUTER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST,
     INNER_RUNAHEAD_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+1,
     SWEEP_ENERGY_CHUNKS_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+2,
+    GPU_SMS_PER_SWEEP_TUNABLE = Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_LAST+3,
   };
   enum SnapReductionID {
     NO_REDUCTION_ID = 0,
@@ -341,10 +342,6 @@ public:
 public:
   // Snap mapper derived from the default mapper
   class SnapMapper : public Legion::Mapping::DefaultMapper {
-  public:
-    enum Tunables {
-      BATCHES_TUNABLE = 1000,
-    };
   public:
     typedef Legion::Mapping::MapperRuntime MapperRuntime;
     typedef Legion::Mapping::MapperContext MapperContext;

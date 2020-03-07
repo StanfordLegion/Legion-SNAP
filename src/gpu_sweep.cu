@@ -76,7 +76,7 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   int gpu;
   cudaGetDevice(&gpu);
   assert(gpu < MAX_GPUS);
-  assert(num_octants < MAX_OCTANTS);
+  assert(num_octants <= MAX_OCTANTS);
   const size_t ec_size = num_angles * num_moments * num_octants * sizeof(double);
   if (cudaMalloc((void**)&ec_d[gpu], ec_size) != cudaSuccess)
   {
@@ -114,7 +114,7 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   }
   cudaMemcpy(w_d[gpu], w_h, angle_size, cudaMemcpyHostToDevice);
 
-  assert(num_groups < MAX_GROUPS);
+  assert(num_groups <= MAX_GROUPS);
   const size_t flux_x_size = ny_per_chunk * nz_per_chunk * angle_size;
   for (int idx = 0; idx < num_octants; idx++)
     for (int g = 0; g < num_groups; g++)
@@ -253,6 +253,8 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
     }
     cudaMemcpy(diag_z_d[gpu][corner], diag_z_h, 
         offset * sizeof(int), cudaMemcpyHostToDevice);
+    // Make sure all the copies are done before we delete host memory
+    cudaDeviceSynchronize();
     free(diag_length_h);
     free(diag_offset_h);
     free(diag_x_h);
@@ -2002,15 +2004,15 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
                              Runtime *runtime, Context ctx, int gpu, 
                              int corner, int num_groups)
 {
+#if 0
   int numsm;
   cudaDeviceGetAttribute(&numsm, cudaDevAttrMultiProcessorCount, gpu);
-  Future batches = runtime->select_tunable_value(ctx, Snap::SnapMapper::BATCHES_TUNABLE, 
+  Future batches = runtime->select_tunable_value(ctx, Snap::GPU_SMS_PER_SWEEP_TUNABLE, 
       0/*mapper id*/, 0/*mapper tag*/, &numsm, sizeof(numsm));
   int active_blocks_per_sm;
   cudaOccupancyMaxActiveBlocksPerMultiprocessor(&active_blocks_per_sm,
       func, threads_per_block, 0);
-  int batch_size = batches.get_result<int>(true/*silence warnings*/); 
-  int numsm_per_kernel = numsm / batch_size;
+  int numsm_per_kernel = batches.get_result<int>(true/*silence warnings*/); 
   int grid_size = active_blocks_per_sm * numsm_per_kernel;
   // Clamp this to the max diagonal length
   if (grid_size > max_wavefront_length[gpu][corner])
@@ -2032,6 +2034,9 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
       assert(false);
     }
   return grid_size; 
+#else
+  return 1;
+#endif
 }
 
 __host__
@@ -2073,7 +2078,7 @@ void run_gpu_sweep(const Point<3> origin,
   dim3 grid(blocks_per_sweep[gpu][corner], 1, 1);
   // Put each sweep on its own stream since they are independent
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
   // No need to delete the stream, Realm CUDA hijack takes care of it
   if (fixup) {
     // Need fixup
@@ -2300,5 +2305,6 @@ void run_gpu_sweep(const Point<3> origin,
       }
     }
   }
+  cudaStreamDestroy(stream);
 }
 

@@ -145,6 +145,18 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
         }
         break;
       }
+    case GPU_SMS_PER_SWEEP_TUNABLE:
+      {
+        // Figure out how many streaming multiprocessors we have
+        int numsm = *((int*)input.args);
+        if (numsm <= 4)
+          runtime->pack_tunable<int>(numsm, output);
+        else if (numsm <= 16)
+          runtime->pack_tunable<int>(4, output);
+        else
+          runtime->pack_tunable<int>(8, output);
+        break;
+      }
     default:
       // Fall back to the default mapper
       DefaultMapper::select_tunable_value(ctx, task, input, output);
@@ -380,7 +392,6 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
     case CALC_INNER_SOURCE_TASK_ID:
     case EXPAND_CROSS_SECTION_TASK_ID:
     case EXPAND_SCATTERING_CROSS_SECTION_TASK_ID:
-    case CALCULATE_GEOMETRY_PARAM_TASK_ID:
     case MMS_SCALE_TASK_ID:
       {
         Memory target_mem;
@@ -411,6 +422,48 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
             continue;
           map_snap_array(ctx, task.regions[idx].region, target_mem,
                          output.chosen_instances[idx]);
+        }
+        break;
+      }
+    case CALCULATE_GEOMETRY_PARAM_TASK_ID:
+      {
+        // This task can have a special vdelt which needs to go in 
+        // zero-copy memory so that we can read it early
+        Memory target_mem, vdelt_mem;
+        std::map<SnapTaskID,VariantID>::const_iterator finder = 
+          gpu_variants.find((SnapTaskID)task.task_id);
+        if (finder != gpu_variants.end() && 
+            (local_kind == Processor::TOC_PROC)) {
+          output.chosen_variant = finder->second; 
+#ifdef LOCAL_MAP_TASKS
+          output.target_procs.push_back(task.target_proc);
+          target_mem = get_associated_framebuffer(task.target_proc);
+          vdelt_mem = get_associated_zerocopy(task.target_proc);
+#else
+          output.target_procs.push_back(local_proc);
+          target_mem = local_framebuffer;
+          vdelt_mem = local_zerocopy;
+#endif
+        } else {
+          output.chosen_variant = cpu_variants[(SnapTaskID)task.task_id];
+#ifdef LOCAL_MAP_TASKS
+          get_associated_procs(task.target_proc, output.target_procs);
+          target_mem = get_associated_sysmem(task.target_proc);
+#else
+          output.target_procs = local_cpus;
+          target_mem = local_sysmem;
+#endif
+          vdelt_mem = target_mem;
+        }
+        for (unsigned idx = 0; idx < task.regions.size(); idx++) { 
+          if (task.regions[idx].privilege == NO_ACCESS)
+            continue;
+          if (idx == 1)
+            map_snap_array(ctx, task.regions[idx].region, vdelt_mem,
+                           output.chosen_instances[idx]);
+          else
+            map_snap_array(ctx, task.regions[idx].region, target_mem,
+                           output.chosen_instances[idx]);
         }
         break;
       }

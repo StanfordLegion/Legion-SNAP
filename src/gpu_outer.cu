@@ -102,12 +102,11 @@ void flux0_launch_helper(Rect<3> subgrid_bounds,
 
 __host__
 void run_flux0_outer_source(Rect<3> subgrid_bounds,
-                         const std::vector<AccessorRO<double,3> > fa_qi0,
-                         const std::vector<AccessorRO<double,3> > fa_flux0,
-                         const std::vector<AccessorRO<MomentQuad,2> > fa_slgg,
-                         const AccessorRO<int,3> &fa_mat,
-                         const std::vector<AccessorWO<double,3> > fa_qo0,
-                            const int num_groups)
+                         const std::vector<AccessorRO<double,3> > &fa_qi0,
+                         const std::vector<AccessorRO<double,3> > &fa_flux0,
+                         const std::vector<AccessorRO<MomentQuad,2> > &fa_slgg,
+                         const std::vector<AccessorWO<double,3> > &fa_qo0,
+                         const AccessorRO<int,3> &fa_mat, const int num_groups)
 {
   // TODO: replace this template madness with Terra
 #define GROUP_CASE(g,x,y)                                                           \
@@ -534,12 +533,13 @@ void gpu_sum_outer_convergence(const DeferredBuffer<int,1> buffer,
 }
 
 __host__
-DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
-                           const std::vector<AccessorRO<double,3> > fa_flux0,
-                           const std::vector<AccessorRO<double,3> > fa_flux0po,
+void run_outer_convergence(Rect<3> subgrid_bounds,
+                           const DeferredValue<bool> &result,
+                           const std::vector<AccessorRO<double,3> > &fa_flux0,
+                           const std::vector<AccessorRO<double,3> > &fa_flux0po,
                            const double epsi)
 {
-  DeferredValue<bool> result(false);;
+  
   // Launch the kernels
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
@@ -562,6 +562,5 @@ DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
   dim3 grid2(1,1,1);
   const int expected = x_range * y_range * z_range * fa_flux0.size();
   gpu_sum_outer_convergence<<<grid2,block2>>>(buffer, result, bounds.hi[0]+1, expected);
-  return result;
 }
 

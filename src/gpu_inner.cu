@@ -206,12 +206,12 @@ void gpu_sum_inner_convergence(const DeferredBuffer<int,1> buffer,
 }
 
 __host__
-DeferredValue<bool> run_inner_convergence(const Rect<3> subgrid_bounds,
+void run_inner_convergence(const Rect<3> subgrid_bounds,
+                           const DeferredValue<bool> &result,
                            const std::vector<AccessorRO<double,3> > &fa_flux0,
                            const std::vector<AccessorRO<double,3> > &fa_flux0pi,
                            const double epsi)
 {
-  DeferredValue<bool> result(false);
   // Launch the kernels
   const int x_range = (subgrid_bounds.hi[0] - subgrid_bounds.lo[0]) + 1;
   const int y_range = (subgrid_bounds.hi[1] - subgrid_bounds.lo[1]) + 1;
@@ -235,6 +235,5 @@ DeferredValue<bool> run_inner_convergence(const Rect<3> subgrid_bounds,
   dim3 grid2(1,1,1);
   const int expected = x_range * y_range * z_range * fa_flux0.size();
   gpu_sum_inner_convergence<<<grid2,block2>>>(buffer, result, bounds.hi[0]+1, expected);
-  return result;
 }
 

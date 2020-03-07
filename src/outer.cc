@@ -403,7 +403,8 @@ TestOuterConvergence::TestOuterConvergence(const Snap &snap,
 }
 
 #ifdef USE_GPU_KERNELS
-extern DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
+extern void run_outer_convergence(Rect<3> subgrid_bounds,
+                                  const DeferredValue<bool> &result,
                                   const std::vector<AccessorRO<double,3> > &fa_flux0,
                                   const std::vector<AccessorRO<double,3> > &fa_flux0po,
                                   const double epsi);
@@ -415,14 +416,15 @@ extern DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
       const std::vector<PhysicalRegion> &regions, Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-#ifndef NO_COMPUTE
   log_snap.info("Running GPU Test Outer Convergence");
+  DeferredValue<bool> result(false);
+#ifndef NO_COMPUTE
 #ifdef USE_GPU_KERNELS
   // If the inner loop didn't converge, then we can't either
   assert(!task->futures.empty());
   bool inner_converged = task->futures[0].get_result<bool>();
   if (!inner_converged)
-    return false;
+    return result;
   // Get the index space domain for iteration
   assert(task->regions[0].region.get_index_space() == 
          task->regions[1].region.get_index_space());
@@ -440,11 +442,11 @@ extern DeferredValue<bool> run_outer_convergence(Rect<3> subgrid_bounds,
     fa_flux0[idx]   = AccessorRO<double,3>(regions[0], *it);
     fa_flux0po[idx] = AccessorRO<double,3>(regions[1], *it);
   }
-  return run_outer_convergence(dom.bounds, fa_flux0, fa_flux0po, epsi);
+  run_outer_convergence(dom.bounds, result, fa_flux0, fa_flux0po, epsi);
 #else
   assert(false);
 #endif
 #endif
-  return false;
+  return result;
 }
 
