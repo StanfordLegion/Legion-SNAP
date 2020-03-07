@@ -393,6 +393,10 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
     case EXPAND_CROSS_SECTION_TASK_ID:
     case EXPAND_SCATTERING_CROSS_SECTION_TASK_ID:
     case MMS_SCALE_TASK_ID:
+#ifdef SNAP_USE_RELAXED_COHERENCE
+    case TEST_OUTER_CONVERGENCE_TASK_ID:
+    case TEST_INNER_CONVERGENCE_TASK_ID:
+#endif
       {
         Memory target_mem;
         std::map<SnapTaskID,VariantID>::const_iterator finder = 
@@ -467,9 +471,11 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
         }
         break;
       }
-    // Convergence tests go on CPU always since reductions are coming
-    // from zero-copy memory anyway and we want to avoid using
-    // too much duplicate memory for storing flux0po
+#ifndef SNAP_USE_RELAXED_COHERENCE
+      // Convergence tests have to go on the CPUs if they are
+      // consuming reduction instances because Realm doesn't know
+      // how to reduce GPU instances directly on the GPUs currently
+      // https://github.com/StanfordLegion/legion/issues/372
     case TEST_OUTER_CONVERGENCE_TASK_ID:
     case TEST_INNER_CONVERGENCE_TASK_ID:
       {
@@ -486,6 +492,7 @@ void Snap::SnapMapper::map_task(const MapperContext ctx,
                          output.chosen_instances[idx]);
         break;
       }
+#endif
     case BIND_INNER_CONVERGENCE_TASK_ID:
     case BIND_OUTER_CONVERGENCE_TASK_ID:
       {

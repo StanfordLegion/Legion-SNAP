@@ -411,7 +411,7 @@ void Snap::transport_solve(void)
     // Some of this is a little weird, you can in theory lift some
     // of this out the time stepping loop because the mock velocity 
     // array and the material array aren't changing, but I think that 
-    // is just an artifact off SNAP and not a more general property of PARTISN, 
+    // is just an artifact of SNAP and not a more general property of PARTISN, 
     // SNAP developers have now confirmed this so we'll leave this
     // here to be consistent with the original implementation of SNAP
     for (int g = 0; g < num_groups; g += energy_group_chunks)
@@ -498,8 +498,9 @@ void Snap::transport_solve(void)
         Predicate converged = test_inner_convergence(inner_pred, flux0, 
                              flux0pi, true_future, energy_group_chunks);
         inner_converged = runtime->get_predicate_future(ctx, converged);
-        inner_converged_tests.push_back(inner_converged);
         convergence.bind_inner(inner_pred, inner_converged);
+#ifdef DISABLE_PREDICATION
+        inner_converged_tests.push_back(inner_converged);
         // Update the next predicate
         inner_pred = runtime->predicate_not(ctx, converged);
         // See if we've run far enough ahead
@@ -510,6 +511,7 @@ void Snap::transport_solve(void)
           if (f.get_result<bool>(true/*silence warnings*/))
             break;
         }
+#endif
       }
       // Test for outer convergence
       // Original SNAP says to skip this on the first iteration
@@ -518,8 +520,9 @@ void Snap::transport_solve(void)
       Predicate converged = test_outer_convergence(outer_pred, flux0,
            flux0po, inner_converged, true_future, energy_group_chunks);
       Future outer_converged = runtime->get_predicate_future(ctx, converged);
-      outer_converged_tests.push_back(outer_converged);
       convergence.bind_outer(outer_pred, outer_converged);
+#ifdef DISABLE_PREDICATION
+      outer_converged_tests.push_back(outer_converged);
       // Update the next predicate
       outer_pred = runtime->predicate_not(ctx, converged);
       // See if we've run far enough ahead
@@ -530,6 +533,7 @@ void Snap::transport_solve(void)
         if (f.get_result<bool>(true/*silence warnings*/))
           break;
       }
+#endif
     }
   }
   if (do_mms) {
