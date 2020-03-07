@@ -24,9 +24,6 @@
 #ifndef MAX_GPUS
 #define MAX_GPUS 16
 #endif
-#ifndef MAX_GROUPS
-#define MAX_GROUPS   128
-#endif
 #ifndef MAX_OCTANTS
 #define MAX_OCTANTS  8
 #endif
@@ -76,7 +73,7 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
                             const double *w_h, const int num_angles,
                             const int num_moments, const int num_octants,
                             const int nx_per_chunk, const int ny_per_chunk,
-                            const int nz_per_chunk, const int num_groups)
+                            const int nz_per_chunk)
 {
   int gpu;
   cudaGetDevice(&gpu);
@@ -119,13 +116,12 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   }
   cudaMemcpy(w_d[gpu], w_h, angle_size, cudaMemcpyHostToDevice);
 
-  assert(num_groups <= MAX_GROUPS);
   const size_t flux_x_size = ny_per_chunk * nz_per_chunk * angle_size;
   for (int idx = 0; idx < MAX_STREAMS; idx++)
     if (cudaMalloc((void**)&flux_x_d[gpu][idx], flux_x_size) != cudaSuccess)
     {
-      printf("ERROR: out of memory for flux X %d of group %d of %zd bytes on GPU %d\n",
-             idx, g, flux_x_size, gpu);
+      printf("ERROR: out of memory for flux X %d of %zd bytes on GPU %d\n",
+             idx, flux_x_size, gpu);
       exit(1);
     }
 
@@ -133,8 +129,8 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   for (int idx = 0; idx < MAX_STREAMS; idx++)
     if (cudaMalloc((void**)&flux_y_d[gpu][idx], flux_y_size) != cudaSuccess)
     {
-      printf("ERROR: out of memory for flux Y %d of group %d of %zd bytes on GPU %d\n",
-             idx, g, flux_y_size, gpu);
+      printf("ERROR: out of memory for flux Y %d of %zd bytes on GPU %d\n",
+             idx, flux_y_size, gpu);
       exit(1);
     }
 
@@ -142,8 +138,8 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   for (int idx = 0; idx < MAX_STREAMS; idx++)
     if (cudaMalloc((void**)&flux_z_d[gpu][idx], flux_z_size) != cudaSuccess)
     {
-      printf("ERROR: out of memory for flux Z %d of group %d of %zd bytes on GPU %d\n",
-             idx, g, flux_z_size, gpu);
+      printf("ERROR: out of memory for flux Z %d of %zd bytes on GPU %d\n",
+             idx, flux_z_size, gpu);
       exit(1);
     }
   for (int idx = 0; idx < MAX_STREAMS; idx++)
