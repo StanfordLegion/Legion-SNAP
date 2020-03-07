@@ -44,9 +44,10 @@ static int *mutex_in_d[MAX_GPUS][MAX_STREAMS];
 static int *mutex_out_d[MAX_GPUS][MAX_STREAMS];
 static cudaStream_t flux_streams[MAX_GPUS][MAX_STREAMS];
 
-static int blocks_per_sweep[MAX_GPUS][MAX_OCTANTS];
-static int total_wavefronts[MAX_GPUS][MAX_OCTANTS];
-static int max_wavefront_length[MAX_GPUS][MAX_OCTANTS];
+static int blocks_per_sweep[MAX_GPUS];
+static int total_wavefronts[MAX_GPUS];
+static int max_wavefront_length[MAX_GPUS];
+
 static int *wavefront_length_d[MAX_GPUS][MAX_OCTANTS];
 static int *wavefront_offset_d[MAX_GPUS][MAX_OCTANTS];
 static int *wavefront_x_d[MAX_GPUS][MAX_OCTANTS];
@@ -145,13 +146,13 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
   for (int idx = 0; idx < MAX_STREAMS; idx++)
     flux_streams[gpu][idx] = 0;
    
+  // Initialize this to zero so we can compute it later
+  blocks_per_sweep[gpu] = 0;
   const long long zeroes[3] = { 0, 0, 0 };
   const long long chunks[3] = { nx_per_chunk, ny_per_chunk, nz_per_chunk };
   // Compute the mapping from corners to wavefronts
   for (int corner = 0; corner < num_octants; corner++)
   {
-    // Initialize this to zero so we can compute it later
-    blocks_per_sweep[gpu][corner] = 0;
     Point<3> strides[3] = 
       { Point<3>(zeroes), Point<3>(zeroes), Point<3>(zeroes) };
     Point<3> start;
@@ -189,8 +190,16 @@ void initialize_gpu_context(const double *ec_h, const double *mu_h,
       if (wavefront_points.size() > max_length)
         max_length = wavefront_points.size();
     }
-    total_wavefronts[gpu][corner] = wavefront_count;
-    max_wavefront_length[gpu][corner] = max_length;
+    if (corner == 0)
+    {
+      total_wavefronts[gpu] = wavefront_count;
+      max_wavefront_length[gpu] = max_length;
+    }
+    else
+    {
+      assert(wavefront_count == total_wavefronts[gpu]);
+      assert(max_length == max_wavefront_length[gpu]);
+    }
     int *wavefront_length_h = (int*)malloc(wavefront_count * sizeof(int));
     int *wavefront_offset_h = (int*)malloc(wavefront_count* sizeof(int));
     int offset = 0;
@@ -2001,8 +2010,7 @@ void gpu_time_independent_sweep_without_fixup(const Point<3> origin,
 __host__
 int compute_blocks_per_sweep(int nx, int ny, int nz,
                              const void *func, int threads_per_block,
-                             Runtime *runtime, Context ctx, int gpu, 
-                             int corner, int num_groups)
+                             Runtime *runtime, Context ctx, int gpu) 
 {
   int numsm;
   cudaDeviceGetAttribute(&numsm, cudaDevAttrMultiProcessorCount, gpu);
@@ -2014,18 +2022,18 @@ int compute_blocks_per_sweep(int nx, int ny, int nz,
   int numsm_per_kernel = batches.get_result<int>(true/*silence warnings*/); 
   int grid_size = active_blocks_per_sm * numsm_per_kernel;
   // Clamp this to the max wavefront length
-  if (grid_size > max_wavefront_length[gpu][corner])
-    grid_size = max_wavefront_length[gpu][corner];
-  for (int g = 0; g < num_groups; g++)
-    if (cudaMalloc((void**)&mutex_in_d[gpu][corner][g], grid_size*sizeof(int)) 
+  if (grid_size > max_wavefront_length[gpu])
+    grid_size = max_wavefront_length[gpu];
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    if (cudaMalloc((void**)&mutex_in_d[gpu][idx], grid_size*sizeof(int)) 
         != cudaSuccess)
     {
       printf("ERROR: failed to allocate mutex in data structure of %zd bytes on gpu %d\n",
           grid_size * sizeof(int), gpu);
       exit(1);
     }
-  for (int g = 0; g < num_groups; g++)
-    if (cudaMalloc((void**)&mutex_out_d[gpu][corner][g], grid_size*sizeof(int)) 
+  for (int idx = 0; idx < MAX_STREAMS; idx++)
+    if (cudaMalloc((void**)&mutex_out_d[gpu][idx], grid_size*sizeof(int)) 
         != cudaSuccess)
     {
       printf("ERROR: failed to allocate mutex out data structure of %zd bytes on gpu %d\n",
@@ -2057,8 +2065,8 @@ void run_gpu_sweep(const Point<3> origin,
                const int num_moments, 
                const double hi, const double hj,
                const double hk, const double vdelt,
-               const int num_angles, const int num_groups,
-               const bool fixup, Runtime *runtime, Context ctx)
+               const int num_angles, const bool fixup, 
+               Runtime *runtime, Context ctx)
 {
   // Figure out how many angles per thread we need
   const int max_threads_per_cta = 1024;
@@ -2070,7 +2078,7 @@ void run_gpu_sweep(const Point<3> origin,
   dim3 block(threads_per_block, 1, 1);
   int gpu;
   cudaGetDevice(&gpu);
-  dim3 grid(blocks_per_sweep[gpu][corner], 1, 1);
+  dim3 grid(blocks_per_sweep[gpu], 1, 1);
   // Put each sweep on its own stream since they are independent
   cudaStream_t stream;
   cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -2103,8 +2111,8 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_dependent_sweep_with_fixup<1>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_dependent_sweep_with_fixup<1><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
@@ -2112,7 +2120,7 @@ void run_gpu_sweep(const Point<3> origin,
                 fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, stride_x_positive, 
                 stride_y_positive, stride_z_positive, mms_source, 
-                num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
+                num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2127,8 +2135,8 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_dependent_sweep_with_fixup<2>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_dependent_sweep_with_fixup<2><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
@@ -2136,7 +2144,7 @@ void run_gpu_sweep(const Point<3> origin,
                 fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, stride_x_positive, 
                 stride_y_positive, stride_z_positive, mms_source, 
-                num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
+                num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2159,15 +2167,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_independent_sweep_with_fixup<1>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_independent_sweep_with_fixup<1><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
                 fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2182,15 +2190,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_independent_sweep_with_fixup<2>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_independent_sweep_with_fixup<2><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
                 fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2216,15 +2224,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_dependent_sweep_without_fixup<1>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_dependent_sweep_without_fixup<1><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
                 fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2239,15 +2247,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_dependent_sweep_without_fixup<2>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_dependent_sweep_without_fixup<2><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
                 fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk, vdelt,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2270,15 +2278,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_independent_sweep_without_fixup<1>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_independent_sweep_without_fixup<1><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
                 fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
@@ -2293,15 +2301,15 @@ void run_gpu_sweep(const Point<3> origin,
             {
               grid.x = compute_blocks_per_sweep(x_range, y_range, z_range,            
                   (const void*)gpu_time_independent_sweep_without_fixup<1>, 
-                  threads_per_block, runtime, ctx, gpu, corner, num_groups);
-              blocks_per_sweep[gpu][corner] = grid.x;
+                  threads_per_block, runtime, ctx, gpu);
+              blocks_per_sweep[gpu] = grid.x;
             }
             gpu_time_independent_sweep_without_fixup<2><<<grid,block>>>(origin,
                 fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
                 fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
                 x_range, y_range, z_range, corner, 
                 stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu][corner], hi, hj, hk,
+                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
                 ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
                 flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
                 flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],

@@ -1542,8 +1542,8 @@ extern void run_gpu_sweep(const Point<3> origin,
                const int num_moments, 
                const double hi, const double hj,
                const double hk, const double vdelt,
-               const int num_angles, const int num_groups,
-               const bool fixup, Runtime *runtime, Context ctx);
+               const int num_angles, const bool fixup, 
+               Runtime *runtime, Context ctx);
 #endif
 
 //------------------------------------------------------------------------------
@@ -1611,7 +1611,7 @@ extern void run_gpu_sweep(const Point<3> origin,
                   x_range, y_range, z_range, args->corner, stride_x_positive,
                   stride_y_positive, stride_z_positive, mms_source,
                   Snap::num_moments, Snap::hi, Snap::hj, Snap::hk, vdelt,
-                  Snap::num_angles, Snap::num_groups, Snap::flux_fixup, runtime, ctx);
+                  Snap::num_angles, Snap::flux_fixup, runtime, ctx);
   }
 #else
   assert(false);
