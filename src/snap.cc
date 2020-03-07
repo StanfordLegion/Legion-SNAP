@@ -411,7 +411,7 @@ void Snap::transport_solve(void)
     // Some of this is a little weird, you can in theory lift some
     // of this out the time stepping loop because the mock velocity 
     // array and the material array aren't changing, but I think that 
-    // is just an artifact off SNAP and not a more general property of PARTISN, 
+    // is just an artifact of SNAP and not a more general property of PARTISN, 
     // SNAP developers have now confirmed this so we'll leave this
     // here to be consistent with the original implementation of SNAP
     for (int g = 0; g < num_groups; g += energy_group_chunks)
