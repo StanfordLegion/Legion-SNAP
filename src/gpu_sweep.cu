@@ -2127,7 +2127,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_with_fixup<1>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_dependent_sweep_with_fixup<1>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2140,7 +2140,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_with_fixup<2>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_dependent_sweep_with_fixup<2>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2173,7 +2173,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_with_fixup<1>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_independent_sweep_with_fixup<1>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2186,7 +2186,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_with_fixup<2>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_independent_sweep_with_fixup<2>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2222,7 +2222,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_without_fixup<1>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_dependent_sweep_without_fixup<1>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2235,7 +2235,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_without_fixup<2>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_dependent_sweep_without_fixup<2>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2268,7 +2268,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_without_fixup<1>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_independent_sweep_without_fixup<1>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
@@ -2281,7 +2281,7 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_without_fixup<2>,
+            cudaLaunchCooperativeKernel((const void*)gpu_time_independent_sweep_without_fixup<2>,
                 grid, block, (void**)args, 0, stream);
             break;
           }
