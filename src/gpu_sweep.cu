@@ -2103,6 +2103,19 @@ void run_gpu_sweep(const Point<3> origin,
     // Need fixup
     if (vdelt != 0.0) {
       // Time dependent
+      const void *args[] = { &origin,
+                &fa_qtot, &fa_flux, &fa_fluxm, &fa_dinv, &fa_time_flux_in,
+                &fa_time_flux_out, &fa_t_xs, &fa_ghostx, &fa_ghosty,
+                &fa_ghostz, &fa_qim,
+                &x_range, &y_range, &z_range, &corner, &stride_x_positive, 
+                &stride_y_positive, &stride_z_positive, &mms_source, 
+                &num_moments, &total_wavefronts[gpu], &hi, &hj, &hk, &vdelt,
+                &ec_d[gpu], &mu_d[gpu], &eta_d[gpu], &xi_d[gpu], &w_d[gpu],
+                &flux_x_d[gpu][stream_idx], &flux_y_d[gpu][stream_idx],
+                &flux_z_d[gpu][stream_idx], &wavefront_length_d[gpu][corner],
+                &wavefront_offset_d[gpu][corner], &wavefront_x_d[gpu][corner],
+                &wavefront_y_d[gpu][corner], &wavefront_z_d[gpu][corner],
+                &mutex_in_d[gpu][stream_idx], &mutex_out_d[gpu][stream_idx] };
       switch (angles_per_thread)
       {
         case 1:
@@ -2114,19 +2127,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_dependent_sweep_with_fixup<1><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
-                fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty,
-                fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, stride_x_positive, 
-                stride_y_positive, stride_z_positive, mms_source, 
-                num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_with_fixup<1>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         case 2:
@@ -2138,19 +2140,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_dependent_sweep_with_fixup<2><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
-                fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty,
-                fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, stride_x_positive, 
-                stride_y_positive, stride_z_positive, mms_source, 
-                num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_with_fixup<2>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         default:
@@ -2159,6 +2150,18 @@ void run_gpu_sweep(const Point<3> origin,
       }
     } else {
       // Time independent
+      const void *args[] = { &origin,
+                &fa_qtot, &fa_flux, &fa_fluxm, &fa_dinv, &fa_t_xs,
+                &fa_ghostx, &fa_ghosty, &fa_ghostz, &fa_qim,
+                &x_range, &y_range, &z_range, &corner, 
+                &stride_x_positive, &stride_y_positive, &stride_z_positive,
+                &mms_source, &num_moments, &total_wavefronts[gpu], &hi, &hj, &hk,
+                &ec_d[gpu], &mu_d[gpu], &eta_d[gpu], &xi_d[gpu], &w_d[gpu],
+                &flux_x_d[gpu][stream_idx], &flux_y_d[gpu][stream_idx],
+                &flux_z_d[gpu][stream_idx], &wavefront_length_d[gpu][corner],
+                &wavefront_offset_d[gpu][corner], &wavefront_x_d[gpu][corner],
+                &wavefront_y_d[gpu][corner], &wavefront_z_d[gpu][corner],
+                &mutex_in_d[gpu][stream_idx], &mutex_out_d[gpu][stream_idx] };
       switch (angles_per_thread)
       {
         case 1:
@@ -2170,18 +2173,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_independent_sweep_with_fixup<1><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
-                fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_with_fixup<1>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         case 2:
@@ -2193,18 +2186,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_independent_sweep_with_fixup<2><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
-                fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_with_fixup<2>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         default:
@@ -2216,6 +2199,18 @@ void run_gpu_sweep(const Point<3> origin,
     // No fixup
     if (vdelt != 0.0) {
       // Time dependent
+      const void *args[] = { &origin, 
+                &fa_qtot, &fa_flux, &fa_fluxm, &fa_dinv, &fa_time_flux_in,
+                &fa_time_flux_out, &fa_t_xs, &fa_ghostx, &fa_ghosty, &fa_ghostz, &fa_qim,
+                &x_range, &y_range, &z_range, &corner, 
+                &stride_x_positive, &stride_y_positive, &stride_z_positive, 
+                &mms_source, &num_moments, &total_wavefronts[gpu], &hi, &hj, &hk, &vdelt,
+                &ec_d[gpu], &mu_d[gpu], &eta_d[gpu], &xi_d[gpu], &w_d[gpu],
+                &flux_x_d[gpu][stream_idx], &flux_y_d[gpu][stream_idx],
+                &flux_z_d[gpu][stream_idx], &wavefront_length_d[gpu][corner],
+                &wavefront_offset_d[gpu][corner], &wavefront_x_d[gpu][corner],
+                &wavefront_y_d[gpu][corner], &wavefront_z_d[gpu][corner],
+                &mutex_in_d[gpu][stream_idx], &mutex_out_d[gpu][stream_idx] };
       switch (angles_per_thread)
       {
         case 1:
@@ -2227,18 +2222,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_dependent_sweep_without_fixup<1><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
-                fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_without_fixup<1>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         case 2:
@@ -2250,18 +2235,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_dependent_sweep_without_fixup<2><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_time_flux_in,
-                fa_time_flux_out, fa_t_xs, fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive, 
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk, vdelt,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_dependent_sweep_without_fixup<2>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         default:
@@ -2270,6 +2245,18 @@ void run_gpu_sweep(const Point<3> origin,
       }
     } else {
       // Time independent
+      const void *args[] = { &origin,
+                &fa_qtot, &fa_flux, &fa_fluxm, &fa_dinv, &fa_t_xs,
+                &fa_ghostx, &fa_ghosty, &fa_ghostz, &fa_qim,
+                &x_range, &y_range, &z_range, &corner, 
+                &stride_x_positive, &stride_y_positive, &stride_z_positive,
+                &mms_source, &num_moments, &total_wavefronts[gpu], &hi, &hj, &hk,
+                &ec_d[gpu], &mu_d[gpu], &eta_d[gpu], &xi_d[gpu], &w_d[gpu],
+                &flux_x_d[gpu][stream_idx], &flux_y_d[gpu][stream_idx],
+                &flux_z_d[gpu][stream_idx], &wavefront_length_d[gpu][corner],
+                &wavefront_offset_d[gpu][corner], &wavefront_x_d[gpu][corner],
+                &wavefront_y_d[gpu][corner], &wavefront_z_d[gpu][corner],
+                &mutex_in_d[gpu][stream_idx], &mutex_out_d[gpu][stream_idx] };
       switch (angles_per_thread)
       {
         case 1:
@@ -2281,18 +2268,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_independent_sweep_without_fixup<1><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
-                fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_without_fixup<1>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         case 2:
@@ -2304,18 +2281,8 @@ void run_gpu_sweep(const Point<3> origin,
                   threads_per_block, runtime, ctx, gpu);
               blocks_per_sweep[gpu] = grid.x;
             }
-            gpu_time_independent_sweep_without_fixup<2><<<grid,block>>>(origin,
-                fa_qtot, fa_flux, fa_fluxm, fa_dinv, fa_t_xs,
-                fa_ghostx, fa_ghosty, fa_ghostz, fa_qim,
-                x_range, y_range, z_range, corner, 
-                stride_x_positive, stride_y_positive, stride_z_positive,
-                mms_source, num_moments, total_wavefronts[gpu], hi, hj, hk,
-                ec_d[gpu], mu_d[gpu], eta_d[gpu], xi_d[gpu], w_d[gpu],
-                flux_x_d[gpu][stream_idx], flux_y_d[gpu][stream_idx],
-                flux_z_d[gpu][stream_idx], wavefront_length_d[gpu][corner],
-                wavefront_offset_d[gpu][corner], wavefront_x_d[gpu][corner],
-                wavefront_y_d[gpu][corner], wavefront_z_d[gpu][corner],
-                mutex_in_d[gpu][stream_idx], mutex_out_d[gpu][stream_idx]);
+            cudaLaunchCooperativeKernel(gpu_time_independent_sweep_without_fixup<2>,
+                grid, block, (void**)args, 0, stream);
             break;
           }
         default:
