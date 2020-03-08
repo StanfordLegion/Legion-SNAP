@@ -361,7 +361,7 @@ void Snap::transport_solve(void)
     if (num_gpus > 0) {
       const Rect<3> gpu_bounds(Point<3>(0,0,0), 
           Point<3>(nx_chunks-1,ny_chunks-1,nz_chunks-1));
-      assert(gpu_bounds.volume() == num_gpus);
+      assert(long(gpu_bounds.volume()) == num_gpus);
       InitGPUSweep init_sweep(*this, gpu_bounds);
       init_sweep.dispatch(ctx, runtime, true/*block*/);
     }
