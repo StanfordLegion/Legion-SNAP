@@ -28,7 +28,8 @@ public:
   CalcInnerSource(const Snap &snap, const Predicate &pred,
                   const SnapArray<3> &s_xs, const SnapArray<3> &flux0,
                   const SnapArray<3> &fluxm, const SnapArray<3> &q2grp0,
-                  const SnapArray<3> &q2grpm, const SnapArray<3> &qtot);
+                  const SnapArray<3> &q2grpm, const SnapArray<3> &qtot,
+                  int group_start, int group_stop);
 public:
   static void preregister_cpu_variants(void);
   static void preregister_gpu_variants(void);

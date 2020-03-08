@@ -485,9 +485,15 @@ void Snap::transport_solve(void)
       for (int inno=0; inno < max_inner_iters; ++inno)
       {
         // Do the inner source calculation
-        CalcInnerSource inner_src(*this, inner_pred, s_xs, flux0, fluxm,
-                                  q2grp0, q2grpm, qtot);
-        inner_src.dispatch(ctx, runtime);
+        for (int g = 0; g < num_groups; g += energy_group_chunks)
+        {
+          int group_stop = g + energy_group_chunks - 1;
+          if (group_stop >= num_groups)
+            group_stop = num_groups - 1;
+          CalcInnerSource inner_src(*this, inner_pred, s_xs, flux0, fluxm,
+                                    q2grp0, q2grpm, qtot, g, group_stop);
+          inner_src.dispatch(ctx, runtime);
+        }
         // Save the fluxes
         save_fluxes(inner_pred, flux0, flux0pi);
         flux0.initialize(inner_pred);
