@@ -357,30 +357,25 @@ void Snap::SnapMapper::slice_task(const MapperContext ctx,
 {
   if (!has_variants)
     update_variants(ctx);
-  if (task.task_id == INIT_GPU_SWEEP_TASK_ID) {
-    // This one needs the default mapper implementation
-    DefaultMapper::slice_task(ctx, task, input, output);
-  } else {
-    // Iterate over the points and assign them to the best target processors
-    Rect<3> all_points = input.domain;
-    // We still keep convergence tests on the CPU if we're doing reductions
+  // Iterate over the points and assign them to the best target processors
+  Rect<3> all_points = input.domain;
+  // We still keep convergence tests on the CPU if we're doing reductions
 #ifndef SNAP_USE_RELAXED_COHERENCE
-    const bool use_gpu = !local_gpus.empty() &&
-      (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end()) &&
-      (task.task_id != TEST_OUTER_CONVERGENCE_TASK_ID) && 
-      (task.task_id != TEST_INNER_CONVERGENCE_TASK_ID);;
+  const bool use_gpu = !local_gpus.empty() &&
+    (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end()) &&
+    (task.task_id != TEST_OUTER_CONVERGENCE_TASK_ID) && 
+    (task.task_id != TEST_INNER_CONVERGENCE_TASK_ID);;
 #else
-    const bool use_gpu = !local_gpus.empty() &&
-      (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
+  const bool use_gpu = !local_gpus.empty() &&
+    (gpu_variants.find((SnapTaskID)task.task_id) != gpu_variants.end());
 #endif
-    for (RectIterator<3> pir(all_points); pir(); pir++) {
-      TaskSlice slice;
-      slice.domain = Domain<3>(Rect<3>(*pir, *pir));
-      slice.proc = use_gpu ? global_gpu_mapping[*pir]:global_cpu_mapping[*pir];
-      slice.recurse = false;
-      slice.stealable = false;
-      output.slices.push_back(slice);
-    }
+  for (RectIterator<3> pir(all_points); pir(); pir++) {
+    TaskSlice slice;
+    slice.domain = Domain<3>(Rect<3>(*pir, *pir));
+    slice.proc = use_gpu ? global_gpu_mapping[*pir]:global_cpu_mapping[*pir];
+    slice.recurse = false;
+    slice.stealable = false;
+    output.slices.push_back(slice);
   }
 }
 
