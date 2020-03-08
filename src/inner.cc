@@ -27,23 +27,45 @@ extern Legion::Logger log_snap;
 CalcInnerSource::CalcInnerSource(const Snap &snap, const Predicate &pred,
                        const SnapArray<3> &s_xs, const SnapArray<3> &flux0,
                        const SnapArray<3> &fluxm, const SnapArray<3> &q2grp0,
-                       const SnapArray<3> &q2grpm, const SnapArray<3> &qtot)
+                       const SnapArray<3> &q2grpm, const SnapArray<3> &qtot,
+                       int group_start, int group_stop)
   : SnapTask<CalcInnerSource, Snap::CALC_INNER_SOURCE_TASK_ID>(
       snap, snap.get_launch_bounds(), pred)
 //------------------------------------------------------------------------------
 {
-  s_xs.add_projection_requirement(READ_ONLY, *this);
-  flux0.add_projection_requirement(READ_ONLY, *this);
-  q2grp0.add_projection_requirement(READ_ONLY, *this);
-  qtot.add_projection_requirement(WRITE_DISCARD, *this);
-  // only include this requirement if we have more than one moment
-  if (Snap::num_moments > 1) {
-    fluxm.add_projection_requirement(READ_ONLY, *this);
-    q2grpm.add_projection_requirement(READ_ONLY, *this);
+  if (group_start == group_stop) {
+    // Special case for a single field
+    const Snap::SnapFieldID group_field = SNAP_ENERGY_GROUP_FIELD(group_start);
+    s_xs.add_projection_requirement(READ_ONLY, *this, group_field);
+    flux0.add_projection_requirement(READ_ONLY, *this, group_field);
+    q2grp0.add_projection_requirement(READ_ONLY, *this, group_field);
+    qtot.add_projection_requirement(WRITE_DISCARD, *this, group_field);
+    // only include this requirement if we have more than one moment
+    if (Snap::num_moments > 1) {
+      fluxm.add_projection_requirement(READ_ONLY, *this, group_field);
+      q2grpm.add_projection_requirement(READ_ONLY, *this, group_field);
+    } else {
+      fluxm.add_projection_requirement(NO_ACCESS, *this);
+      q2grpm.add_projection_requirement(NO_ACCESS, *this);
+    }
   } else {
-    fluxm.add_projection_requirement(NO_ACCESS, *this);
-    q2grpm.add_projection_requirement(NO_ACCESS, *this);
-  }
+    // General case for arbitrary set of fields
+    std::vector<Snap::SnapFieldID> group_fields((group_stop - group_start) + 1);
+    for (int group = group_start; group <= group_stop; group++)
+      group_fields[group-group_start] = SNAP_ENERGY_GROUP_FIELD(group);
+    s_xs.add_projection_requirement(READ_ONLY, *this, group_fields);
+    flux0.add_projection_requirement(READ_ONLY, *this, group_fields);
+    q2grp0.add_projection_requirement(READ_ONLY, *this, group_fields);
+    qtot.add_projection_requirement(WRITE_DISCARD, *this, group_fields);
+    // only include this requirement if we have more than one moment
+    if (Snap::num_moments > 1) {
+      fluxm.add_projection_requirement(READ_ONLY, *this, group_fields);
+      q2grpm.add_projection_requirement(READ_ONLY, *this, group_fields);
+    } else {
+      fluxm.add_projection_requirement(NO_ACCESS, *this);
+      q2grpm.add_projection_requirement(NO_ACCESS, *this);
+    }
+  } 
 }
 
 //------------------------------------------------------------------------------
