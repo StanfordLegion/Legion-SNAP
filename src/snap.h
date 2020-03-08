@@ -293,7 +293,7 @@ public:
 public:
   static void parse_arguments(int argc, char **argv);
   static void compute_derived_globals(void);
-  static void report_arguments(void);
+  static void report_arguments(Runtime *runtime, Context ctx);
   static void perform_registrations(void);
   static void mapper_registration(Machine machine, Runtime *runtime,
                                   const std::set<Processor> &local_procs);

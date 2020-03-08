@@ -736,8 +736,8 @@ Predicate Snap::test_outer_convergence(const Predicate &outer_pred,
                                      Context ctx, Runtime *runtime)
 //------------------------------------------------------------------------------
 {
-  printf("Welcome to Legion-SNAP!\n");
-  report_arguments();
+  runtime->print_once(ctx,stdout,"Welcome to Legion-SNAP!\n");
+  report_arguments(runtime, ctx);
   Snap snap(ctx, runtime); 
   snap.setup();
   snap.transport_solve();
@@ -1137,41 +1137,68 @@ int Snap::lma[4];
 }
 
 //------------------------------------------------------------------------------
-/*static*/ void Snap::report_arguments(void)
+/*static*/ void Snap::report_arguments(Runtime *runtime, Context ctx)
 //------------------------------------------------------------------------------
 {
-  printf("Dimensions: %d\n", num_dims);
-  printf("X-Chunks: %d\n", nx_chunks);
-  printf("Y-Chunks: %d\n", ny_chunks);
-  printf("Z-Chunks: %d\n", nz_chunks);
-  printf("nx,ny,nz: %d,%d,%d\n", nx, ny, nz);
-  printf("lx,ly,lz: %.8g,%.8g,%.8g\n", lx, ly, lz);
-  printf("Moments: %d\n", num_moments);
-  printf("Angles: %d\n", num_angles);
-  printf("Groups: %d\n", num_groups);
-  printf("Convergence: %.8g\n", convergence_eps);
-  printf("Max Inner Iterations: %d\n", max_inner_iters);
-  printf("Max Outer Iterations: %d\n", max_outer_iters);
-  printf("Time Dependent: %s\n", (time_dependent ? "Yes" : "No"));
-  printf("Total Simulation Time: %.8g\n", total_sim_time);
-  printf("Total Steps: %d\n", num_steps);
-  printf("Material Layout: %s\n", ((material_layout == HOMOGENEOUS_LAYOUT) ? 
+  char buffer[128];
+  snprintf(buffer,128,"Dimensions: %d\n", num_dims);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"X-Chunks: %d\n", nx_chunks);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Y-Chunks: %d\n", ny_chunks);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Z-Chunks: %d\n", nz_chunks);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"nx,ny,nz: %d,%d,%d\n", nx, ny, nz);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"lx,ly,lz: %.8g,%.8g,%.8g\n", lx, ly, lz);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Moments: %d\n", num_moments);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Angles: %d\n", num_angles);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Groups: %d\n", num_groups);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Convergence: %.8g\n", convergence_eps);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Max Inner Iterations: %d\n", max_inner_iters);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Max Outer Iterations: %d\n", max_outer_iters);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Time Dependent: %s\n", (time_dependent ? "Yes" : "No"));
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Total Simulation Time: %.8g\n", total_sim_time);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Total Steps: %d\n", num_steps);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Material Layout: %s\n", ((material_layout == HOMOGENEOUS_LAYOUT) ? 
         "Homogenous Layout" : (material_layout == CENTER_LAYOUT) ? 
         "Center Layout" : "Corner Layout"));
-  printf("Source Layout: %s\n", ((source_layout == EVERYWHERE_SOURCE) ? 
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Source Layout: %s\n", ((source_layout == EVERYWHERE_SOURCE) ? 
         "Everywhere" : (source_layout == CENTER_SOURCE) ? "Center" :
         (source_layout == CORNER_SOURCE) ? "Corner" : "MMS"));
-  printf("Dump Scatter: %s\n", dump_scatter ? "Yes" : "No");
-  printf("Dump Iteration: %s\n", dump_iteration ? "Yes" : "No");
-  printf("Dump Flux: %s\n", (dump_flux == 2) ? "All" : 
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Scatter: %s\n", dump_scatter ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Iteration: %s\n", dump_iteration ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Flux: %s\n", (dump_flux == 2) ? "All" : 
       (dump_flux == 1) ? "Scalar" : "No");
-  printf("Fixup Flux: %s\n", flux_fixup ? "Yes" : "No");
-  printf("Dump Solution: %s\n", dump_solution ? "Yes" : "No");
-  printf("Dump Kplane: %d\n", dump_kplane);
-  printf("Dump Population: %s\n", (dump_population == 2) ? "All" : 
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Fixup Flux: %s\n", flux_fixup ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Solution: %s\n", dump_solution ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Kplane: %d\n", dump_kplane);
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Dump Population: %s\n", (dump_population == 2) ? "All" : 
       (dump_population == 1) ? "Final" : "No");
-  printf("Mini-KBA Sweep: %s\n", minikba_sweep ? "Yes" : "No");
-  printf("Single Angle Copy: %s\n", single_angle_copy ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Mini-KBA Sweep: %s\n", minikba_sweep ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
+  snprintf(buffer,128,"Single Angle Copy: %s\n", single_angle_copy ? "Yes" : "No");
+  runtime->print_once(ctx,stdout,buffer);
 }
 
 //------------------------------------------------------------------------------
