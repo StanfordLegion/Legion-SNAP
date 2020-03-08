@@ -130,6 +130,10 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
           // Mapping to CPUs only
           const int num_cpus = local_cpus.size();
           int result = 8/*directions*/ * Snap::num_groups / num_cpus;
+          // Make sure we have some extra slack on each processor 
+          // for scheduling so we can pipeline if possible
+          if (result >= 4)
+            result /= 4;
           // Clamp it at the number of groups if necessary
           if (result > Snap::num_groups)
             result = Snap::num_groups;
@@ -138,6 +142,10 @@ void Snap::SnapMapper::select_tunable_value(const MapperContext ctx,
           // Mapping to GPUs
           const int num_gpus = local_gpus.size();
           int result = 8/*directions*/ * Snap::num_groups / num_gpus;
+          // Make sure we have some extra slack on each processor 
+          // for scheduling so we can pipeline if possible
+          if (result >= 4)
+            result /= 4;
           // Clamp it at the number of groups if necessary
           if (result > Snap::num_groups)
             result = Snap::num_groups;
