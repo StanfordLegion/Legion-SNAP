@@ -149,9 +149,10 @@ void gpu_inner_convergence(const Point<3> origin,
   // Butterfly reduction across all threads in all warps
   for (int i = 16; i >= 1; i/=2)
     local_converged += __shfl_xor_sync(0xfffffff, local_converged, i, 32);
-  unsigned laneid, warpid;
+  unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid =
+    ((threadIdx.z * blockDim.y + threadIdx.y) * blockDim.x + threadIdx.x) >> 5;
   // First thread in each warp writes out all values
   if (laneid == 0)
     trampoline[warpid] = local_converged;
@@ -184,16 +185,16 @@ void gpu_sum_inner_convergence(const DeferredBuffer<int,1> buffer,
   }
   for (int i = 16; i >= 1; i/=2)
     total += __shfl_xor_sync(0xfffffff, total, i, 32);
-  unsigned laneid, warpid;
+  unsigned laneid;
   asm volatile("mov.u32 %0, %laneid;" : "=r"(laneid) : );
-  asm volatile("mov.u32 %0, %warpid;" : "=r"(warpid) : );
+  unsigned warpid = threadIdx.x >> 5;
   // Write results in the trampoline
   if (laneid == 0)
     trampoline[warpid] = total;
   __syncthreads();
   if (warpid == 0)
   {
-    unsigned numwarps = (blockDim.x * blockDim.y * blockDim.z) >> 5;
+    unsigned numwarps = blockDim.x >> 5;
     total = (laneid < numwarps) ? trampoline[laneid] : 0;
     for (int i = 16; i >= 1; i/=2)
       total += __shfl_xor_sync(0xfffffff, total, i, 32);
