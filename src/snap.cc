@@ -358,11 +358,11 @@ void Snap::transport_solve(void)
     Future f_gpus = runtime->select_tunable_value(ctx, 
         Legion::Mapping::DefaultMapper::DEFAULT_TUNABLE_GLOBAL_GPUS);
     long num_gpus = f_gpus.get_result<long>(true/*silence warnings*/);
-    assert(num_gpus > 0);
-    Rect<3> gpu_bounds(Point<3>(0,0,0), Point<3>(0,0,0));
-    gpu_bounds.hi[0] = num_gpus - 1;
-    InitGPUSweep init_sweep(*this, gpu_bounds);
-    init_sweep.dispatch(ctx, runtime, true/*block*/);
+    if (num_gpus > 0) {
+      const Rect<3> gpu_bounds(Point<3>(0,0,0), Point<3>(num_gpus-1,0,0));
+      InitGPUSweep init_sweep(*this, gpu_bounds);
+      init_sweep.dispatch(ctx, runtime, true/*block*/);
+    }
   }
 #endif
   initialize_scattering(sigt, siga, sigs, slgg);
