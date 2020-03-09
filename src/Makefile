@@ -61,7 +61,7 @@ CC_FLAGS	+= $(shell $(CXX) --version | grep -q clang || echo -fabi-version=0)
 
 ifeq ($(strip $(USE_CUDA)),1)
 CC_FLAGS	+= -DUSE_GPU_KERNELS
-GPU_ARCH	= kepler
+GPU_ARCH	= volta 
 endif
 
 ###########################################################################
