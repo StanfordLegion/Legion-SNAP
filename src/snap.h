@@ -244,8 +244,12 @@ protected:
   void initialize_scattering(const SnapArray<1> &sigt, const SnapArray<1> &siga,
                              const SnapArray<1> &sigs, const SnapArray<2> &slgg) const;
   void initialize_velocity(const SnapArray<1> &vel, const SnapArray<1> &vdelt) const;
-  void save_fluxes(const Predicate &pred,
-                   const SnapArray<3> &src, const SnapArray<3> &dst) const;
+  void save_fluxes(const Predicate &pred, const SnapArray<3> &src, 
+                   const SnapArray<3> &dst, int energy_group_chunks) const;
+  void calculate_inner_source(const Predicate &pred, const SnapArray<3> &s_xs,
+                              const SnapArray<3> &flux0, const SnapArray<3> &fluxm,
+                              const SnapArray<3> &q2grp0, const SnapArray<3> &q2grpm,
+                              const SnapArray<3> &qtot, int energy_group_chunks) const;
   void perform_sweeps(const Predicate &pred, const SnapArray<3> &flux,
                       const SnapArray<3> &fluxm, const SnapArray<3> &qtot, 
                       const SnapArray<1> &vdelt, const SnapArray<3> &dinv, 

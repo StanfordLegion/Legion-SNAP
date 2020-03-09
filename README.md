@@ -15,15 +15,15 @@ Several notes on the code for this implementation of SNAP.
   sweep for each energy group and direction. This allows Legion to 
   extract task parallelism from the different sweeps. This proves
   especially useful for the way Legion performs the GPU computation. 
-  The GPU implementation launches a single CTA per sweep and energy group 
-  and relies on task parallelism to launch multiple kernels onto the GPU
-  to keep all the SMs on the GPU busy. This is unorthodox, but allows
-  for a more efficient implementation that can store per-angle fluxes
-  in the register file as the CTA sweeps through cells.
+  The GPU implementation launches a cooperative kernel using a subset of
+  SMs per sweep and energy group and relies on task parallelism to launch 
+  multiple kernels onto the GPU to keep all the SMs on the GPU busy. This 
+  is unorthodox, but allows for a more efficient implementation that can 
+  store per-angle fluxes per stream as the kernel sweeps through cells.
 
 * The Legion style of this implementation is designed to illustrate
   how code should be generated from a higher-level compiler or written
-  for  a domain specific library, with good application-specific 
+  for a domain specific library, with good application-specific 
   abstractions and multiple different task variants for each logical 
   task. This allows the application to specialize itself for different 
   target architectures. The downside is that the code can appear to be 

@@ -472,11 +472,13 @@ void Snap::transport_solve(void)
     for (int otno = 0; otno < max_outer_iters; ++otno)
     {
       // Do the outer source calculation 
+      // Note that this is the only task which actually has no
+      // group parallelism as it requires all the groups results
       CalcOuterSource outer_src(*this, outer_pred, qi, slgg, mat, 
                                 q2grp0, q2grpm, flux0, fluxm);
       outer_src.dispatch(ctx, runtime);
       // Save the fluxes
-      save_fluxes(outer_pred, flux0, flux0po);
+      save_fluxes(outer_pred, flux0, flux0po, energy_group_chunks);
       // Do the inner solve
       inner_converged_tests.clear();
       Predicate inner_pred = outer_pred;
@@ -485,17 +487,10 @@ void Snap::transport_solve(void)
       for (int inno=0; inno < max_inner_iters; ++inno)
       {
         // Do the inner source calculation
-        for (int g = 0; g < num_groups; g += energy_group_chunks)
-        {
-          int group_stop = g + energy_group_chunks - 1;
-          if (group_stop >= num_groups)
-            group_stop = num_groups - 1;
-          CalcInnerSource inner_src(*this, inner_pred, s_xs, flux0, fluxm,
-                                    q2grp0, q2grpm, qtot, g, group_stop);
-          inner_src.dispatch(ctx, runtime);
-        }
+        calculate_inner_source(inner_pred, s_xs, flux0, fluxm, q2grp0,
+                               q2grpm, qtot, energy_group_chunks);
         // Save the fluxes
-        save_fluxes(inner_pred, flux0, flux0pi);
+        save_fluxes(inner_pred, flux0, flux0pi, energy_group_chunks);
         flux0.initialize(inner_pred);
         // Perform the sweeps
         perform_sweeps(inner_pred, flux0, fluxm, qtot, vdelt, dinv, t_xs,
@@ -593,8 +588,8 @@ void Snap::initialize_velocity(const SnapArray<1> &vel,
 }
 
 //------------------------------------------------------------------------------
-void Snap::save_fluxes(const Predicate &pred, 
-                       const SnapArray<3> &src, const SnapArray<3> &dst) const
+void Snap::save_fluxes(const Predicate &pred, const SnapArray<3> &src, 
+                       const SnapArray<3> &dst, int energy_group_chunks) const
 //------------------------------------------------------------------------------
 {
   // Use this macro to disable index space copy launches
@@ -607,23 +602,40 @@ void Snap::save_fluxes(const Predicate &pred,
       RegionRequirement(LogicalRegion::NO_REGION, WRITE_DISCARD,
                         EXCLUSIVE, dst.get_region()));
   const std::set<FieldID> &src_fields = src.get_all_fields();
-  RegionRequirement &src_req = launcher.src_requirements.back();
-  src_req.privilege_fields = src_fields;
-  src_req.instance_fields.insert(src_req.instance_fields.end(),
-      src_fields.begin(), src_fields.end());
   const std::set<FieldID> &dst_fields = dst.get_all_fields();
+  assert(src_fields.size() == dst_fields.size());
+  RegionRequirement &src_req = launcher.src_requirements.back();
   RegionRequirement &dst_req = launcher.dst_requirements.back();
-  dst_req.privilege_fields = dst_fields;
-  dst_req.instance_fields.insert(dst_req.instance_fields.end(),
-      dst_fields.begin(), dst_fields.end());
-  // Iterate over the sub-regions and issue copies for each separately
-  for (GenericPointInRectIterator<3> color_it(launch_bounds); 
-        color_it; color_it++)   
+  std::set<FieldID>::const_iterator src_it = src_fields.begin();
+  std::set<FieldID>::const_iterator dst_it = dst_fields.begin();
+  while ((src_it != src_fields.end()) && (dst_it != dst_fields.end()))
   {
-    DomainPoint dp = DomainPoint::from_point<3>(color_it.p);
-    src_req.region = src.get_subregion(dp);
-    dst_req.region = dst.get_subregion(dp);
-    runtime->issue_copy_operation(ctx, launcher);
+    src_req.privilege_fields.clear();
+    src_req.instance_fields.clear();
+    dst_req.privilege_fields.clear();
+    dst_req.instance_fields.clear();
+    for (int g = 0; g < energy_group_chunks; g++)
+    {
+      src_req.privilege_fields.insert(*src_it);
+      src_req.instance_fields.push_back(*src_it);
+      src_it++;
+      dst_req.privilege_fields.insert(*dst_it);
+      dst_req.instance_fields.push_back(*dst_it);
+      dst_it++;
+      if (src_it == src_fields.end())
+        break;
+      if (dst_it == dst_fields.end())
+        break;
+    }
+    // Iterate over the sub-regions and issue copies for each separately
+    for (GenericPointInRectIterator<3> color_it(launch_bounds); 
+          color_it; color_it++)   
+    {
+      DomainPoint dp = DomainPoint::from_point<3>(color_it.p);
+      src_req.region = src.get_subregion(dp);
+      dst_req.region = dst.get_subregion(dp);
+      runtime->issue_copy_operation(ctx, launcher);
+    }
   }
 #else
   IndexCopyLauncher launcher(get_launch_bounds(), pred);
@@ -633,17 +645,53 @@ void Snap::save_fluxes(const Predicate &pred,
       RegionRequirement(dst.get_partition(), 0/*projection id*/,
                         WRITE_DISCARD, EXCLUSIVE, dst.get_region()));
   const std::set<FieldID> &src_fields = src.get_all_fields();
-  RegionRequirement &src_req = launcher.src_requirements.back();
-  src_req.privilege_fields = src_fields;
-  src_req.instance_fields.insert(src_req.instance_fields.end(),
-      src_fields.begin(), src_fields.end());
   const std::set<FieldID> &dst_fields = dst.get_all_fields();
+  assert(src_fields.size() == dst_fields.size());
+  RegionRequirement &src_req = launcher.src_requirements.back();
   RegionRequirement &dst_req = launcher.dst_requirements.back();
-  dst_req.privilege_fields = dst_fields;
-  dst_req.instance_fields.insert(dst_req.instance_fields.end(),
-      dst_fields.begin(), dst_fields.end());
-  runtime->issue_copy_operation(ctx, launcher);
+  std::set<FieldID>::const_iterator src_it = src_fields.begin();
+  std::set<FieldID>::const_iterator dst_it = dst_fields.begin();
+  while ((src_it != src_fields.end()) && (dst_it != dst_fields.end()))
+  {
+    src_req.privilege_fields.clear();
+    src_req.instance_fields.clear();
+    dst_req.privilege_fields.clear();
+    dst_req.instance_fields.clear();
+    for (int g = 0; g < energy_group_chunks; g++)
+    {
+      src_req.privilege_fields.insert(*src_it);
+      src_req.instance_fields.push_back(*src_it);
+      src_it++;
+      dst_req.privilege_fields.insert(*dst_it);
+      dst_req.instance_fields.push_back(*dst_it);
+      dst_it++;
+      if (src_it == src_fields.end())
+        break;
+      if (dst_it == dst_fields.end())
+        break;
+    }
+    runtime->issue_copy_operation(ctx, launcher);
+  }
 #endif
+}
+
+//------------------------------------------------------------------------------
+void Snap::calculate_inner_source(const Predicate &pred,
+                          const SnapArray<3> &s_xs, const SnapArray<3> &flux0, 
+                          const SnapArray<3> &fluxm, const SnapArray<3> &q2grp0,
+                          const SnapArray<3> &q2grpm, const SnapArray<3> &qtot, 
+                          int energy_group_chunks) const
+//------------------------------------------------------------------------------
+{
+  for (int g = 0; g < num_groups; g += energy_group_chunks)
+  {
+    int group_stop = g + energy_group_chunks - 1;
+    if (group_stop >= num_groups)
+      group_stop = num_groups - 1;
+    CalcInnerSource inner_src(*this, pred, s_xs, flux0, fluxm,
+                              q2grp0, q2grpm, qtot, g, group_stop);
+    inner_src.dispatch(ctx, runtime);
+  }
 }
 
 //------------------------------------------------------------------------------
