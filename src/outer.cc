@@ -85,7 +85,7 @@ CalcOuterSource::CalcOuterSource(const Snap &snap, const Predicate &pred,
   execution_constraints.add_constraint(
       ResourceConstraint(REGISTER_FILE_SIZE, GE_EK/*>=*/, 65536/*registers*/));
   // Need at least two CTAs per SM for performance
-  execution_constraints.add_constraint(LaunchConstraint(CTAS_PER_SM, 2));
+  execution_constraints.add_constraint(LaunchConstraint(LEGION_CTAS_PER_SM, 2));
   TaskLayoutConstraintSet layout_constraints;
   // All regions need to be SOA
   for (unsigned idx = 0; idx < 7; idx++)
