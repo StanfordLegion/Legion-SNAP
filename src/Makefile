@@ -52,6 +52,7 @@ GEN_GPU_SRC	?= gpu_outer.cu \
 INC_FLAGS	?=
 CC_FLAGS	?=
 CC_FLAGS	+= -DDISABLE_SPECULATION -DSNAP_USE_RELAXED_COHERENCE # Do this until Realm supports multi-field reduction instances
+CC_FLAGS	+= -Wno-ignored-attributes # FIXME: https://github.com/StanfordLegion/Legion-SNAP/issues/2
 CC_FLAGS	+= -std=c++11 # Need this to deal with linkage issues
 NVCC_FLAGS	?= -std=c++11
 GASNET_FLAGS	?=
