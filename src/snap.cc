@@ -401,7 +401,7 @@ void Snap::transport_solve(void)
   std::deque<Future> inner_converged_tests;
   // Use this for when predicates evaluate to false, tasks can then
   // return true to indicate convergence
-  const Future true_future = Future::from_value<bool>(runtime, true);
+  const Future true_future = Future::from_value<bool>(true);
   // Use this for printing convergence and timing information
   // in a deferred execution environment with predication
   ConvergenceMonad convergence(ctx, runtime);
@@ -1266,7 +1266,7 @@ int Snap::lma[4];
   Runtime::preregister_task_variant<snap_top_level_task>(registrar,
                           Snap::task_names[SNAP_TOP_LEVEL_TASK_ID]);
   Runtime::set_top_level_task_id(SNAP_TOP_LEVEL_TASK_ID);
-  Runtime::set_registration_callback(mapper_registration);
+  Runtime::add_registration_callback(mapper_registration);
   // Now register all the task variants
   InitMaterial::preregister_cpu_variants();
   InitSource::preregister_cpu_variants();
